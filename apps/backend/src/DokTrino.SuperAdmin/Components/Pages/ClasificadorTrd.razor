@@ -1,0 +1,75 @@
+@page "/clasificador-trd"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@inject IClasificadorTrdService Clasificador
+
+<PageTitle>Clasificador TRD - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">IA Documental</div>
+        <h1 class="ase-title">Clasificador TRD asistido</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Texto del documento (asunto / contenido)</div>
+    <textarea class="form-control" rows="4" @bind="_texto" placeholder="Ej: Solicitud de certificado laboral y contrato de prestacion de servicios..."></textarea>
+    <div style="margin-top:8px;">
+        <button class="btn btn-primary btn-sm" @onclick="Sugerir" disabled="@_busy">@(_busy ? "Analizando..." : "Sugerir serie TRD")</button>
+    </div>
+    <small class="text-muted">Version heuristica (coincidencia de terminos con las series y tipologias de tu TRD). Cuando configures un proveedor de IA en "Servidores de IA", esta sugerencia se podra enriquecer con el modelo.</small>
+</div>
+
+@if (_done)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Series sugeridas (@_sug.Count)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th class="text-center">Score</th><th>Codigo</th><th>Serie</th><th>Terminos coincidentes</th><th class="text-center">AG</th><th class="text-center">AC</th></tr></thead>
+                <tbody>
+                    @foreach (var s in _sug)
+                    {
+                        <tr>
+                            <td class="text-center"><span class="cls-score">@s.Score</span></td>
+                            <td><span class="mono">@s.Codigo</span></td>
+                            <td>@s.Nombre</td>
+                            <td><small>@s.Coincidencias</small></td>
+                            <td class="text-center">@(s.AgAnios?.ToString() ?? "-")</td>
+                            <td class="text-center">@(s.AcAnios?.ToString() ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_sug.Count == 0) { <div class="ase-empty">Sin coincidencias con la TRD. Revisa que existan series cargadas (modulo TRD) o ajusta el texto.</div> }
+        </div>
+    </div>
+}
+
+<style>
+    .cls-score { font-weight: 800; color: var(--primary); background: var(--primary-soft); padding: 1px 9px; border-radius: 999px; }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    private string _texto = "";
+    private List<SugerenciaSerieDto> _sug = new();
+    private bool _busy, _done;
+    private string? _error;
+
+    private async Task Sugerir()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            _sug = (await Clasificador.SugerirAsync(_texto)).ToList();
+            _done = true;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+}
