@@ -1,0 +1,1451 @@
+@using System.Security.Claims
+@using System.Text.Json
+@using Microsoft.Extensions.DependencyInjection
+@using DokTrino.Application.Tenancy
+@using DokTrino.SuperAdmin.Components.Forms
+@inject IFormDefinitionService FormsSvc
+@inject IAsignacionService AsigSvc
+@inject IHistoriaClinicaService HcSvc
+@inject IOrdenMedicamentoService OrdMedSvc
+@inject IOrdenServicioService OrdSrvSvc
+@inject IIncapacidadService IncSvc
+@inject ICertificacionService CertSvc
+@inject IRemisionService RemSvc
+@inject IInsumoService InsumoSvc
+@inject IEscalaService EscSvc
+@inject IDocumentoHcService DocSvc
+@inject IFirmaResolverService FirmaResolverSvc
+@inject IServiceScopeFactory ScopeFactory
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@*
+   Modulo reutilizable de Historias Clinicas.
+   Se invoca como submodulo desde /atencion recibiendo el paciente como contexto.
+   No tiene @page: no es ruta independiente.
+*@
+
+<div class="hc-grid @(_pacienteColapsado ? "paciente-colapsado" : "") @(_chatColapsado ? "chat-colapsado" : "")">
+
+    @* =========== SIDEBAR IZQUIERDO: filtros + lista historias =========== *@
+    @* Colapsable: si _pacienteColapsado es true se reduce a una franja vertical
+       que solo muestra el boton para volver a expandir. Asi el doctor maximiza
+       el ancho del modulo de historias en pantallas chicas. *@
+    @if (_pacienteColapsado)
+    {
+        <div class="hc-paciente-strip">
+            <button class="hc-paciente-expand" @onclick="() => _pacienteColapsado = false" title="Mostrar paciente y filtros">
+                <span class="hc-paciente-expand-ico">&#128100;</span>
+                <span class="hc-paciente-expand-text">Paciente</span>
+            </button>
+        </div>
+    }
+    else
+    {
+    <div class="hc-col">
+        <div class="ase-card">
+            <div class="ase-card-h" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Paciente</span>
+                <button class="hc-col-toggle" @onclick="() => _pacienteColapsado = true" title="Ocultar columna paciente">&laquo;</button>
+            </div>
+            <div class="hc-form-padding">
+                @if (PacienteContexto is PacienteAsignacionDto pc)
+                {
+                    @* Paciente recibido por parametro: NO permite cambiar. *@
+                    <div class="hc-paciente-card">
+                        <div class="hc-paciente-nm">@pc.NombreCompleto</div>
+                        <div class="hc-paciente-doc">@pc.TipoDocumento @pc.NumeroDocumento</div>
+                        <small class="text-muted">Paciente fijado por el modulo de Atencion.</small>
+                    </div>
+                }
+                else if (_paciente is PacienteAsignacionDto p)
+                {
+                    <div class="hc-paciente-card">
+                        <div class="hc-paciente-nm">@p.NombreCompleto</div>
+                        <div class="hc-paciente-doc">@p.TipoDocumento @p.NumeroDocumento</div>
+                        <button class="btn btn-link btn-sm" @onclick="OpenPacienteModal">Cambiar paciente</button>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-outline-primary btn-sm" @onclick="OpenPacienteModal">&#128270; Seleccionar paciente</button>
+                }
+            </div>
+        </div>
+
+        @if (_formatoForzadoId is not null)
+        {
+            <div class="ase-card hc-forzado-card">
+                <div class="ase-card-h">Formato de historia para este servicio</div>
+                <div class="hc-form-padding">
+                    <div class="hc-forzado-name">@_formatoForzadoNombre</div>
+                    <small class="text-muted">Definido por el servicio asignado. Al iniciar una historia nueva se usa este formato automaticamente.</small>
+                </div>
+            </div>
+        }
+
+        <div class="ase-card">
+            <div class="ase-card-h">Filtros de busqueda</div>
+            <div class="ase-form hc-form">
+                <div class="ase-f"><label>Fecha inicial</label><input type="date" class="form-control form-control-sm" @bind="_filFechaIni" /></div>
+                <div class="ase-f"><label>Fecha final</label><input type="date" class="form-control form-control-sm" @bind="_filFechaFin" /></div>
+                <div class="ase-f ase-f-wide">
+                    <label>Formato de historia <small class="text-muted">(opcional - filtro)</small></label>
+                    <select class="form-select form-select-sm" @bind="_filFormato">
+                        <option value="">Todos los formatos</option>
+                        @foreach (var f in _formatos)
+                        {
+                            <option value="@f.Id">[@f.Codigo] @f.Nombre</option>
+                        }
+                    </select>
+                </div>
+                <div class="ase-f ase-f-wide">
+                    <button class="btn btn-outline-primary btn-sm" @onclick="MostrarHistorias">Mostrar historias</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="ase-card hc-list-card">
+            <div class="ase-card-h">Historias del paciente (@_historias.Count)</div>
+            <div class="hc-list">
+                @if (_historias.Count == 0)
+                {
+                    <div class="ase-empty">Aplica un filtro y presiona "Mostrar historias".</div>
+                }
+                @foreach (var h in _historias)
+                {
+                    <div class="hc-item @(h.Id == _historiaSel?.Id ? "sel" : "")">
+                        <div class="hc-item-h">
+                            <div>
+                                <div class="hc-item-prof">Especialista: <strong>@h.Especialista</strong></div>
+                                <div class="hc-item-fecha">Fecha inicial: @h.Fecha.ToString("dd/MM/yyyy")</div>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-link btn-sm hc-item-menu" @onclick="() => ToggleMenu(h.Id)">&#8942;</button>
+                                @if (_menuAbierto == h.Id)
+                                {
+                                    <div class="hc-menu">
+                                        <div class="hc-menu-h">Acciones</div>
+                                        <button class="hc-menu-item" @onclick="() => Seleccionar(h)">Ver esta historia</button>
+                                        <button class="hc-menu-item" disabled>Impresion</button>
+                                        <button class="hc-menu-item" disabled>Procesar Interoperabilidad</button>
+                                        <button class="hc-menu-item" disabled>Abrir Documento</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(h.Observaciones))
+                        {
+                            <div class="hc-item-obs">Obs: @h.Observaciones</div>
+                        }
+                        <div class="hc-item-pill @($"hc-est-{h.Estado.ToLower()}")">@h.Estado</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    }
+
+    @* =========== COLUMNA CENTRAL: chat WhatsApp del paciente =========== *@
+    @* Vive en el hc-grid (no dentro del modal) para que el doctor pueda colapsar
+       paciente + chat y dejar el modulo de historia a maximo ancho. *@
+    <div class="hc-chat-outer @(_chatColapsado ? "hc-chat-colapsado" : "")">
+        <WhatsAppChatPanel Telefono="@PacienteActivo?.Telefono"
+                           NombreContacto="@PacienteActivo?.NombreCompleto"
+                           Cedula="@PacienteActivo?.NumeroDocumento"
+                           PacienteId="@PacienteActivo?.Id"
+                           Colapsable="true"
+                           @bind-Colapsado="_chatColapsado"
+                           OnTelefonoActualizado="HandleTelefonoActualizado" />
+    </div>
+
+    @* =========== PANEL DERECHO: detalle + tabs =========== *@
+    <div class="hc-col hc-col-main">
+        <div class="ase-card">
+            <div class="hc-actions">
+                <button class="btn btn-primary btn-sm" @onclick="IniciarHistoria"
+                        disabled="@(_formatoForzadoId is null && string.IsNullOrEmpty(_filFormato))"
+                        title="@(_formatoForzadoId is not null ? $"Inicia historia con formato {_formatoForzadoNombre}" : "Selecciona un formato del filtro o abre desde un servicio asignado")">
+                    &#128221; Iniciar historia medica
+                </button>
+                <button class="btn btn-outline-success btn-sm" disabled="@(_schemaActual is null)" @onclick="Imprimir" title="Abrir vista documento en nueva pestana para imprimir o guardar PDF">&#128424; Imprimir</button>
+                <button class="btn btn-danger btn-sm" disabled="@(_schemaActual is null)" @onclick="Descartar">&#128465; Descartar</button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(_schemaActual is null)" @onclick="Cerrar">&#10006; Cerrar</button>
+                @* Indicador de autoguardado. Solo se muestra cuando hay HC abierta. *@
+                @if (_historiaSel is not null && string.Equals(_historiaSel.Estado, "Abierta", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="hc-autosave hc-autosave-@_saveStatus" title="@_saveTitle">
+                        @switch (_saveStatus)
+                        {
+                            case "limpio":     <span>&#10003; Guardado</span> break;
+                            case "sucio":      <span>&#9998; Cambios sin guardar</span> break;
+                            case "guardando":  <span>&#8635; Guardando...</span> break;
+                            case "guardado":   <span>&#10003; Guardado @(_ultimoGuardado?.ToString("HH:mm:ss"))</span> break;
+                            case "error":      <span>&#9888; Error al guardar - reintento automatico</span> break;
+                        }
+                    </div>
+                }
+            </div>
+            @if (_imprimirMsg is not null) { <div class="hc-info-msg">@_imprimirMsg</div> }
+
+            <div class="hc-buscar">
+                <label class="hc-buscar-lbl">BUSCAR DATOS DE HISTORIA:</label>
+                <div class="hc-buscar-row">
+                    <input class="form-control form-control-sm" placeholder="BUSCA INFORMACION DE LA HISTORIA" @bind="_busqueda" />
+                    <button class="btn btn-outline-secondary btn-sm" title="Filtrar por campo">&#9776;</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="ase-card hc-col-full hc-with-menu @(_menuColapsado ? "menu-colapsado" : "")">
+            @* ===== Menu lateral del modulo (izquierda) ===== *@
+            <aside class="hc-side-menu">
+                <button class="hc-side-toggle" title="@(_menuColapsado ? "Expandir menu" : "Colapsar menu")"
+                        @onclick="() => _menuColapsado = !_menuColapsado">
+                    @if (_menuColapsado) { <span>&raquo;</span> } else { <span>&laquo;</span> <span class="hc-side-toggle-lbl">Menu</span> }
+                </button>
+                <nav class="hc-side-nav">
+                    @foreach (var t in _tabs)
+                    {
+                        var (icono, badge) = IconoYBadge(t);
+                        <button class="hc-side-item @(t == _tabSel ? "sel" : "")"
+                                title="@t"
+                                @onclick="() => _tabSel = t">
+                            <span class="hc-side-icon">@icono</span>
+                            <span class="hc-side-lbl">@t</span>
+                            @if (badge > 0) { <span class="hc-side-badge">@badge</span> }
+                        </button>
+                    }
+                </nav>
+            </aside>
+
+            @* ===== Cuerpo del tab seleccionado (centro) ===== *@
+            <div class="hc-tab-body">
+                @if (_historiaSel is null)
+                {
+                    <div class="ase-empty hc-empty-detail">
+                        Selecciona una historia de la lista o presiona "Iniciar historia medica" para crear una nueva.
+                    </div>
+                }
+                else
+                {
+                    @if (_tabSel == "Historial")
+                    {
+                        @if (_schemaActual is null)
+                        {
+                            <div class="hc-placeholder">
+                                <div class="hc-placeholder-t">Selecciona un formato y presiona "Iniciar historia medica"</div>
+                                <div class="hc-placeholder-d">
+                                    El motor de formularios cargara la plantilla seleccionada para que la diligencies aqui mismo.
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (_hcEsDeOtroDoctor)
+                            {
+                                <div class="ase-alert" style="background:#fef3c7;color:#92400e;border-color:#fbbf24;margin-bottom:10px;">
+                                    <strong>&#128274; Solo lectura.</strong>
+                                    Esta historia clinica fue iniciada por <strong>@_historiaSel?.Especialista</strong>.
+                                    No puedes modificarla. Inicia una nueva con tu usuario si necesitas registrar tu propia atencion.
+                                </div>
+                            }
+                            <FormViewer Schema="@_schemaActual" Valores="@_valores"
+                                        Titulo="@_formatoActualNombre" Subtitulo="@_subtituloFormato"
+                                        ReadOnlyKeys="@_hcReadOnlyKeys"
+                                        ReadOnly="@_hcEsDeOtroDoctor"
+                                        OnValueChanged="OnValorCambiado" />
+                        }
+                    }
+                    else if (_tabSel == "Escalas")
+                    {
+                        <HcEscalas HistoriaClinicaId="@_historiaSel?.Id"
+                                   PacienteId="@PacienteActivo?.Id"
+                                   Paciente="@PacienteActivo"
+                                   EspecialistaNombre="@_historiaSel?.Especialista"
+                                   OnCountChanged="@(c => _escCount = c)" />
+                    }
+                    else if (_tabSel == "Evoluciones")
+                    {
+                        <HcDocumentos Tipo="EVOLUCION"
+                                      HistoriaClinicaId="@_historiaSel?.Id"
+                                      PacienteId="@PacienteActivo?.Id"
+                                      Paciente="@PacienteActivo"
+                                      EspecialistaNombre="@_historiaSel?.Especialista"
+                                      OnCountChanged="@(c => _evoCount = c)" />
+                    }
+                    else if (_tabSel == "Consentimientos")
+                    {
+                        <HcDocumentos Tipo="CONSENTIMIENTO"
+                                      HistoriaClinicaId="@_historiaSel?.Id"
+                                      PacienteId="@PacienteActivo?.Id"
+                                      Paciente="@PacienteActivo"
+                                      EspecialistaNombre="@_historiaSel?.Especialista"
+                                      OnCountChanged="@(c => _conCount = c)" />
+                    }
+                    else if (_tabSel == "Ordenes medicamento")
+                    {
+                        <OrdenMedicamentos HistoriaClinicaId="@_historiaSel?.Id"
+                                           OnCountChanged="OnMedicamentosCountChanged" />
+                    }
+                    else if (_tabSel == "Ordenes servicios Propias")
+                    {
+                        <OrdenServicios HistoriaClinicaId="@_historiaSel?.Id"
+                                        OnCountChanged="@(c => _servCount = c)" />
+                    }
+                    else if (_tabSel == "Insumos")
+                    {
+                        <OrdenInsumos HistoriaClinicaId="@_historiaSel?.Id"
+                                      OnCountChanged="@(c => _insCount = c)" />
+                    }
+                    else if (_tabSel == "Remisiones")
+                    {
+                        <OrdenRemisiones HistoriaClinicaId="@_historiaSel?.Id"
+                                         OnCountChanged="@(c => _remCount = c)" />
+                    }
+                    else if (_tabSel == "Ordenes incapacidad")
+                    {
+                        <OrdenIncapacidades HistoriaClinicaId="@_historiaSel?.Id"
+                                            OnCountChanged="@(c => _incCount = c)" />
+                    }
+                    else if (_tabSel == "Ordenes certificaciones")
+                    {
+                        <OrdenCertificaciones HistoriaClinicaId="@_historiaSel?.Id"
+                                              OnCountChanged="@(c => _certCount = c)" />
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ===== Modal IMPRIMIR (paquete) ===== *@
+@if (_showImprimirModal)
+{
+    <div class="cie-backdrop" @onclick="CancelarImprimir"></div>
+    <div class="cie-modal" style="width: 480px;">
+        <div class="cie-modal-h">
+            <h3>&#128424; Imprimir documentos</h3>
+            <button class="cie-modal-close" @onclick="CancelarImprimir">&times;</button>
+        </div>
+        <div class="cie-modal-body">
+            <p style="font-size: 12.5px; color: #475569; margin-bottom: 14px;">
+                Selecciona los documentos que deseas imprimir. Solo aparecen las
+                ordenes que tienen items registrados en esta historia.
+            </p>
+
+            <div class="hc-impr-opt">
+                <label>
+                    <input type="checkbox" @bind="_imprIncluirHc" />
+                    <span><b>Historia clinica</b></span>
+                </label>
+                <small>Documento principal del formato de la HC.</small>
+            </div>
+
+            @if (_imprMedCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirMed" />
+                        <span><b>Orden de Medicamentos</b> <em>(@_imprMedCount item@(_imprMedCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprSrvCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirSrv" />
+                        <span><b>Orden a Servicios</b> <em>(@_imprSrvCount item@(_imprSrvCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprIncCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirInc" />
+                        <span><b>Orden de Incapacidad</b> <em>(@_imprIncCount item@(_imprIncCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprCertCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirCert" />
+                        <span><b>Certificacion Medica</b> <em>(@_imprCertCount item@(_imprCertCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprEscCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirEsc" />
+                        <span><b>Escalas diligenciadas</b> <em>(@_imprEscCount escala@(_imprEscCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprEvoCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirEvo" />
+                        <span><b>Evoluciones diligenciadas</b> <em>(@_imprEvoCount evolucion@(_imprEvoCount == 1 ? "" : "es"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprConCount > 0)
+            {
+                <div class="hc-impr-opt">
+                    <label>
+                        <input type="checkbox" @bind="_imprIncluirCon" />
+                        <span><b>Consentimientos diligenciados</b> <em>(@_imprConCount consentimiento@(_imprConCount == 1 ? "" : "s"))</em></span>
+                    </label>
+                </div>
+            }
+            @if (_imprMedCount == 0 && _imprSrvCount == 0 && _imprIncCount == 0 && _imprCertCount == 0 && _imprEscCount == 0 && _imprEvoCount == 0 && _imprConCount == 0)
+            {
+                <div style="font-size:12px; color:#94a3b8; font-style:italic; padding:10px 0;">
+                    Esta historia no tiene ordenes, escalas, evoluciones ni consentimientos registrados.
+                </div>
+            }
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="CancelarImprimir">Cancelar</button>
+                <button class="btn btn-primary btn-sm" @onclick="ConfirmarImprimirAsync">&#128424; Imprimir seleccion</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== Modal BUSCAR PACIENTE (solo si NO viene paciente por parametro) ===== *@
+@if (_showPacModal)
+{
+    <div class="cie-backdrop" @onclick="ClosePacienteModal"></div>
+    <div class="cie-modal cie-modal-lg">
+        <div class="cie-modal-h">
+            <h3>BUSCAR PACIENTE</h3>
+            <button class="cie-modal-close" @onclick="ClosePacienteModal">&times;</button>
+        </div>
+        <div class="cie-modal-body">
+            <div class="ase-form" style="grid-template-columns: 1fr 1fr 200px; display:grid; gap:10px; margin-bottom:14px;">
+                <div class="ase-f"><label>No Documento</label><input class="form-control form-control-sm mono" @bind="_modalDoc" /></div>
+                <div class="ase-f"><label>Nombre</label><input class="form-control form-control-sm" @bind="_modalNombre" /></div>
+                <div style="display:flex; align-items:end;"><button class="btn btn-primary btn-sm" @onclick="BuscarPaciente" disabled="@_modalBusy">@(_modalBusy ? "Buscando..." : "Aplicar filtro")</button></div>
+            </div>
+            <div class="bp-results" style="border:1px solid #e2e8f0; border-radius:8px; max-height:340px; overflow:auto;">
+                <table class="table table-sm" style="margin:0; font-size:12px;">
+                    <thead style="background:#f8fafc;">
+                        <tr><th style="width:50px"></th><th>Documento</th><th>Nombre</th><th>Contrato</th><th>Telefono</th></tr>
+                    </thead>
+                    <tbody>
+                        @if (_modalGrid.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted" style="padding:20px;">@(_modalBusy ? "Buscando..." : "Aplica un filtro para ver pacientes.")</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var r in _modalGrid)
+                            {
+                                <tr>
+                                    <td><button class="btn btn-primary btn-sm" @onclick="() => PickPaciente(r)">&#10003;</button></td>
+                                    <td class="mono">@r.Documento</td>
+                                    <td>@r.NombreCompleto</td>
+                                    <td>@(r.Contrato ?? "-")</td>
+                                    <td>@(r.Telefono ?? "-")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Grid externo de 3 columnas: paciente (320px) | chat WhatsApp (320px) | modulo
+       de historias (1fr). Cada columna puede colapsar a 50px (paciente/chat) para
+       que el modulo de historias respire en pantallas chicas. align-items: start
+       permite que el chat se quede sticky cuando se hace scroll en la HC. */
+    .hc-grid { display: grid; grid-template-columns: 320px 320px 1fr; gap: 14px; align-items: start; }
+    .hc-grid.paciente-colapsado { grid-template-columns: 50px 320px 1fr; }
+    .hc-grid.chat-colapsado { grid-template-columns: 320px 50px 1fr; }
+    .hc-grid.paciente-colapsado.chat-colapsado { grid-template-columns: 50px 50px 1fr; }
+    .hc-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: 600px; }
+    .hc-col-main { min-width: 0; }
+    /* Chat WhatsApp: queda sticky al hacer scroll en la HC. Forzamos 600px de
+       altura para que el panel sea generoso (thread amplio que crece via flex
+       aunque no haya mensajes aun). Sticky top deja el panel fijo arriba al
+       scrollear la HC. */
+    .hc-chat-outer {
+        display: flex; flex-direction: column; min-width: 0;
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 1px 3px rgba(15,23,42,.08);
+        position: sticky; top: 12px;
+        height: 600px;
+    }
+    .hc-chat-outer > * { flex: 1; min-height: 0; }
+    .hc-chat-outer.hc-chat-colapsado { height: 240px; }
+
+    /* Franja vertical cuando la columna paciente esta colapsada. */
+    .hc-paciente-strip { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; align-items: flex-start; justify-content: center; padding-top: 12px; min-height: 600px; }
+    .hc-paciente-expand { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; border: 1px solid #cbd5e1; background: #fff; border-radius: 8px; cursor: pointer; min-width: 36px; }
+    .hc-paciente-expand:hover { background: #eef6ff; border-color: #1565c0; }
+    .hc-paciente-expand-ico { font-size: 18px; }
+    .hc-paciente-expand-text { font-size: 9px; font-weight: 700; color: #475569; writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .04em; text-transform: uppercase; }
+    .hc-col-toggle { background: rgba(255,255,255,.7); border: 1px solid #e2e8f0; color: #1e40af; padding: 0 8px; border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 22px; }
+    .hc-col-toggle:hover { background: #fff; border-color: #1565c0; }
+    .hc-col > .ase-card:last-child { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .hc-col-full { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+    .hc-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .hc-form .ase-f-wide { grid-column: span 2; }
+    .hc-form label { font-size: 11px; color: #475569; font-weight: 600; text-transform: uppercase; }
+
+    .hc-list-card { min-height: 0; }
+    .hc-list { overflow: auto; flex: 1; padding: 4px; max-height: 440px; }
+    .hc-item { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; background: #fff; cursor: pointer; position: relative; }
+    .hc-item.sel { border-color: #1565c0; background: #eff6ff; }
+    .hc-item-h { display: flex; justify-content: space-between; align-items: flex-start; }
+    .hc-item-prof { font-size: 12.5px; color: #0f172a; }
+    .hc-item-fecha { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .hc-item-obs { font-size: 11px; color: #475569; font-style: italic; margin-top: 6px; }
+    .hc-item-pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-top: 6px; text-transform: uppercase; }
+    .hc-est-abierta { background: #dbeafe; color: #1e40af; }
+    .hc-est-cerrada { background: #dcfce7; color: #166534; }
+    .hc-est-inactiva { background: #fee2e2; color: #991b1b; }
+    .hc-item-menu { font-size: 20px; color: #64748b; padding: 0 6px; }
+
+    .dropdown { position: relative; }
+    .hc-menu { position: absolute; right: 0; top: 24px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(15,23,42,.1); min-width: 200px; z-index: 100; padding: 6px 0; }
+    .hc-menu-h { font-size: 11px; font-weight: 700; color: #94a3b8; padding: 6px 12px; text-transform: uppercase; }
+    .hc-menu-item { display: block; width: 100%; padding: 8px 12px; background: none; border: none; text-align: left; font-size: 12.5px; color: #0f172a; cursor: pointer; }
+    .hc-menu-item:hover { background: #f1f5f9; }
+    .hc-menu-item:disabled { color: #cbd5e1; cursor: not-allowed; }
+
+    .hc-actions { display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; justify-content: flex-end; flex-wrap: wrap; align-items: center; }
+    .hc-info-msg { padding: 8px 14px; background: #ecfdf5; border-left: 3px solid #16a34a; font-size: 12px; color: #166534; }
+    .hc-autosave { margin-left: auto; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: background-color .25s, color .25s; }
+    .hc-autosave-limpio    { background: #f1f5f9; color: #475569; }
+    .hc-autosave-sucio     { background: #fef3c7; color: #92400e; }
+    .hc-autosave-guardando { background: #dbeafe; color: #1e40af; }
+    .hc-autosave-guardado  { background: #d1fae5; color: #065f46; }
+    .hc-autosave-error     { background: #fee2e2; color: #991b1b; }
+    .hc-buscar { padding: 12px 14px; }
+    .hc-buscar-lbl { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .hc-buscar-row { display: flex; gap: 6px; margin-top: 4px; max-width: 520px; }
+    .hc-buscar-row > input { flex: 1; }
+
+    /* Menu lateral del modulo (reemplaza los tabs horizontales).
+       Usamos !important porque hay reglas heredadas en app.css que aplican
+       display:flex a .ase-card y vencen a la specificity de 2 clases. */
+    /* Grid del modal interno (vuelve a 2 columnas tras sacar el chat al grid externo):
+       menu lateral (izquierda) | cuerpo del tab (centro). */
+    .hc-col-full.hc-with-menu { display: grid !important; grid-template-columns: 230px 1fr !important; grid-template-rows: 1fr; gap: 0; min-height: 0; }
+    .hc-col-full.hc-with-menu.menu-colapsado { grid-template-columns: 56px 1fr !important; }
+    .hc-side-menu { background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
+    .hc-side-toggle { background: none; border: none; border-bottom: 1px solid #e2e8f0; padding: 10px 12px; font-size: 14px; color: #1565c0; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; }
+    .hc-side-toggle:hover { background: #eef6ff; }
+    .hc-side-toggle-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #475569; font-weight: 700; }
+    .hc-side-nav { flex: 1; overflow-y: auto; padding: 6px 0; }
+    .hc-side-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; background: none; border: none; border-left: 3px solid transparent; color: #334155; font-size: 12.5px; font-weight: 600; cursor: pointer; text-align: left; position: relative; transition: background .15s, border-color .15s; }
+    .hc-side-item:hover { background: #eef6ff; }
+    .hc-side-item.sel { background: #dbeafe; color: #1565c0; border-left-color: #1565c0; }
+    .hc-side-icon { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
+    .hc-side-lbl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hc-side-badge { background: #1565c0; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; flex-shrink: 0; }
+    .menu-colapsado .hc-side-lbl, .menu-colapsado .hc-side-badge { display: none; }
+    .menu-colapsado .hc-side-item { justify-content: center; padding: 10px 6px; }
+    .menu-colapsado .hc-side-toggle { justify-content: center; padding: 10px 6px; }
+    /* Conservamos las clases tab por compat — escondidas (no se renderizan) */
+    .hc-tabs { display: none; }
+    .hc-tab { display: none; }
+    .hc-tab.sel { display: none; }
+    /* Badge con conteo dentro de la pestana (ej. cantidad de medicamentos en la orden). */
+    .hc-tab-badge { display:inline-block; background:#1565c0; color:#fff; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; margin-left:6px; vertical-align:middle; }
+    .hc-tab-body { padding: 18px; flex: 1; overflow: auto; }
+    .hc-empty-detail { padding: 60px 30px; }
+    .hc-placeholder { padding: 30px; text-align: center; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; }
+    .hc-placeholder-t { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+    .hc-placeholder-d { font-size: 12.5px; color: #64748b; }
+
+    .hc-form-padding { padding: 14px; }
+    .hc-paciente-card { padding: 10px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; }
+    .hc-paciente-nm { font-weight: 700; color: #0f172a; font-size: 13px; }
+    .hc-paciente-doc { font-family: monospace; font-size: 11.5px; color: #1e40af; margin-top: 2px; }
+    .hc-paciente-card button { padding: 0 4px; font-size: 11px; margin-top: 4px; }
+
+    /* Card que se muestra cuando el formato de historia viene fijado por el servicio
+       asignado. Lo destacamos en amber para distinguirlo de los filtros normales. */
+    .hc-forzado-card { border-left: 3px solid #f59e0b; }
+    .hc-forzado-name { font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 4px; }
+
+    /* Opcion del modal "Imprimir paquete": checkbox + label + sub-texto. */
+    .hc-impr-opt { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; background: #fff; }
+    .hc-impr-opt label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #0f172a; margin: 0; }
+    .hc-impr-opt label input { margin: 0; }
+    .hc-impr-opt label em { color: #64748b; font-style: normal; font-size: 11.5px; font-weight: 500; }
+    .hc-impr-opt small { display: block; margin-left: 26px; color: #94a3b8; font-size: 11px; margin-top: 2px; }
+
+    .cie-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 950; }
+    .cie-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 720px; max-width: 95vw; max-height: 80vh; background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(15,23,42,.25); z-index: 951; display: flex; flex-direction: column; }
+    .cie-modal-lg { width: 900px; }
+    .cie-modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; }
+    .cie-modal-h h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
+    .cie-modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+    .cie-modal-body { padding: 18px; overflow: auto; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    /// <summary>Paciente para el que se abre el modulo. Si esta seteado, NO se permite cambiar.</summary>
+    [Parameter] public PacienteAsignacionDto? PacienteContexto { get; set; }
+
+    /// <summary>
+    /// Codigo (no Guid) del formato de historia que ya viene configurado en el
+    /// servicio asignado. Si esta presente, el profesional NO elige formato:
+    /// se usa ESTE para crear historias nuevas y el dropdown de "Formato de
+    /// historia" pasa a ser solo filtro de busqueda de historias previas.
+    /// Cuando es null o el codigo no resuelve a un FormDefinition activo,
+    /// el modulo se comporta como antes (el profesional elige del dropdown).
+    /// </summary>
+    [Parameter] public string? FormatoForzadoCodigo { get; set; }
+
+    private DateOnly? _filFechaIni;
+    private DateOnly? _filFechaFin;
+    private string _filFormato = "";
+    // Formato forzado por el servicio asignado (viene de Asignacion.FormatoHistoria
+    // resuelto a su FormDefinition). Cuando esta seteado, IniciarHistoria usa este
+    // formato y el dropdown queda solo como filtro de busqueda.
+    private Guid? _formatoForzadoId;
+    private string? _formatoForzadoNombre;
+    private string _busqueda = "";
+
+    private readonly string[] _tabs = new[] {
+        "Historial", "Escalas", "Evoluciones", "Consentimientos",
+        "Ordenes medicamento", "Ordenes servicios Propias",
+        "Insumos", "Remisiones", "Ordenes incapacidad", "Ordenes certificaciones"
+    };
+    /// <summary>Estado de colapso del menu lateral. False = visible con etiquetas, true = solo iconos.</summary>
+    private bool _menuColapsado;
+    /// <summary>Estado de colapso de la columna del chat WhatsApp (lateral derecha).
+    /// Inicia en true (colapsado) para que el doctor no tenga el chat encima desde el
+    /// arranque; lo expande con un click cuando necesita escribir al paciente.</summary>
+    private bool _chatColapsado = true;
+
+    /// <summary>Callback del panel WhatsApp tras guardar el telefono del paciente desde
+    /// su propio mini-modal. Refresca el render para que el PacienteActivo refleje el
+    /// nuevo numero (el panel ya lo tiene actualizado internamente).</summary>
+    private async Task HandleTelefonoActualizado(string nuevoTelefono)
+    {
+        // Si el paciente vino como contexto (param) no podemos mutarlo aqui; el padre
+        // (Atencion.razor) deberia rehidratarlo al re-renderizar. Si tenemos el _paciente
+        // interno (modo "Buscar paciente") lo reemplazamos con el nuevo telefono via record-with.
+        if (_paciente is PacienteAsignacionDto p)
+        {
+            _paciente = p with { Telefono = nuevoTelefono };
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+    /// <summary>Estado de colapso de la columna izquierda (paciente + filtros + lista
+    /// de historias). Cuando se colapsa, queda una franja vertical con boton para
+    /// volver a expandir. Combinada con chat colapsado, el modulo de historias usa
+    /// todo el ancho disponible.</summary>
+    private bool _pacienteColapsado;
+
+    /// <summary>Devuelve (icono unicode, conteo de badge) para una etiqueta del menu.</summary>
+    private (string icono, int badge) IconoYBadge(string tab) => tab switch
+    {
+        "Historial" => ("\U0001F4DD", 0),                      // notepad
+        "Escalas" => ("\U0001F4CB", _escCount),                // clipboard
+        "Evoluciones" => ("\U0001F4C8", _evoCount),            // chart up
+        "Consentimientos" => ("✅", _conCount),            // check mark
+        "Ordenes medicamento" => ("\U0001F48A", _medCount),    // pill
+        "Ordenes servicios Propias" => ("\U0001F3E5", _servCount), // hospital
+        "Insumos" => ("\U0001F4E6", _insCount),                // box
+        "Remisiones" => ("↗", _remCount),                 // arrow up-right
+        "Ordenes incapacidad" => ("\U0001F4C4", _incCount),    // page facing up
+        "Ordenes certificaciones" => ("\U0001F4DC", _certCount), // scroll
+        _ => ("•", 0)
+    };
+    private string _tabSel = "Historial";
+
+    private List<HistoriaRow> _historias = new();
+    private HistoriaRow? _historiaSel;
+    private Guid? _menuAbierto;
+    /// <summary>ProfesionalId del usuario logueado (claim "profesional_id"). Null
+    /// si el usuario es admin (no esta vinculado a un profesional). Sirve para:
+    /// (1) reanudar la HC abierta del MISMO doctor al pulsar Iniciar; (2) decidir
+    /// si la HC seleccionada se muestra readonly (pertenece a otro doctor).</summary>
+    private Guid? _miProfesionalId;
+    /// <summary>True cuando la HC seleccionada NO pertenece al doctor logueado:
+    /// el FormViewer va en modo lectura para impedir modificar HC ajenas. Los
+    /// usuarios admin sin profesional_id NO entran en este modo.</summary>
+    private bool _hcEsDeOtroDoctor;
+    /// <summary>Conteo de medicamentos para badge en la pestana. Se mantiene
+    /// sincronizado via OnCountChanged del componente OrdenMedicamentos.</summary>
+    private int _medCount;
+    /// <summary>Conteo de servicios para badge en la pestana "Ordenes servicios Propias".</summary>
+    private int _servCount;
+    /// <summary>Conteo de incapacidades para badge en la pestana "Ordenes incapacidad".</summary>
+    private int _incCount;
+    /// <summary>Conteo de certificaciones para badge en la pestana "Ordenes certificaciones".</summary>
+    private int _certCount;
+    /// <summary>Conteo de remisiones para badge en la pestana "Remisiones".</summary>
+    private int _remCount;
+    /// <summary>Conteo de insumos para badge en la pestana "Insumos".</summary>
+    private int _insCount;
+    /// <summary>Conteo de escalas para badge en la pestana "Escalas".</summary>
+    private int _escCount;
+    /// <summary>Conteo de evoluciones diligenciadas para badge en la pestana "Evoluciones".</summary>
+    private int _evoCount;
+    /// <summary>Conteo de consentimientos diligenciados para badge en la pestana "Consentimientos".</summary>
+    private int _conCount;
+
+    // =================== AUTOGUARDADO HC HISTORIAL ===================
+    /// <summary>Estado visible del autoguardado: limpio | sucio | guardando | guardado | error.</summary>
+    private string _saveStatus = "limpio";
+    private string? _saveTitle;
+    private DateTime? _ultimoGuardado;
+    /// <summary>CTS para cancelar el debounce cuando llegan cambios nuevos.</summary>
+    private System.Threading.CancellationTokenSource? _autosaveCts;
+    private const int AutoSaveDebounceMs = 2000;
+
+    private List<FormDefinitionDto> _formatos = new();
+    private FormSchema? _schemaActual;
+    private PrefillRouteSet _prefillRoutesActual = new();
+    private Dictionary<string, string?> _valores = new();
+    /// <summary>Names del schema que estan poblados desde la fuente derivada
+    /// "historiaMedica" (medicamentos.lista_numerada, etc.). Se recalcula cada
+    /// vez que cambian los datos derivados (al agregar/quitar medicamentos).
+    /// El FormViewer los renderiza disabled con badge "auto".</summary>
+    private HashSet<string> _hcReadOnlyKeys = new();
+    // Keys del header (No Historia / Fecha / Hora) que se mantienen siempre readonly.
+    // Se reaplican como base cada vez que se refresca el prefill historia medica.
+    private HashSet<string> _hcHeaderReadOnlyKeys = new();
+    private string? _formatoActualNombre;
+    private string? _subtituloFormato;
+    private string? _imprimirMsg;
+
+    // ---- Modal "Imprimir paquete" ----
+    // Permite al especialista elegir que documentos imprimir (HC y/o las ordenes
+    // que tengan datos). Conteos vienen de los Svc.ContarPorHistoriaAsync.
+    private bool _showImprimirModal;
+    private bool _imprIncluirHc;
+    private bool _imprIncluirMed;
+    private bool _imprIncluirSrv;
+    private bool _imprIncluirInc;
+    private bool _imprIncluirCert;
+    private bool _imprIncluirEsc;
+    private bool _imprIncluirEvo;
+    private bool _imprIncluirCon;
+    private int _imprMedCount, _imprSrvCount, _imprIncCount, _imprCertCount, _imprEscCount, _imprEvoCount, _imprConCount;
+
+    private PacienteAsignacionDto? _paciente;
+
+    private bool _showPacModal;
+    private string _modalDoc = "";
+    private string _modalNombre = "";
+    private List<PacienteFiltroResultadoDto> _modalGrid = new();
+    private bool _modalBusy;
+
+    // Paciente efectivo: prioriza el parametro, despues el seleccionado en el modal interno.
+    private PacienteAsignacionDto? PacienteActivo => PacienteContexto ?? _paciente;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _formatos = (await FormsSvc.ListAsync()).Where(f => f.Activo).ToList();
+        // Si nos pasaron un codigo de formato forzado (viene del servicio asignado),
+        // lo resolvemos a su Guid para usarlo al iniciar historia. NO toca _filFormato
+        // (que es solo el filtro de busqueda de historias previas).
+        if (!string.IsNullOrWhiteSpace(FormatoForzadoCodigo))
+        {
+            var match = _formatos.FirstOrDefault(f =>
+                string.Equals(f.Codigo, FormatoForzadoCodigo, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(f.CodigoSecundario, FormatoForzadoCodigo, StringComparison.OrdinalIgnoreCase));
+            _formatoForzadoId = match?.Id;
+            _formatoForzadoNombre = match?.Nombre;
+        }
+        await AutoCargarHcEnCursoSiCorrespondeAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Cuando el modal cambia de paciente sin recrear el componente (raro pero
+        // posible), re-evaluamos si hay HC en curso para auto-cargar.
+        await AutoCargarHcEnCursoSiCorrespondeAsync();
+    }
+
+    private bool _autoCargaIntentada;
+
+    /// <summary>Al entrar el doctor al modal de HC con un paciente activo y un
+    /// formato del servicio: si ya hay una HC abierta de ese doctor sobre ese
+    /// formato + paciente, la pre-seleccionamos automaticamente. Asi el doctor
+    /// no tiene que pulsar "Iniciar historia medica" para retomar la HC en curso.
+    /// Se ejecuta una sola vez por sesion del componente.</summary>
+    private async Task AutoCargarHcEnCursoSiCorrespondeAsync()
+    {
+        if (_autoCargaIntentada) { return; }
+        if (PacienteActivo is not PacienteAsignacionDto p) { return; }
+        if (_formatoForzadoId is not Guid fid) { return; }
+        _autoCargaIntentada = true;
+
+        var miProf = await ResolverMiProfesionalIdAsync();
+        if (miProf is not Guid pidProf) { return; }
+
+        var hcId = await HcSvc.BuscarAbiertaDelProfesionalAsync(p.Id, pidProf, fid);
+        if (hcId is not Guid id) { return; }
+
+        // Cargar las HC del paciente (para tenerlas en la lista lateral) y
+        // seleccionar la que esta en curso.
+        await MostrarHistorias();
+        var fila = _historias.FirstOrDefault(x => x.Id == id);
+        if (fila is null) { return; }
+        await Seleccionar(fila);
+        StateHasChanged();
+    }
+
+    private void OpenPacienteModal()
+    {
+        if (PacienteContexto is not null) { return; }
+        _showPacModal = true;
+        _modalDoc = ""; _modalNombre = "";
+        _modalGrid = new();
+    }
+
+    private void ClosePacienteModal() => _showPacModal = false;
+
+    private async Task BuscarPaciente()
+    {
+        _modalBusy = true;
+        try
+        {
+            var f = new BusquedaPacienteFiltro(
+                null,
+                string.IsNullOrWhiteSpace(_modalDoc) ? null : _modalDoc.Trim(),
+                string.IsNullOrWhiteSpace(_modalNombre) ? null : _modalNombre.Trim(),
+                null, null);
+            _modalGrid = (await AsigSvc.BuscarPacientesAvanzadoAsync(f)).ToList();
+        }
+        finally { _modalBusy = false; }
+    }
+
+    private async Task PickPaciente(PacienteFiltroResultadoDto r)
+    {
+        var full = await AsigSvc.GetPacienteAsync(r.Id);
+        if (full is null) { return; }
+        _paciente = full;
+        _showPacModal = false;
+    }
+
+    private async Task MostrarHistorias()
+    {
+        if (PacienteActivo is not PacienteAsignacionDto p) { return; }
+        Guid? formId = Guid.TryParse(_filFormato, out var fid) ? fid : null;
+        var rows = await HcSvc.ListarPorPacienteAsync(p.Id, _filFechaIni, _filFechaFin, formId);
+        _historias = rows.Select(r => new HistoriaRow
+        {
+            Id = r.Id,
+            Especialista = r.EspecialistaNombre ?? "(sin nombre)",
+            Fecha = DateOnly.FromDateTime(r.FechaApertura.LocalDateTime),
+            Estado = r.Estado,
+            Observaciones = $"[{r.FormatoCodigo}] {r.FormatoNombre}" + (r.MotivoInactivacion is not null ? $" — Motivo: {r.MotivoInactivacion}" : ""),
+            ProfesionalId = r.ProfesionalId
+        }).ToList();
+    }
+
+    /// <summary>Lee el claim "profesional_id" del usuario logueado, una sola
+    /// vez por sesion del componente. Null para admins (no son profesionales).</summary>
+    private async Task<Guid?> ResolverMiProfesionalIdAsync()
+    {
+        if (_miProfesionalId is Guid cached) { return cached; }
+        if (AuthState is null) { return null; }
+        var st = await AuthState;
+        var raw = st.User.FindFirst("profesional_id")?.Value;
+        if (Guid.TryParse(raw, out var pid))
+        {
+            _miProfesionalId = pid;
+            return pid;
+        }
+        return null;
+    }
+
+    private async Task Seleccionar(HistoriaRow h)
+    {
+        _menuAbierto = null;
+        // Si habia un autosave pendiente para otra HC, cancelarlo y resetear el estado visual.
+        _autosaveCts?.Cancel();
+        _saveStatus = "limpio";
+        _ultimoGuardado = null;
+        _saveTitle = null;
+        _historiaSel = h;
+        // Decidir si el FormViewer debe ir en lectura: la HC pertenece a otro
+        // profesional Y el usuario logueado SI es un profesional (admin sin
+        // profesional_id sigue pudiendo editar todo).
+        var miProf = await ResolverMiProfesionalIdAsync();
+        _hcEsDeOtroDoctor = miProf is Guid mi
+                            && h.ProfesionalId is Guid duenio
+                            && mi != duenio;
+        // Cargar la historia completa desde BD para mostrar sus valores en el FormViewer.
+        var detail = await HcSvc.GetAsync(h.Id);
+        if (detail is null) { return; }
+        _schemaActual = FormSchema.FromJson(detail.SchemaJson);
+        _prefillRoutesActual = PrefillRouteSet.FromJson(detail.PrefillRoutesJson);
+        _valores = DeserializeValores(detail.ValoresJson);
+        // Re-aplicar header autofill (No Historia / Fecha / Hora) por si la HC se
+        // creo antes de esta feature o el schema cambio. Mantiene el header sincronizado.
+        _hcHeaderReadOnlyKeys = HeaderAutoFillHelper.Aplicar(_valores, _schemaActual.Header, h.Id, detail.FechaApertura);
+        _hcReadOnlyKeys = new HashSet<string>(_hcHeaderReadOnlyKeys, StringComparer.OrdinalIgnoreCase);
+        _formatoActualNombre = detail.FormatoNombre;
+        _subtituloFormato = !string.IsNullOrWhiteSpace(detail.FormatoVersion)
+            ? $"Codigo: {detail.FormatoCodigo}  -  Version: {detail.FormatoVersion}"
+            : $"Codigo: {detail.FormatoCodigo}";
+        _tabSel = "Historial";
+        _imprimirMsg = null;
+        // Reset autoguardado para la nueva HC.
+        _autosaveCts?.Cancel();
+        _saveStatus = "limpio";
+        _ultimoGuardado = null;
+        _saveTitle = "Los cambios se guardan automaticamente cada 2 segundos.";
+        // Refrescar el badge de la pestana de medicamentos para la nueva HC.
+        _medCount = await OrdMedSvc.ContarPorHistoriaAsync(h.Id);
+        _remCount = await RemSvc.ContarPorHistoriaAsync(h.Id);
+        _insCount = await InsumoSvc.ContarPorHistoriaAsync(h.Id);
+        _escCount = await EscSvc.ContarPorHistoriaAsync(h.Id);
+        _evoCount = await DocSvc.ContarPorHistoriaAsync(h.Id, "EVOLUCION");
+        _conCount = await DocSvc.ContarPorHistoriaAsync(h.Id, "CONSENTIMIENTO");
+        // Aplicar fuente derivada "historiaMedica" (medicamentos.lista_numerada, etc.)
+        // ANTES de pintar. Asi al abrir una HC vieja el contenido refleja la orden
+        // actual aunque haya cambiado entre sesiones, no el ValoresJson historico.
+        await RefrescarPrefillHistoriaMedicaAsync(h.Id);
+    }
+
+    /// <summary>
+    /// Carga la fuente derivada (medicamentos de la HC actual), aplica los mapeos
+    /// configurados en la ruta sourceModule = "historiaMedica" y actualiza
+    /// _hcReadOnlyKeys para que el FormViewer marque esos campos como auto.
+    /// Llamada al abrir la HC y cada vez que el doctor agrega/quita un medicamento.
+    /// </summary>
+    // Serializa el acceso al DokTrinoDbContext compartido del componente para evitar
+    // InvalidOperationException ("A second operation was started on this context
+    // instance...") entre el autosave debounced y RefrescarPrefillHistoriaMedica.
+    // Un scope nuevo via IServiceScopeFactory no resolveria ITenantContext y
+    // los Query Filters de tenant retornarian 0 filas, asi que mantenemos el
+    // DbContext del componente pero turnamos las operaciones.
+    private readonly SemaphoreSlim _dbLock = new(1, 1);
+
+    /// <summary>Reintenta una operacion EF Core hasta 3 veces si choca con otro
+    /// flujo (chat IA, WhatsApp panel) que tiene el DbContext ocupado.</summary>
+    private static async Task<T> RetryAsync<T>(Func<Task<T>> op)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            try { return await op(); }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("second operation", StringComparison.OrdinalIgnoreCase))
+            {
+                await Task.Delay(150 * (i + 1));
+            }
+        }
+        return await op();
+    }
+
+    private async Task RefrescarPrefillHistoriaMedicaAsync(Guid hcId)
+    {
+        await _dbLock.WaitAsync();
+        try
+        {
+            var meds = await RetryAsync(() => OrdMedSvc.ListarPorHistoriaAsync(hcId));
+            var rem = await RetryAsync(() => RemSvc.ListarPorHistoriaAsync(hcId));
+            var inc = await RetryAsync(() => IncSvc.ListarPorHistoriaAsync(hcId));
+            var cert = await RetryAsync(() => CertSvc.ListarPorHistoriaAsync(hcId));
+            var ord = await RetryAsync(() => OrdSrvSvc.ListarPorHistoriaAsync(hcId));
+            var ins = await RetryAsync(() => InsumoSvc.ListarPorHistoriaAsync(hcId));
+
+            var fuentes = new HistoriaMedicaPrefillHelper.HmFuentes(meds, rem, inc, cert, ord, ins);
+            var medsKeys = HistoriaMedicaPrefillHelper.Aplicar(_valores, fuentes, _prefillRoutesActual, _schemaActual);
+
+            // MERGE: las del header (No Historia / Fecha / Hora) NO se pierden cuando
+            // se refresca el prefill de medicamentos. Esto era el bug que dejaba
+            // editable el encabezado tras el autosave.
+            _hcReadOnlyKeys = new HashSet<string>(_hcHeaderReadOnlyKeys, StringComparer.OrdinalIgnoreCase);
+            foreach (var k in medsKeys) { _hcReadOnlyKeys.Add(k); }
+
+            // Forzar nueva referencia del dict: Blazor compara por referencia al
+            // enviar Valores a FormViewer (SetParametersAsync). Sin esto, el
+            // FormViewer renderiza el dict viejo y la fila auto no aparece hasta
+            // que el usuario navega afuera y vuelve.
+            _valores = new Dictionary<string, string?>(_valores, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            // Loggea pero NO oculta el error: si la rama tabla falla queremos
+            // saberlo. Mantenemos las keys del header siempre.
+            Console.WriteLine($"[RefrescarPrefillHistoriaMedica] {ex.GetType().Name}: {ex.Message}");
+            _hcReadOnlyKeys = new HashSet<string>(_hcHeaderReadOnlyKeys, StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Handler que el componente OrdenMedicamentos invoca tras cada Add/Delete.
+    /// Refresca el badge y, sobre todo, re-aplica el prefill historiaMedica para
+    /// que los campos del formulario (visible o no) reflejen la nueva lista. Luego
+    /// dispara un autoguardado para persistir el cambio.
+    /// </summary>
+    /// <summary>
+    /// Cambio de tab en el menu lateral. Si el doctor vuelve al Historial
+    /// despues de agregar/quitar medicamentos en otro tab, refrescamos el
+    /// FormViewer SIN concurrencia (no hay autosave activo en este momento).
+    /// Esto resuelve el caso donde OnMedicamentosCountChanged en vivo choca
+    /// con el DbContext compartido por otros componentes.
+    /// </summary>
+    private async Task CambiarTab(string tab)
+    {
+        var prev = _tabSel;
+        _tabSel = tab;
+        if (tab == "Historial" && prev != "Historial" && _historiaSel is HistoriaRow h)
+        {
+            // Re-cargar los valores frescos desde BD y reaplicar el prefill.
+            // Asi las celdas auto-pobladas siempre reflejan el estado actual de
+            // los modulos (medicamentos, remisiones, etc.) sin importar lo que
+            // se haya hecho en el otro tab.
+            try
+            {
+                var detail = await HcSvc.GetAsync(h.Id);
+                if (detail is not null)
+                {
+                    _valores = DeserializeValores(detail.ValoresJson);
+                    _hcHeaderReadOnlyKeys = HeaderAutoFillHelper.Aplicar(_valores, _schemaActual.Header, h.Id, detail.FechaApertura);
+                }
+                await RefrescarPrefillHistoriaMedicaAsync(h.Id);
+                // Persistir las filas auto-cargadas (no esperar al autosave debounced)
+                if (string.Equals(h.Estado, "Abierta", StringComparison.OrdinalIgnoreCase))
+                {
+                    await HcSvc.GuardarValoresAsync(h.Id, SerializeValores(_valores), Guid.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CambiarTab Historial] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task OnMedicamentosCountChanged(int count)
+    {
+        _medCount = count;
+        if (_historiaSel is HistoriaRow h)
+        {
+            // Cancelar cualquier autosave debounced pendiente para evitar carrera
+            // entre nuestro guardado inmediato y el del debounce (ambos usan el
+            // mismo DokTrinoDbContext del componente y se chocan).
+            _autosaveCts?.Cancel();
+
+            await RefrescarPrefillHistoriaMedicaAsync(h.Id);
+            // Marcar como sucio y guardar inmediatamente (sin debounce) — el doctor
+            // espera que los campos auto-poblados ya esten persistidos cuando vuelva
+            // al tab Historial. Usamos un scope propio para evitar choques con el
+            // DbContext del componente (autosave, chat IA, etc.).
+            if (string.Equals(h.Estado, "Abierta", StringComparison.OrdinalIgnoreCase))
+            {
+                _saveStatus = "guardando";
+                await _dbLock.WaitAsync();
+                try
+                {
+                    var json = SerializeValores(_valores);
+                    await RetryAsync(async () => { await HcSvc.GuardarValoresAsync(h.Id, json, Guid.Empty); return 0; });
+                    _saveStatus = "guardado";
+                    _ultimoGuardado = DateTime.Now;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[OnMedicamentosCountChanged] {ex.GetType().Name}: {ex.Message}");
+                    _saveStatus = "error";
+                }
+                finally
+                {
+                    _dbLock.Release();
+                }
+            }
+            StateHasChanged();
+        }
+    }
+    private void ToggleMenu(Guid id) => _menuAbierto = _menuAbierto == id ? null : id;
+
+    private static Dictionary<string, string?> DeserializeValores(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) { return new(); }
+        try
+        {
+            var dict = JsonSerializer.Deserialize<Dictionary<string, string?>>(json);
+            return dict ?? new();
+        }
+        catch { return new(); }
+    }
+
+    private static string SerializeValores(Dictionary<string, string?> v)
+        => JsonSerializer.Serialize(v);
+
+    private async Task IniciarHistoria()
+    {
+        // Prioridad: 1) si el usuario eligio EXPLICITAMENTE un formato en el
+        //               filtro (dropdown), ese gana. Permite aplicar escalas o
+        //               formatos secundarios sobre el mismo servicio.
+        //            2) si no, el formato forzado por el servicio asignado
+        //               (Atencion).
+        // Si no hay ninguno, nada que iniciar.
+        Guid fid;
+        if (Guid.TryParse(_filFormato, out var fidFiltro)) { fid = fidFiltro; }
+        else if (_formatoForzadoId is Guid forzado) { fid = forzado; }
+        else { return; }
+        if (PacienteActivo is not PacienteAsignacionDto p) { return; }
+
+        // Reanudar HC abierta del mismo doctor sobre el mismo paciente y formato
+        // si existe. Asi al volver al paciente NO se duplican HCs y el doctor
+        // sigue editando la que ya empezo. Solo aplica si el usuario es un
+        // profesional (admins sin profesional_id siempre crean una nueva).
+        var miProf = await ResolverMiProfesionalIdAsync();
+        if (miProf is Guid pidProf)
+        {
+            var enCurso = await HcSvc.BuscarAbiertaDelProfesionalAsync(p.Id, pidProf, fid);
+            if (enCurso is Guid hcId)
+            {
+                // Si la HC ya esta en la lista la seleccionamos; si no, refrescamos
+                // la lista y luego la seleccionamos.
+                var existente = _historias.FirstOrDefault(x => x.Id == hcId);
+                if (existente is null)
+                {
+                    await MostrarHistorias();
+                    existente = _historias.FirstOrDefault(x => x.Id == hcId);
+                }
+                if (existente is not null)
+                {
+                    await Seleccionar(existente);
+                    return;
+                }
+            }
+        }
+
+        var detail = await FormsSvc.GetAsync(fid);
+        if (detail is null) { return; }
+        _schemaActual = FormSchema.FromJson(detail.SchemaJson);
+        _prefillRoutesActual = PrefillRouteSet.FromJson(detail.PrefillRoutesJson);
+        _valores = new();
+        // 1) Aplicar valores por defecto declarados en cada FormNode del schema.
+        //    Estos quedan visibles desde el primer render aunque no haya paciente.
+        DefaultValuesHelper.Aplicar(_valores, _schemaActual);
+        // 2) Prefill desde el paciente activo (paciente sobreescribe defaults si coincide).
+        await PrefillFromPaciente();
+        _formatoActualNombre = detail.Nombre;
+        _subtituloFormato = !string.IsNullOrWhiteSpace(detail.Version) ? $"Codigo: {detail.Codigo}  -  Version: {detail.Version}" : $"Codigo: {detail.Codigo}";
+        _tabSel = "Historial";
+
+        // Persistir la historia recien creada con los valores de prefill.
+        var especialista = await GetEspecialistaNombreAsync();
+        var creada = await HcSvc.CrearAsync(
+            new CrearHistoriaRequest(p.Id, fid, SerializeValores(_valores), especialista, miProf),
+            Guid.Empty);
+
+        // 3) Encabezado del documento (No Historia, Fecha, Hora). Se llena con el
+        //    consecutivo del HC y la fecha/hora de apertura, y quedan readonly.
+        _hcHeaderReadOnlyKeys = HeaderAutoFillHelper.Aplicar(_valores, _schemaActual.Header, creada.Id, creada.FechaApertura);
+        _hcReadOnlyKeys = new HashSet<string>(_hcHeaderReadOnlyKeys, StringComparer.OrdinalIgnoreCase);
+        // Persistir los valores recien rellenados (incluye header autofill).
+        await HcSvc.GuardarValoresAsync(creada.Id, SerializeValores(_valores), Guid.Empty);
+
+        var nueva = new HistoriaRow
+        {
+            Id = creada.Id,
+            Especialista = creada.EspecialistaNombre ?? "(usuario actual)",
+            Fecha = DateOnly.FromDateTime(creada.FechaApertura.LocalDateTime),
+            Estado = creada.Estado,
+            Observaciones = $"Iniciada con formato {detail.Codigo} para {p.NombreCompleto}",
+            ProfesionalId = creada.ProfesionalId
+        };
+        _historias.Insert(0, nueva);
+        _historiaSel = nueva;
+        _hcEsDeOtroDoctor = false; // la acabamos de crear nosotros
+        _imprimirMsg = null;
+        _medCount = 0; // HC recien creada no tiene medicamentos aun
+    }
+
+    private async Task<string?> GetEspecialistaNombreAsync()
+    {
+        if (AuthState is null) { return null; }
+        try
+        {
+            var st = await AuthState;
+            return st.User.Identity?.Name
+                ?? st.User.FindFirst(ClaimTypes.Name)?.Value
+                ?? st.User.FindFirst("name")?.Value
+                ?? st.User.FindFirst(ClaimTypes.Email)?.Value;
+        }
+        catch { return null; }
+    }
+
+    private async Task PrefillFromPaciente()
+    {
+        if (PacienteActivo is not PacienteAsignacionDto p) { return; }
+        // Datos del paciente (logica centralizada en PacientePrefillHelper para
+        // que HC, Escalas, Evoluciones y Consentimientos compartan el mismo prefill).
+        PacientePrefillHelper.Aplicar(_valores, p, _schemaActual, _prefillRoutesActual);
+
+        // Sistema: fecha/hora del momento + datos del usuario logueado. Los
+        // datos del tenant (agencia) y de la sede se quedan en null en este
+        // caller — el caller que sepa estos datos puede pasarlos. La sede
+        // tipica viene en el claim "sede_nombre"; si no esta, queda vacio.
+        try
+        {
+            string? usuarioNombre = null, usuarioEmail = null, sedeNombre = null;
+            if (AuthState is not null)
+            {
+                var state = await AuthState;
+                usuarioNombre = state.User.Identity?.Name
+                    ?? state.User.FindFirst("display_name")?.Value;
+                usuarioEmail = state.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+                sedeNombre = state.User.FindFirst("sede_nombre")?.Value;
+            }
+            var sistemaCtx = new SistemaPrefillHelper.SistemaCtx(
+                Ahora: DateTimeOffset.Now,
+                AgenciaNombre: null,
+                AgenciaSlogan: null,
+                SedeNombre: sedeNombre ?? p.Sede,
+                SedeCiudad: p.Ciudad,
+                UsuarioNombre: usuarioNombre,
+                UsuarioEmail: usuarioEmail);
+            SistemaPrefillHelper.Aplicar(_valores, sistemaCtx, _prefillRoutesActual);
+        }
+        catch { /* el prefill de sistema es best-effort */ }
+
+        // Firmas: paciente (mas reciente capturada) + profesional logueado.
+        try
+        {
+            var firmaPac = await FirmaResolverSvc.ResolverFirmaPacienteAsync(p.Id);
+            string? firmaProf = null;
+            if (AuthState is not null)
+            {
+                var state = await AuthState;
+                // 1) Perfil de campo: claim "profesional_id" presente
+                //    (login con sede especifica + profesional vinculado).
+                // 2) Admin: NameIdentifier (platform_user_id) + "tenant_id".
+                //    Esto cubre demo-admin y otros admins que estan
+                //    vinculados a un profesional pero no llevan el claim.
+                var profClaim = state.User.FindFirst("profesional_id")?.Value;
+                if (Guid.TryParse(profClaim, out var pid) && pid != Guid.Empty)
+                {
+                    firmaProf = await FirmaResolverSvc.ResolverFirmaPorProfesionalAsync(pid);
+                }
+                else
+                {
+                    var puid = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    var tidStr = state.User.FindFirst("tenant_id")?.Value;
+                    if (Guid.TryParse(puid, out var platformUserId) && Guid.TryParse(tidStr, out var tid))
+                    {
+                        firmaProf = await FirmaResolverSvc.ResolverFirmaProfesionalPorPlatformUserAsync(platformUserId, tid);
+                    }
+                }
+            }
+            FirmasPrefillHelper.Aplicar(_valores, firmaPac, firmaProf, _prefillRoutesActual);
+        }
+        catch { /* las firmas son opcionales: si fallan, el form sigue funcionando */ }
+    }
+
+    private async Task Descartar()
+    {
+        if (_historiaSel is HistoriaRow h)
+        {
+            // Pedimos motivo via prompt nativo; null o vacio = el usuario cancelo.
+            var motivo = await JS.InvokeAsync<string?>(
+                "prompt",
+                "Motivo de inactivacion de la historia clinica:",
+                "");
+            if (string.IsNullOrWhiteSpace(motivo)) { return; }
+
+            await HcSvc.DescartarAsync(h.Id, motivo.Trim(), Guid.Empty);
+            h.Estado = "Inactiva";
+            h.MotivoInactivacion = motivo.Trim();
+        }
+        _schemaActual = null; _valores = new(); _historiaSel = null;
+        _imprimirMsg = null;
+    }
+
+    private async Task Cerrar()
+    {
+        // Cancelamos cualquier autoguardado pendiente — CerrarAsync ya persiste los
+        // valores actuales como parte del cierre.
+        _autosaveCts?.Cancel();
+        if (_historiaSel is HistoriaRow h)
+        {
+            await HcSvc.CerrarAsync(h.Id, SerializeValores(_valores), Guid.Empty);
+            h.Estado = "Cerrada";
+        }
+        _schemaActual = null; _valores = new();
+        _imprimirMsg = null;
+        _saveStatus = "limpio";
+        _ultimoGuardado = null;
+    }
+
+    /// <summary>
+    /// Abre la vista documento de la historia en una pestana nueva, lista para
+    /// imprimir o guardar como PDF. La vista usa el FormSchema + valores
+    /// diligenciados + encabezado configurable y dispara window.print() al boton.
+    /// Requiere que la historia este previamente persistida (Iniciar / Cerrar).
+    /// </summary>
+    private async Task Imprimir()
+    {
+        if (_historiaSel is HistoriaRow h)
+        {
+            // Persistimos cambios pendientes antes de imprimir, asi lo que se
+            // imprime es lo mismo que esta en BD (solo si esta abierta).
+            if (string.Equals(h.Estado, "Abierta", StringComparison.OrdinalIgnoreCase))
+            {
+                try { await HcSvc.GuardarValoresAsync(h.Id, SerializeValores(_valores), Guid.Empty); }
+                catch { /* tolerar: la impresion no debe bloquearse por un fallo de guardado */ }
+            }
+            // Cargar conteos para decidir que checkboxes mostrar en el modal.
+            _imprMedCount  = await OrdMedSvc.ContarPorHistoriaAsync(h.Id);
+            _imprSrvCount  = await OrdSrvSvc.ContarPorHistoriaAsync(h.Id);
+            _imprIncCount  = await IncSvc.ContarPorHistoriaAsync(h.Id);
+            _imprCertCount = await CertSvc.ContarPorHistoriaAsync(h.Id);
+            _imprEscCount  = await EscSvc.ContarPorHistoriaAsync(h.Id);
+            _imprEvoCount  = await DocSvc.ContarPorHistoriaAsync(h.Id, "EVOLUCION");
+            _imprConCount  = await DocSvc.ContarPorHistoriaAsync(h.Id, "CONSENTIMIENTO");
+            // Sleccion por defecto: todo lo que tiene datos.
+            _imprIncluirHc   = true;
+            _imprIncluirMed  = _imprMedCount  > 0;
+            _imprIncluirSrv  = _imprSrvCount  > 0;
+            _imprIncluirInc  = _imprIncCount  > 0;
+            _imprIncluirCert = _imprCertCount > 0;
+            _imprIncluirEsc  = _imprEscCount  > 0;
+            _imprIncluirEvo  = _imprEvoCount  > 0;
+            _imprIncluirCon  = _imprConCount  > 0;
+            _showImprimirModal = true;
+            _imprimirMsg = null;
+        }
+        else
+        {
+            _imprimirMsg = "Selecciona o inicia una historia antes de imprimir.";
+        }
+    }
+
+    /// <summary>Confirmacion del modal: abre /imprimir-paquete con la lista de docs seleccionados.</summary>
+    private async Task ConfirmarImprimirAsync()
+    {
+        if (_historiaSel is not HistoriaRow h) { _showImprimirModal = false; return; }
+        var docs = new List<string>();
+        if (_imprIncluirHc)   { docs.Add("HC");   }
+        if (_imprIncluirMed)  { docs.Add("MED");  }
+        if (_imprIncluirSrv)  { docs.Add("SRV");  }
+        if (_imprIncluirInc)  { docs.Add("INC");  }
+        if (_imprIncluirCert) { docs.Add("CERT"); }
+        if (_imprIncluirEsc)  { docs.Add("ESC");  }
+        if (_imprIncluirEvo)  { docs.Add("EVO");  }
+        if (_imprIncluirCon)  { docs.Add("CON");  }
+        if (docs.Count == 0) { _imprimirMsg = "Selecciona al menos un documento."; return; }
+        _showImprimirModal = false;
+        await JS.InvokeVoidAsync("open", $"/imprimir-paquete/{h.Id}?docs={string.Join(",", docs)}", "_blank");
+    }
+
+    private void CancelarImprimir() => _showImprimirModal = false;
+
+    // =================== AUTOGUARDADO HC HISTORIAL ===================
+    /// <summary>
+    /// Handler que FormViewer dispara en cada cambio de valor del formulario.
+    /// Marca el estado como "sucio" y reinicia un debounce de @ref AutoSaveDebounceMs
+    /// milisegundos. Si llegan mas cambios antes de que expire el timer, se cancela
+    /// el anterior y se reinicia. Cuando el timer expira sin nuevos cambios,
+    /// dispara el guardado en BD.
+    /// </summary>
+    private async Task OnValorCambiado(KeyValuePair<string, string?> kv)
+    {
+        // Solo autoguardamos cuando hay HC abierta. Las cerradas son inmutables.
+        if (_historiaSel is not HistoriaRow h) { return; }
+        if (!string.Equals(h.Estado, "Abierta", StringComparison.OrdinalIgnoreCase)) { return; }
+
+        _saveStatus = "sucio";
+        _saveTitle = "Los cambios se guardan automaticamente cada 2 segundos.";
+        StateHasChanged();
+
+        // Cancelamos cualquier debounce pendiente.
+        _autosaveCts?.Cancel();
+        _autosaveCts = new System.Threading.CancellationTokenSource();
+        var token = _autosaveCts.Token;
+
+        try
+        {
+            await Task.Delay(AutoSaveDebounceMs, token);
+            await GuardarAhoraAsync(token);
+        }
+        catch (TaskCanceledException) { /* otro cambio reseteo el timer; ignorar */ }
+    }
+
+    /// <summary>
+    /// Persiste el JSON de valores en la BD. Maneja errores reportandolos en el
+    /// indicador visual sin romper el flujo del usuario. El siguiente cambio
+    /// reintenta automaticamente porque vuelve a disparar el debounce.
+    /// </summary>
+    private async Task GuardarAhoraAsync(System.Threading.CancellationToken ct = default)
+    {
+        if (_historiaSel is not HistoriaRow h) { return; }
+        if (!string.Equals(h.Estado, "Abierta", StringComparison.OrdinalIgnoreCase)) { return; }
+
+        _saveStatus = "guardando";
+        _saveTitle = "Guardando en la base de datos...";
+        StateHasChanged();
+
+        // Adquirir el _dbLock para serializar con RefrescarPrefillHistoriaMedica
+        // y otros flujos que tocan el DbContext compartido del componente.
+        await _dbLock.WaitAsync(ct);
+        try
+        {
+            await HcSvc.GuardarValoresAsync(h.Id, SerializeValores(_valores), Guid.Empty, ct);
+            _ultimoGuardado = DateTime.Now;
+            _saveStatus = "guardado";
+            _saveTitle = $"Ultimo guardado: {_ultimoGuardado:HH:mm:ss}";
+            StateHasChanged();
+
+            // Despues de unos segundos vuelve a estado "limpio" pero conservando
+            // el ultimoGuardado para el tooltip.
+            try
+            {
+                await Task.Delay(4000, ct);
+                if (_saveStatus == "guardado")
+                {
+                    _saveStatus = "limpio";
+                    StateHasChanged();
+                }
+            }
+            catch (TaskCanceledException) { /* nuevo cambio en pleno display */ }
+        }
+        catch (Exception ex) when (ex is not TaskCanceledException)
+        {
+            _saveStatus = "error";
+            _saveTitle = "Error al guardar: " + ex.Message;
+            StateHasChanged();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
+
+    private sealed class HistoriaRow
+    {
+        public Guid Id { get; set; }
+        public string Especialista { get; set; } = "";
+        public DateOnly Fecha { get; set; }
+        public string Estado { get; set; } = "Abierta";
+        public string? Observaciones { get; set; }
+        public string? MotivoInactivacion { get; set; }
+        /// <summary>Dueno de la HC. Permite distinguir cuando el usuario logueado
+        /// la abre como editor (es el mismo profesional) o solo en lectura.</summary>
+        public Guid? ProfesionalId { get; set; }
+    }
+}

@@ -1,0 +1,559 @@
+@page "/cfg-usuarios"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IUsuarioAdminService Svc
+@inject IRolService RolesSvc
+@inject ISucursalService SucSvc
+@inject IJSRuntime JS
+
+<PageTitle>Administracion de Usuarios - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Configuracion de la Entidad</div>
+        <h1 class="ase-title">Administracion de Usuarios</h1>
+    </div>
+    <button class="btn btn-primary btn-sm" @onclick="OpenCreateModal">+ Nuevo usuario</button>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Usuarios (@_users.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Correo</th>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Rol</th>
+                    <th>Sedes</th>
+                    <th class="text-center">Global</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in _users)
+                {
+                    <tr>
+                        <td class="mono">@u.Email</td>
+                        <td>@u.DisplayName</td>
+                        <td>@u.Estado</td>
+                        <td>
+                            <select class="form-select form-select-sm" @bind="u.RolSel">
+                                <option value="">--</option>
+                                @foreach (var r in _roles) { <option value="@r.Id">@r.Nombre</option> }
+                            </select>
+                        </td>
+                        <td>
+                            <div class="usu-sedes" title="@string.Join(", ", u.SedesNombres)">
+                                @if (u.SedesIds.Count == 0)
+                                {
+                                    <span class="usu-sede-empty">Sin sedes</span>
+                                }
+                                else
+                                {
+                                    @foreach (var n in u.SedesNombres) { <span class="usu-sede-pill">@n</span> }
+                                }
+                                <button class="btn btn-link btn-sm usu-sede-edit" @onclick="() => OpenSedesModal(u)">editar</button>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input" @bind="u.Global" />
+                        </td>
+                        <td class="ase-row-actions">
+                            <button class="btn btn-outline-primary btn-sm" title="Editar detalles" @onclick="() => SelectRow(u)">&#9998;</button>
+                            <button class="btn btn-primary btn-sm" title="Guardar asignacion" @onclick="() => Asignar(u)">&#10003;</button>
+                            <button class="btn btn-outline-warning btn-sm" title="Reiniciar clave" @onclick="() => ResetPassword(u)">&#128274;</button>
+                            <button class="btn btn-outline-danger btn-sm" title="Quitar de la entidad" @onclick="() => Eliminar(u)">&times;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_users.Count == 0) { <div class="ase-empty">Sin usuarios.</div> }
+    </div>
+</div>
+
+@* ============================================================
+   PANEL DE DETALLE: campos completos + reset clave + permisos
+   coordinacion. Se muestra cuando hay un usuario seleccionado
+   (boton lapiz en la tabla).
+   ============================================================ *@
+@if (_selectedRow is Row sel)
+{
+    <div class="usu-det-grid">
+        @* --- Sidebar izquierdo: avatar + foto --- *@
+        <div class="ase-card usu-det-side">
+            <div class="usu-avatar-circle">@sel.Iniciales</div>
+            <div class="usu-avatar-nm">@(string.IsNullOrWhiteSpace(sel.DisplayName) ? sel.Email : sel.DisplayName)</div>
+            <div class="usu-avatar-em">@sel.Email</div>
+            <div class="usu-avatar-pill">@(sel.Inhabilitado ? "Inhabilitado" : "Activo")</div>
+            <hr />
+            <div class="usu-photo-drop">
+                <div class="usu-photo-ico">&#128247;</div>
+                <div class="usu-photo-t">Foto de perfil</div>
+                <div class="usu-photo-s">PNG o JPG &middot; Max. 2 MB</div>
+                <button class="btn btn-outline-secondary btn-sm" disabled title="Pendiente">Elegir archivo</button>
+                <div class="usu-photo-name">Sin archivo (pendiente de cableado)</div>
+            </div>
+        </div>
+
+        @* --- Bloque central + inferior --- *@
+        <div class="usu-det-main">
+            @if (_detalleError is not null) { <div class="ase-alert">@_detalleError</div> }
+            @if (_detalleOk is not null) { <div class="ase-ok">@_detalleOk</div> }
+
+            @* Campos que puedes modificar *@
+            <div class="ase-card">
+                <div class="ase-card-h">&#9998; Campos que puedes modificar</div>
+                <div class="ase-form usu-form-grid">
+                    <div class="ase-f"><label>Correo *</label><input class="form-control form-control-sm asg-ro" readonly value="@sel.Email" /></div>
+                    <div class="ase-f"><label>Identificacion</label><input class="form-control form-control-sm mono" @bind="sel.Documento" placeholder="Cedula" /></div>
+                    <div class="ase-f ase-f-wide"><label>Nombre (display)</label><input class="form-control form-control-sm" @bind="sel.DisplayName" /></div>
+                    <div class="ase-f"><label>Usuario (login corto)</label><input class="form-control form-control-sm mono" @bind="sel.Username" placeholder="ana.toro" /></div>
+                    <div class="ase-f"><label>Celular</label><input class="form-control form-control-sm" @bind="sel.Celular" /></div>
+                    <div class="ase-f"><label>Fijo</label><input class="form-control form-control-sm" @bind="sel.Fijo" /></div>
+                    <div class="ase-f"><label>Primer Nombre</label><input class="form-control form-control-sm" @bind="sel.PrimerNombre" /></div>
+                    <div class="ase-f"><label>Segundo Nombre</label><input class="form-control form-control-sm" @bind="sel.SegundoNombre" /></div>
+                    <div class="ase-f"><label>Primer Apellido</label><input class="form-control form-control-sm" @bind="sel.PrimerApellido" /></div>
+                    <div class="ase-f"><label>Segundo Apellido</label><input class="form-control form-control-sm" @bind="sel.SegundoApellido" /></div>
+                    <div class="ase-f"><label>Ciudad</label><input class="form-control form-control-sm" @bind="sel.Ciudad" placeholder="Cali, Bogota, ..." /></div>
+                    <div class="ase-f ase-f-wide"><label>Direccion</label><input class="form-control form-control-sm" @bind="sel.Direccion" placeholder="Ingresa la direccion principal" /></div>
+                    <label class="ase-chk"><input type="checkbox" @bind="sel.Inhabilitado" /> <span>Inhabilitar usuario</span></label>
+                </div>
+                <div class="ase-actions">
+                    <button class="btn btn-secondary btn-sm" @onclick="CerrarDetalle">Cerrar</button>
+                    <button class="btn btn-primary btn-sm" @onclick="GuardarPerfil" disabled="@_busy">@(_busy ? "Guardando..." : "Guardar cambios del perfil")</button>
+                </div>
+            </div>
+
+            @* Seguridad y acceso *@
+            <div class="ase-card">
+                <div class="ase-card-h">&#128274; Seguridad y acceso</div>
+                <div class="ase-form usu-form-grid">
+                    <div class="ase-f ase-f-wide">
+                        <label>Nueva clave del usuario (minimo 6 caracteres)</label>
+                        <div class="asg-input-row">
+                            <input type="password" class="form-control form-control-sm" @bind="_resetPwd" placeholder="Nueva clave temporal" />
+                            <button class="btn btn-warning btn-sm" @onclick="ResetPasswordPanel" disabled="@_busy">Reiniciar clave</button>
+                        </div>
+                        <small class="usu-help">Al guardar, el usuario deberia iniciar sesion con la nueva clave y, idealmente, cambiarla.</small>
+                    </div>
+                </div>
+            </div>
+
+            @* Permisos de uso modulo (coordinacion) *@
+            <div class="ase-card">
+                <div class="ase-card-h">Permisos de uso modulo</div>
+                <div class="usu-perm-sub">
+                    <div class="usu-perm-t">Activa los permisos por modulo</div>
+                    <div class="usu-perm-h">Habilita permisos granulares por modulo segun la configuracion general del sistema.</div>
+                </div>
+                <div class="usu-perm-list">
+                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaTerapias" /> <span class="usu-perm-lbl">COORDINADOR_TERAPIAS</span></label>
+                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaEnfermeria" /> <span class="usu-perm-lbl">COORDINADOR_ENFERMERIA</span></label>
+                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaConsultas" /> <span class="usu-perm-lbl">COORDINADOR_CONSULTAS</span></label>
+                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaEquipos" /> <span class="usu-perm-lbl">COORDINADOR_EQUIPOS</span></label>
+                </div>
+                <div class="ase-actions">
+                    <button class="btn btn-primary btn-sm" @onclick="GuardarPermisosCoord" disabled="@_busy">@(_busy ? "Guardando..." : "Actualizar permisos del usuario")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== Modal Crear usuario ===== *@
+@if (_showCreateModal)
+{
+    <div class="usu-modal-backdrop" @onclick="CloseCreateModal"></div>
+    <div class="usu-modal">
+        <div class="usu-modal-h">
+            <h3>Nuevo usuario</h3>
+            <button class="usu-modal-close" @onclick="CloseCreateModal">&times;</button>
+        </div>
+        <div class="usu-modal-body">
+            @if (_modalError is not null) { <div class="ase-alert">@_modalError</div> }
+            <div class="ase-form">
+                <div class="ase-f ase-f-wide"><label>Correo *</label><input class="form-control form-control-sm" @bind="_nEmail" placeholder="usuario@ips.com" /></div>
+                <div class="ase-f ase-f-wide"><label>Nombre</label><input class="form-control form-control-sm" @bind="_nNombre" /></div>
+                <div class="ase-f"><label>Clave *</label><input type="password" class="form-control form-control-sm" @bind="_nPass" placeholder="Min. 6 caracteres" /></div>
+                <div class="ase-f"><label>Rol</label>
+                    <select class="form-select form-select-sm" @bind="_nRol">
+                        <option value="">--</option>
+                        @foreach (var r in _roles) { <option value="@r.Id">@r.Nombre</option> }
+                    </select>
+                </div>
+                <div class="ase-f ase-f-wide">
+                    <label>Sedes que maneja</label>
+                    <div class="usu-sedes-grid">
+                        @if (_sucursales.Count == 0)
+                        {
+                            <span class="usu-sede-empty">No hay sedes configuradas. Crea sedes en "Configuracion de Empresa".</span>
+                        }
+                        else
+                        {
+                            @foreach (var s in _sucursales)
+                            {
+                                <label class="usu-sede-chk">
+                                    <input type="checkbox" checked="@_nSedes.Contains(s.Id)" @onchange="e => ToggleNSede(s.Id, e)" />
+                                    <span>@s.Nombre</span>
+                                </label>
+                            }
+                        }
+                    </div>
+                </div>
+                <label class="ase-chk ase-f-wide"><input type="checkbox" @bind="_nGlobal" /> <span>Usuario global (puede acceder a cualquier empresa del SaaS)</span></label>
+            </div>
+        </div>
+        <div class="usu-modal-f">
+            <button class="btn btn-secondary btn-sm" @onclick="CloseCreateModal">Cancelar</button>
+            <button class="btn btn-primary btn-sm" @onclick="Crear" disabled="@_busy">@(_busy ? "Creando..." : "Crear usuario")</button>
+        </div>
+    </div>
+}
+
+@* ===== Modal editar sedes de un usuario ===== *@
+@if (_sedesModalUser is not null)
+{
+    <div class="usu-modal-backdrop" @onclick="CloseSedesModal"></div>
+    <div class="usu-modal">
+        <div class="usu-modal-h">
+            <h3>Sedes asignadas a @_sedesModalUser.Email</h3>
+            <button class="usu-modal-close" @onclick="CloseSedesModal">&times;</button>
+        </div>
+        <div class="usu-modal-body">
+            <div class="usu-sedes-grid">
+                @if (_sucursales.Count == 0)
+                {
+                    <span class="usu-sede-empty">No hay sedes configuradas.</span>
+                }
+                else
+                {
+                    @foreach (var s in _sucursales)
+                    {
+                        <label class="usu-sede-chk">
+                            <input type="checkbox" checked="@_sedesModalUser.SedesIds.Contains(s.Id)" @onchange="e => ToggleRowSede(_sedesModalUser, s.Id, e)" />
+                            <span>@s.Nombre</span>
+                        </label>
+                    }
+                }
+            </div>
+        </div>
+        <div class="usu-modal-f">
+            <button class="btn btn-secondary btn-sm" @onclick="CloseSedesModal">Cancelar</button>
+            <button class="btn btn-primary btn-sm" @onclick="GuardarSedesModal">Aplicar</button>
+        </div>
+    </div>
+}
+
+<style>
+    .usu-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 950; }
+    .usu-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 720px; max-width: 95vw; max-height: 90vh; background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(15,23,42,.25); z-index: 951; display: flex; flex-direction: column; }
+    .usu-modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; }
+    .usu-modal-h h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
+    .usu-modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #64748b; }
+    .usu-modal-body { padding: 18px; overflow: auto; }
+    .usu-modal-f { padding: 12px 18px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; justify-content: flex-end; }
+    .usu-sedes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; padding: 6px 0; }
+    .usu-sede-chk { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+    .usu-sede-chk:hover { background: #f1f5f9; }
+    .usu-sedes { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .usu-sede-pill { background: #dbeafe; color: #1e40af; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+    .usu-sede-empty { font-size: 12px; color: #94a3b8; font-style: italic; }
+    .usu-sede-edit { font-size: 12px; padding: 0 4px; }
+
+    /* ====== Panel de detalle (campos + permisos coordinacion) ====== */
+    .usu-det-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; margin-top: 14px; align-items: stretch; }
+    .usu-det-side { display: flex; flex-direction: column; align-items: center; padding: 18px; text-align: center; }
+    .usu-det-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .usu-avatar-circle { width: 96px; height: 96px; border-radius: 50%; background: #d1fae5; color: #047857; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+    .usu-avatar-nm { font-weight: 600; color: #0f172a; font-size: 14px; margin-top: 4px; }
+    .usu-avatar-em { color: #64748b; font-size: 12px; margin-bottom: 8px; }
+    .usu-avatar-pill { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 11px; padding: 2px 10px; border-radius: 999px; }
+    .usu-det-side hr { width: 100%; margin: 14px 0; }
+    .usu-photo-drop { width: 100%; border: 1.5px dashed #cbd5e1; border-radius: 10px; padding: 14px; text-align: center; }
+    .usu-photo-ico { font-size: 22px; color: #94a3b8; }
+    .usu-photo-t { font-weight: 600; color: #0f172a; font-size: 13px; margin-top: 6px; }
+    .usu-photo-s { color: #94a3b8; font-size: 11px; margin-bottom: 10px; }
+    .usu-photo-name { color: #94a3b8; font-size: 11px; margin-top: 6px; font-style: italic; }
+    .usu-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .usu-form-grid .ase-f { display: flex; flex-direction: column; gap: 4px; }
+    .usu-form-grid .ase-f-wide { grid-column: span 2; }
+    .usu-form-grid label { font-size: 11px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+    .usu-form-grid .asg-ro { background: #f1f5f9; }
+    .usu-help { color: #94a3b8; font-size: 11px; margin-top: 4px; }
+    .ase-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+    .ase-chk { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* Permisos coordinacion */
+    .usu-perm-sub { padding: 0 0 12px; }
+    .usu-perm-t { font-weight: 600; color: #0f172a; font-size: 14px; }
+    .usu-perm-h { color: #64748b; font-size: 12px; margin-top: 2px; }
+    .usu-perm-list { display: flex; flex-direction: column; gap: 6px; }
+    .usu-perm-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; }
+    .usu-perm-row:has(input:checked) { background: #eff6ff; border-color: #93c5fd; }
+    .usu-perm-lbl { font-family: monospace; font-size: 13px; font-weight: 700; color: #1e40af; letter-spacing: 0.5px; }
+    .asg-input-row { display:flex; gap:6px; }
+    .asg-input-row > input { flex:1; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<Row> _users = new();
+    private List<RolDto> _roles = new();
+    private List<SucursalDto> _sucursales = new();
+
+    private bool _showCreateModal;
+    private string _nEmail = "", _nPass = ""; private string? _nNombre; private string _nRol = ""; private bool _nGlobal;
+    private HashSet<Guid> _nSedes = new();
+    private string? _modalError;
+    private bool _busy;
+    private string? _error, _ok;
+    private Row? _sedesModalUser;
+
+    // Panel de detalle / edicion completa del usuario seleccionado.
+    private Row? _selectedRow;
+    private string _resetPwd = "";
+    private string? _detalleError;
+    private string? _detalleOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _roles = (await RolesSvc.ListAsync()).ToList();
+        _sucursales = (await SucSvc.ListAsync()).ToList();
+        await Load();
+    }
+
+    private async Task Load() => _users = (await Svc.ListAsync()).Select(Row.From).ToList();
+
+    private void OpenCreateModal()
+    {
+        _nEmail = ""; _nPass = ""; _nNombre = null; _nRol = ""; _nGlobal = false; _nSedes = new();
+        _modalError = null; _showCreateModal = true;
+    }
+
+    private void CloseCreateModal() => _showCreateModal = false;
+
+    private void ToggleNSede(Guid id, ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on) { _nSedes.Add(id); } else { _nSedes.Remove(id); }
+    }
+
+    private void ToggleRowSede(Row u, Guid id, ChangeEventArgs e)
+    {
+        var on = e.Value is bool b && b;
+        if (on) { if (!u.SedesIds.Contains(id)) { u.SedesIds.Add(id); } }
+        else { u.SedesIds.Remove(id); }
+        u.SedesNombres = u.SedesIds.Select(sid => _sucursales.FirstOrDefault(s => s.Id == sid)?.Nombre ?? "").Where(n => n.Length > 0).OrderBy(n => n).ToList();
+    }
+
+    private void OpenSedesModal(Row u) => _sedesModalUser = u;
+    private void CloseSedesModal() => _sedesModalUser = null;
+
+    private async Task GuardarSedesModal()
+    {
+        if (_sedesModalUser is null) { return; }
+        await Asignar(_sedesModalUser);
+        _sedesModalUser = null;
+    }
+
+    private async Task Crear()
+    {
+        _modalError = null; _busy = true;
+        try
+        {
+            Guid? rol = Guid.TryParse(_nRol, out var rg) ? rg : null;
+            var sedes = _nSedes.ToList();
+            var u = await Svc.CrearAsync(new CrearUsuarioRequest(_nEmail, _nNombre, _nPass, rol, sedes, _nGlobal), await Actor());
+            if (u is null) { _modalError = "No se pudo crear (sin tenant activo)."; return; }
+            await Load(); _ok = $"Usuario \"{u.Email}\" creado.";
+            _showCreateModal = false;
+        }
+        catch (InvalidOperationException ex) { _modalError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Asignar(Row u)
+    {
+        _error = _ok = null;
+        Guid? rol = Guid.TryParse(u.RolSel, out var rg) ? rg : null;
+        await Svc.AsignarAsync(u.Id, rol, u.SedesIds.ToList(), u.Global, await Actor());
+        _ok = $"Asignacion de \"{u.Email}\" guardada.";
+        await Load();
+    }
+
+    private async Task ResetPassword(Row u)
+    {
+        var nueva = await JS.InvokeAsync<string?>("prompt", $"Nueva clave para {u.Email} (minimo 6 caracteres):", "");
+        if (string.IsNullOrWhiteSpace(nueva)) { return; }
+        try
+        {
+            if (await Svc.ResetPasswordAsync(u.Id, nueva, await Actor()))
+            {
+                _ok = $"Clave de \"{u.Email}\" reiniciada.";
+            }
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // ---------- Panel de detalle ----------
+
+    private void SelectRow(Row u)
+    {
+        _selectedRow = u;
+        _resetPwd = "";
+        _detalleError = null; _detalleOk = null;
+    }
+
+    private void CerrarDetalle()
+    {
+        _selectedRow = null;
+        _detalleError = null; _detalleOk = null;
+    }
+
+    private async Task GuardarPerfil()
+    {
+        if (_selectedRow is not Row u) { return; }
+        _detalleError = null; _detalleOk = null; _busy = true;
+        try
+        {
+            var req = new ActualizarPerfilUsuarioRequest(
+                u.DisplayName, u.Username, u.Documento,
+                u.PrimerNombre, u.SegundoNombre, u.PrimerApellido, u.SegundoApellido,
+                u.Celular, u.Fijo, u.Ciudad, u.Direccion, u.Inhabilitado);
+            var updated = await Svc.ActualizarPerfilAsync(u.Id, req, await Actor());
+            if (updated is not null)
+            {
+                _detalleOk = "Perfil actualizado.";
+                await Load();
+                _selectedRow = _users.FirstOrDefault(x => x.Id == u.Id);
+            }
+        }
+        catch (InvalidOperationException ex) { _detalleError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ResetPasswordPanel()
+    {
+        if (_selectedRow is not Row u) { return; }
+        _detalleError = null; _detalleOk = null;
+        if (string.IsNullOrWhiteSpace(_resetPwd) || _resetPwd.Length < 6)
+        {
+            _detalleError = "La nueva clave debe tener al menos 6 caracteres.";
+            return;
+        }
+        _busy = true;
+        try
+        {
+            if (await Svc.ResetPasswordAsync(u.Id, _resetPwd, await Actor()))
+            {
+                _detalleOk = $"Clave de \"{u.Email}\" reiniciada.";
+                _resetPwd = "";
+            }
+        }
+        catch (InvalidOperationException ex) { _detalleError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task GuardarPermisosCoord()
+    {
+        if (_selectedRow is not Row u) { return; }
+        _detalleError = null; _detalleOk = null; _busy = true;
+        try
+        {
+            var req = new ActualizarPermisosCoordinacionRequest(
+                u.CoordinaTerapias, u.CoordinaEnfermeria, u.CoordinaConsultas, u.CoordinaEquipos);
+            var updated = await Svc.ActualizarPermisosCoordinacionAsync(u.Id, req, await Actor());
+            if (updated is not null)
+            {
+                _detalleOk = "Permisos de coordinacion actualizados.";
+                await Load();
+                _selectedRow = _users.FirstOrDefault(x => x.Id == u.Id);
+            }
+        }
+        catch (InvalidOperationException ex) { _detalleError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Eliminar(Row u)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", $"Quitar a \"{u.Email}\" de esta entidad?");
+        if (!ok) { return; }
+        await Svc.EliminarAsync(u.Id, await Actor());
+        await Load();
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private sealed class Row
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = "";
+        public string? DisplayName { get; set; }
+        public string Estado { get; set; } = "";
+        public string RolSel { get; set; } = "";
+        public List<Guid> SedesIds { get; set; } = new();
+        public List<string> SedesNombres { get; set; } = new();
+        public bool Global { get; set; }
+        // ----- Datos personales (PlatformUser) -----
+        public string? Documento { get; set; }
+        public string? Username { get; set; }
+        public string? PrimerNombre { get; set; }
+        public string? SegundoNombre { get; set; }
+        public string? PrimerApellido { get; set; }
+        public string? SegundoApellido { get; set; }
+        public string? Celular { get; set; }
+        public string? Fijo { get; set; }
+        public string? Ciudad { get; set; }
+        public string? Direccion { get; set; }
+        public bool Inhabilitado { get; set; }
+        // ----- Permisos de coordinacion (TenantUser) -----
+        public bool CoordinaTerapias { get; set; }
+        public bool CoordinaEnfermeria { get; set; }
+        public bool CoordinaConsultas { get; set; }
+        public bool CoordinaEquipos { get; set; }
+
+        public string Iniciales
+        {
+            get
+            {
+                var src = !string.IsNullOrWhiteSpace(DisplayName) ? DisplayName! : Email;
+                var parts = src.Split(new[] { ' ', '@', '.' }, StringSplitOptions.RemoveEmptyEntries);
+                var a = parts.Length > 0 && parts[0].Length > 0 ? char.ToUpper(parts[0][0]) : '?';
+                var b = parts.Length > 1 && parts[1].Length > 0 ? char.ToUpper(parts[1][0]) : ' ';
+                return $"{a}{b}".Trim();
+            }
+        }
+
+        public static Row From(UsuarioDto d) => new()
+        {
+            Id = d.Id, Email = d.Email, DisplayName = d.DisplayName, Estado = d.Estado,
+            RolSel = d.RolId?.ToString() ?? "",
+            SedesIds = d.SucursalIds.ToList(),
+            SedesNombres = d.SucursalNombres.ToList(),
+            Global = d.EsGlobal,
+            Documento = d.Documento, Username = d.Username,
+            PrimerNombre = d.PrimerNombre, SegundoNombre = d.SegundoNombre,
+            PrimerApellido = d.PrimerApellido, SegundoApellido = d.SegundoApellido,
+            Celular = d.Celular, Fijo = d.Fijo, Ciudad = d.Ciudad, Direccion = d.Direccion,
+            Inhabilitado = string.Equals(d.Estado, "Blocked", StringComparison.OrdinalIgnoreCase),
+            CoordinaTerapias = d.CoordinaTerapias,
+            CoordinaEnfermeria = d.CoordinaEnfermeria,
+            CoordinaConsultas = d.CoordinaConsultas,
+            CoordinaEquipos = d.CoordinaEquipos
+        };
+    }
+}

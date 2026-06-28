@@ -1,0 +1,360 @@
+@page "/relaciones-formularios"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IRelacionFormularioService Svc
+@inject IJSRuntime JS
+
+<PageTitle>Relaciones de formularios - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Configuracion del Sistema</div>
+        <h1 class="ase-title">Relaciones de formularios</h1>
+        <small class="text-muted">Cada fila indica que el formulario destino (ej. una evolucion) debe sugerirse cuando se trabaja con el formulario origen (ej. una historia clinica).</small>
+    </div>
+    <div class="med-toolbar">
+        <button class="btn btn-primary" @onclick="OnNueva" disabled="@_busy">+ Nueva relacion</button>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    @if (_loading)
+    {
+        <div class="ase-empty">Cargando...</div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="ase-empty" style="padding:30px;">
+            Aun no hay relaciones configuradas. Crea la primera con "+ Nueva relacion".
+        </div>
+    }
+    else
+    {
+        var rowsVisibles = RowsVisibles();
+        <div class="rf-summary">
+            <div class="rf-summary-info">
+                Mostrando <strong>@rowsVisibles.Count</strong> de @_rows.Count relacion(es)@(string.IsNullOrEmpty(_filtroTipo) ? "" : " (filtro activo)").
+            </div>
+            <label class="rf-filtro">
+                <span>Filtrar por tipo:</span>
+                <select class="form-select form-select-sm" @bind="_filtroTipo" @bind:after="StateHasChanged">
+                    <option value="">Todos</option>
+                    <option value="EVOLUCION">EVOLUCION</option>
+                    <option value="CONSENTIMIENTO">CONSENTIMIENTO</option>
+                    <option value="__none__">(Sin tipo)</option>
+                </select>
+            </label>
+        </div>
+        <div class="med-tbl-wrap">
+            <table class="table table-sm med-tbl">
+                <thead>
+                    <tr>
+                        <th class="rf-th-sort" @onclick='() => SetSort("origen")'>Formulario origen @SortIndicator("origen")</th>
+                        <th class="text-center" style="width:60px"></th>
+                        <th class="rf-th-sort" @onclick='() => SetSort("destino")'>Formulario destino @SortIndicator("destino")</th>
+                        <th class="rf-th-sort" style="width:160px" @onclick='() => SetSort("tipo")'>Tipo @SortIndicator("tipo")</th>
+                        <th>Observacion</th>
+                        <th style="width:90px" class="text-center">Activo</th>
+                        <th style="width:80px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (rowsVisibles.Count == 0)
+                    {
+                        <tr><td colspan="7" class="text-center text-muted" style="padding:18px;">No hay relaciones que coincidan con el filtro.</td></tr>
+                    }
+                    @foreach (var r in rowsVisibles)
+                    {
+                        <tr class="@(r.Activo ? "" : "rf-row-inactiva")">
+                            <td>
+                                <div class="rf-nombre">@r.OrigenNombre</div>
+                                <div class="rf-meta">@r.OrigenCodigo @(string.IsNullOrWhiteSpace(r.OrigenTipo) ? "" : $" - {r.OrigenTipo}")</div>
+                            </td>
+                            <td class="text-center"><span class="rf-flecha">&rarr;</span></td>
+                            <td>
+                                <div class="rf-nombre">@r.DestinoNombre</div>
+                                <div class="rf-meta">@r.DestinoCodigo @(string.IsNullOrWhiteSpace(r.DestinoTipo) ? "" : $" - {r.DestinoTipo}")</div>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(r.TipoRelacion))
+                                {
+                                    <span class="rf-tipo-pill rf-tipo-@(r.TipoRelacion.ToLowerInvariant())">@r.TipoRelacion</span>
+                                }
+                                else { <span class="rf-meta">-</span> }
+                            </td>
+                            <td>@(r.Observacion ?? "-")</td>
+                            <td class="text-center">
+                                <label class="ag-switch" title="@(r.Activo ? "Pausar" : "Activar")">
+                                    <input type="checkbox" checked="@r.Activo" @onchange="@(e => ToggleAsync(r, (bool)e.Value!))" disabled="@_busy" />
+                                    <span class="ag-slider"></span>
+                                </label>
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-link btn-sm" title="Editar" @onclick="() => OnEditar(r)">&#9998;</button>
+                                <button class="btn btn-link btn-sm text-danger" title="Eliminar" @onclick="() => OnEliminarAsync(r)">&#128465;</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* ============= MODAL CREAR / EDITAR ============= *@
+@if (_modalAbierto)
+{
+    <div class="cie-backdrop" @onclick="CerrarModal"></div>
+    <div class="cie-modal" style="width: 600px; max-width: 95vw;">
+        <div class="cie-modal-h">
+            <h3>@(_editId is null ? "Nueva relacion de formularios" : "Editar relacion")</h3>
+            <button class="cie-modal-close" @onclick="CerrarModal">&times;</button>
+        </div>
+        <div class="cie-modal-body">
+            <div class="ase-form">
+                <div class="ase-f">
+                    <label>Formulario origen *</label>
+                    <select class="form-select form-select-sm" @bind="_fOrigenId">
+                        <option value="">Selecciona un formulario...</option>
+                        @foreach (var grp in _opciones.GroupBy(o => o.Tipo ?? "(sin tipo)"))
+                        {
+                            <optgroup label="@grp.Key">
+                                @foreach (var o in grp)
+                                {
+                                    <option value="@o.Id">@(o.Activo ? "" : "[apagado] ")@o.Codigo - @o.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                </div>
+                <div class="ase-f">
+                    <label>Formulario destino *</label>
+                    <select class="form-select form-select-sm" @bind="_fDestinoId">
+                        <option value="">Selecciona un formulario...</option>
+                        @foreach (var grp in _opciones.GroupBy(o => o.Tipo ?? "(sin tipo)"))
+                        {
+                            <optgroup label="@grp.Key">
+                                @foreach (var o in grp)
+                                {
+                                    <option value="@o.Id">@(o.Activo ? "" : "[apagado] ")@o.Codigo - @o.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                </div>
+                <div class="ase-f">
+                    <label>Tipo de relacion</label>
+                    <select class="form-select form-select-sm" @bind="_fTipo">
+                        <option value="">(Sin tipo)</option>
+                        <option value="EVOLUCION">EVOLUCION</option>
+                        <option value="CONSENTIMIENTO">CONSENTIMIENTO</option>
+                    </select>
+                </div>
+                <div class="ase-f ase-f-wide">
+                    <label>Observacion (opcional)</label>
+                    <input class="form-control form-control-sm" @bind="_fObservacion"
+                           placeholder="Ej: HC inicial sugiere evolucion de fisioterapia" />
+                </div>
+                <label class="ase-chk" style="margin-top:4px;">
+                    <input type="checkbox" @bind="_fActivo" /> <span>Relacion activa</span>
+                </label>
+            </div>
+            @if (_modalError is not null) { <div class="text-danger small mt-2">@_modalError</div> }
+        </div>
+        <div class="cie-modal-foot" style="justify-content: flex-end; gap: 8px;">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="CerrarModal">Cancelar</button>
+            <button class="btn btn-primary btn-sm" @onclick="GuardarAsync" disabled="@_busy">
+                @(_editId is null ? "Crear" : "Guardar")
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    .rf-nombre { font-weight: 600; color: #0f172a; font-size: 13px; }
+    .rf-meta { color: #64748b; font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .rf-flecha { font-size: 18px; color: #1565c0; font-weight: 700; }
+    .rf-row-inactiva { opacity: 0.55; background: #f8fafc; }
+    .rf-tipo-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+    .rf-tipo-evolucion { background: #dbeafe; color: #1e40af; }
+    .rf-tipo-consentimiento { background: #fef3c7; color: #92400e; }
+    .rf-filtro { display:flex; align-items:center; gap:8px; font-size:12px; color:#475569; margin:0; }
+    .rf-filtro span { white-space:nowrap; font-weight:600; }
+    .rf-filtro select { min-width:170px; }
+    .rf-th-sort { cursor:pointer; user-select:none; }
+    .rf-th-sort:hover { background:#f1f5f9; }
+    .rf-sort-arrow { font-size:10px; color:#1565c0; margin-left:4px; }
+    .rf-summary {
+        display:flex; align-items:center; justify-content:space-between; gap:16px;
+        padding:10px 14px; font-size:12px; color:#475569;
+        background:#f8fafc; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;
+    }
+    .rf-summary-info { min-width:0; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _ok;
+
+    private List<RelacionFormularioDto> _rows = new();
+    private List<OpcionFormularioDto> _opciones = new();
+
+    // Filtro por tipo: "" = todos, "EVOLUCION" / "CONSENTIMIENTO" = match exacto,
+    // "__none__" = solo las que no tienen tipo asignado.
+    private string _filtroTipo = "";
+
+    // Sort: columna ("tipo" | "origen" | "destino") + direccion. Por defecto
+    // ordenamos por tipo y luego por origen (lo que pidio el usuario para
+    // agrupar visualmente las EVOLUCION y los CONSENTIMIENTO).
+    private string _sortCol = "tipo";
+    private bool _sortAsc = true;
+
+    private bool _modalAbierto;
+    private Guid? _editId;
+    private string _fOrigenId = "";
+    private string _fDestinoId = "";
+    private string _fTipo = "";
+    private bool _fActivo = true;
+    private string? _fObservacion;
+    private string? _modalError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        _loading = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            _rows = (await Svc.ListarAsync()).ToList();
+            _opciones = (await Svc.ListarOpcionesAsync()).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void OnNueva()
+    {
+        _editId = null; _modalError = null;
+        _fOrigenId = ""; _fDestinoId = ""; _fTipo = ""; _fActivo = true; _fObservacion = null;
+        _modalAbierto = true;
+    }
+
+    private void OnEditar(RelacionFormularioDto r)
+    {
+        _editId = r.Id; _modalError = null;
+        _fOrigenId = r.OrigenId.ToString();
+        _fDestinoId = r.DestinoId.ToString();
+        _fTipo = r.TipoRelacion ?? "";
+        _fActivo = r.Activo;
+        _fObservacion = r.Observacion;
+        _modalAbierto = true;
+    }
+
+    private void CerrarModal() => _modalAbierto = false;
+
+    private async Task GuardarAsync()
+    {
+        _modalError = null;
+        if (!Guid.TryParse(_fOrigenId, out var oid)) { _modalError = "Selecciona el formulario origen."; return; }
+        if (!Guid.TryParse(_fDestinoId, out var did)) { _modalError = "Selecciona el formulario destino."; return; }
+        if (oid == did) { _modalError = "Origen y destino deben ser distintos."; return; }
+        _busy = true; _error = _ok = null;
+        try
+        {
+            var actor = await ActorAsync();
+            var req = new SaveRelacionFormularioRequest(_editId, oid, did, string.IsNullOrWhiteSpace(_fTipo) ? null : _fTipo, _fActivo, _fObservacion);
+            var dto = await Svc.GuardarAsync(req, actor);
+            _ok = _editId is null ? "Relacion creada." : "Relacion actualizada.";
+            _modalAbierto = false;
+            await CargarAsync();
+        }
+        catch (Exception ex) { _modalError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task OnEliminarAsync(RelacionFormularioDto r)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"Eliminar la relacion \"{r.OrigenNombre}\" → \"{r.DestinoNombre}\"? Esta accion no se puede deshacer.");
+        if (!ok) { return; }
+        _busy = true; _error = _ok = null;
+        try
+        {
+            var actor = await ActorAsync();
+            await Svc.EliminarAsync(r.Id, actor);
+            _ok = "Relacion eliminada.";
+            await CargarAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task ToggleAsync(RelacionFormularioDto r, bool activo)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var actor = await ActorAsync();
+            await Svc.SetActivoAsync(r.Id, activo, actor);
+            await CargarAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task<Guid> ActorAsync()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    /// <summary>Aplica el filtro de tipo + el ordenamiento elegido sobre _rows.
+    /// Se recalcula en cada render; el set de relaciones nunca es grande
+    /// (decenas, no miles), asi que no vale la pena memoizar.</summary>
+    private List<RelacionFormularioDto> RowsVisibles()
+    {
+        IEnumerable<RelacionFormularioDto> q = _rows;
+        if (!string.IsNullOrEmpty(_filtroTipo))
+        {
+            q = _filtroTipo == "__none__"
+                ? q.Where(r => string.IsNullOrWhiteSpace(r.TipoRelacion))
+                : q.Where(r => string.Equals(r.TipoRelacion, _filtroTipo, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Comparador segun la columna activa. Para "tipo" desempatamos con
+        // origen + destino; para "origen"/"destino" desempatamos con el otro
+        // extremo para que el orden sea estable.
+        Func<RelacionFormularioDto, string> primario = _sortCol switch
+        {
+            "origen"  => r => (r.OrigenNombre ?? "") + "|" + (r.DestinoNombre ?? ""),
+            "destino" => r => (r.DestinoNombre ?? "") + "|" + (r.OrigenNombre ?? ""),
+            _         => r => (r.TipoRelacion ?? "ZZZ") + "|" + (r.OrigenNombre ?? "") + "|" + (r.DestinoNombre ?? "")
+        };
+        q = _sortAsc ? q.OrderBy(primario, StringComparer.OrdinalIgnoreCase)
+                     : q.OrderByDescending(primario, StringComparer.OrdinalIgnoreCase);
+        return q.ToList();
+    }
+
+    private void SetSort(string col)
+    {
+        if (_sortCol == col) { _sortAsc = !_sortAsc; }
+        else { _sortCol = col; _sortAsc = true; }
+    }
+
+    private MarkupString SortIndicator(string col) =>
+        _sortCol == col
+            ? new MarkupString($"<span class=\"rf-sort-arrow\">{(_sortAsc ? "&#9650;" : "&#9660;")}</span>")
+            : new MarkupString("");
+}

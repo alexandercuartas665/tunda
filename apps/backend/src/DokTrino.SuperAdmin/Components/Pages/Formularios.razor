@@ -1,0 +1,1635 @@
+@page "/formularios"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.IO
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@using DokTrino.SuperAdmin.Components.Forms
+@inject IFormDefinitionService FormsSvc
+@inject IFormDefinitionVersionService VersionSvc
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Env
+
+<PageTitle>Motor de Formularios - DokTrino</PageTitle>
+
+<div class="fb-shell">
+
+    <!-- Toolbar -->
+    <div class="fb-toolbar">
+        <div class="fb-tb-left">
+            <span class="fb-eyebrow">Operacion Clinica</span>
+            <strong class="fb-tb-title">Motor de Formularios</strong>
+        </div>
+        @* Lado derecho: select arriba (fila 1) + botones de accion abajo (fila 2).
+           Las dos filas mantienen su posicion incluso cuando aparecen los botones
+           condicionales (Vista documento, Rutas de prefill, Eliminar), asi
+           Nuevo/Guardar no saltan de lugar al abrir un formulario. *@
+        <div class="fb-tb-right">
+            <select class="fb-input fb-input-sm fb-tb-select" @onchange="OnPickForm">
+                <option value="">— Abrir formulario —</option>
+                @foreach (var f in _forms)
+                {
+                    <option value="@f.Id" selected="@(f.Id == _currentId)">@f.Nombre (@f.Codigo)</option>
+                }
+            </select>
+            <div class="fb-tb-actions">
+                @if (_currentId is not null)
+                {
+                    <a class="fb-btn" href="@($"/formulario-doc/{_currentId}")" target="_blank">Vista documento</a>
+                    <button class="fb-btn" @onclick="OpenPrefillRoutesModal" title="Configurar rutas de prefill desde otros modulos">&#128279; Rutas de prefill</button>
+                    <button class="fb-btn" @onclick="OpenVersionHistoryAsync" title="Ver versiones anteriores y restaurar">&#128344; Historial</button>
+                    <button class="fb-btn fb-btn-danger" @onclick="DeleteFormAsync" disabled="@_busy"
+                            title="Eliminar definitivamente este formulario">&#128465; Eliminar</button>
+                }
+                <button class="fb-btn" @onclick="AutoEnlazarPacienteAsync" disabled="@_busy"
+                        title="Recorre todos los formularios e infiere mapeos prefill desde el modulo Paciente segun el nombre/etiqueta de cada campo. No sobrescribe mapeos existentes.">&#128279; Auto-enlazar Paciente</button>
+                <button class="fb-btn" @onclick="NewForm">Nuevo</button>
+                <button class="fb-btn fb-btn-primary" @onclick="SaveAsync" disabled="@_busy">@(_busy ? "Guardando..." : "Guardar")</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="fb-alert">@_error</div>
+    }
+    @if (_ok is not null)
+    {
+        <div class="fb-ok">@_ok</div>
+    }
+
+    <!-- Meta del formulario -->
+    <div class="fb-meta">
+        <div class="fb-meta-field">
+            <label>Nombre</label>
+            <input class="fb-input" @bind="_nombre" @bind:event="oninput" placeholder="Historia Clinica General" />
+        </div>
+        <div class="fb-meta-field" style="max-width:160px;">
+            <label>Codigo</label>
+            <input class="fb-input fb-mono" @bind="_codigo" @bind:event="oninput" placeholder="HC-GENERAL" />
+        </div>
+        <div class="fb-meta-field" style="max-width:180px;" title="Identificador alternativo opcional (codigo legacy, prestador, integracion). Texto libre.">
+            <label>Codigo formulario</label>
+            <input class="fb-input fb-mono" @bind="_codigoSecundario" @bind:event="oninput" placeholder="HC-001" />
+        </div>
+        <div class="fb-meta-field" style="max-width:160px;">
+            <label>Tipo</label>
+            <input class="fb-input" @bind="_tipo" @bind:event="oninput" placeholder="historia" />
+        </div>
+        <div class="fb-meta-field" style="max-width:110px;">
+            <label>Version</label>
+            <input class="fb-input" @bind="_version" @bind:event="oninput" placeholder="1.0" />
+        </div>
+        <label class="fb-check">
+            <input type="checkbox" @bind="_activo" /> Activo
+        </label>
+    </div>
+
+    <!-- Body: paleta | lienzo | propiedades -->
+    <div class="fb-body">
+
+        <!-- Paleta: cada boton es click + draggable. Drag&drop al lienzo o seccion deja el campo
+             en la posicion deseada; click sigue funcionando como atajo (cae en la raiz/seccion seleccionada). -->
+        <aside class="fb-palette">
+            <div class="fb-palette-group">Estructura</div>
+            @if (_schema.Header is null)
+            {
+                <button class="fb-pal-btn" draggable="true"
+                        @ondragstart="@(() => OnDragStart("structure:header"))" @ondragend="OnDragEnd"
+                        @onclick="AddHeader">+ Encabezado</button>
+            }
+            <button class="fb-pal-btn" draggable="true"
+                    @ondragstart="@(() => OnDragStart("structure:section"))" @ondragend="OnDragEnd"
+                    @onclick="AddSection">+ Seccion</button>
+            <button class="fb-pal-btn" draggable="true"
+                    @ondragstart="@(() => OnDragStart("text:heading"))" @ondragend="OnDragEnd"
+                    @onclick='() => AddText("heading")'>Titulo</button>
+            <button class="fb-pal-btn" draggable="true"
+                    @ondragstart="@(() => OnDragStart("text:subheading"))" @ondragend="OnDragEnd"
+                    @onclick='() => AddText("subheading")'>Subtitulo</button>
+            <button class="fb-pal-btn" draggable="true"
+                    @ondragstart="@(() => OnDragStart("text:paragraph"))" @ondragend="OnDragEnd"
+                    @onclick='() => AddText("paragraph")'>Parrafo</button>
+
+            <div class="fb-palette-group">Campos</div>
+            @foreach (var ft in FieldTypes)
+            {
+                <button class="fb-pal-btn" draggable="true"
+                        @ondragstart="@(() => OnDragStart($"field:{ft.Key}"))" @ondragend="OnDragEnd"
+                        @onclick="() => AddField(ft.Key)">@ft.Value</button>
+            }
+            <div class="fb-pal-hint">Arrastra al lienzo o haz click para agregar.</div>
+        </aside>
+
+        <!-- Lienzo (acepta drop a la raiz) -->
+        <section class="fb-canvas @(_dragType is not null ? "fb-canvas-drag" : "")"
+                 @ondragover:preventDefault="true" @ondragover:stopPropagation="false"
+                 @ondrop="OnDropOnCanvas">
+            @if (_schema.Header is not null)
+            {
+            <div class="fb-header @(_headerSel ? "sel" : "")" @onclick="SelectHeader">
+                <div class="fb-hdr-brand">
+                    @if (!string.IsNullOrWhiteSpace(_schema.Header?.LogoUrl))
+                    {
+                        <img class="fb-hdr-logo" src="@_schema.Header!.LogoUrl" alt="logo" />
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    }
+                    <div>
+                        <div class="fb-hdr-inst">@(string.IsNullOrWhiteSpace(_schema.Header?.Institucion) ? "Institucion" : _schema.Header!.Institucion)</div>
+                        <div class="fb-hdr-tag">@_schema.Header?.Tagline</div>
+                    </div>
+                </div>
+                <div class="fb-hdr-title">@(string.IsNullOrWhiteSpace(_schema.Header?.Titulo) ? (string.IsNullOrWhiteSpace(_nombre) ? "Titulo del documento" : _nombre) : _schema.Header!.Titulo)</div>
+                <div class="fb-hdr-meta">
+                    @foreach (var c in _schema.Header?.Campos ?? new())
+                    {
+                        <span>@c.Label: ____</span>
+                    }
+                </div>
+            </div>
+            }
+
+            @if (_schema.Children.Count == 0)
+            {
+                <div class="fb-empty">Agrega una seccion o un campo desde la paleta.</div>
+            }
+            else
+            {
+                @foreach (var node in _schema.Children)
+                {
+                    if (node.IsSection)
+                    {
+                        <div class="fb-section @(IsSelected(node) ? "sel" : "") @(IsDragOver(node) ? "fb-section-drag" : "")"
+                             @onclick="() => Select(node)" @onclick:stopPropagation="true"
+                             @ondragenter="@(() => OnDragEnterSection(node))"
+                             @ondragleave="@(() => OnDragLeaveSection(node))"
+                             @ondragover:preventDefault="true" @ondragover:stopPropagation="true"
+                             @ondrop="@(() => OnDropOnSection(node))" @ondrop:stopPropagation="true">
+                            <div class="fb-section-head">
+                                <span class="fb-section-title">@(string.IsNullOrWhiteSpace(node.Label) ? "Seccion" : node.Label)</span>
+                                <span class="fb-node-actions">
+                                    <button class="fb-mini" title="Subir" @onclick="() => MoveUp(node, _schema.Children)" @onclick:stopPropagation="true">↑</button>
+                                    <button class="fb-mini" title="Bajar" @onclick="() => MoveDown(node, _schema.Children)" @onclick:stopPropagation="true">↓</button>
+                                    <button class="fb-mini fb-mini-danger" title="Eliminar" @onclick="() => Delete(node)" @onclick:stopPropagation="true">×</button>
+                                </span>
+                            </div>
+                            <div class="fb-section-body fb-grid">
+                                @if (node.Children is null || node.Children.Count == 0)
+                                {
+                                    <div class="fb-empty-sm">Seccion vacia. Selecciona y agrega campos.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var fld in node.Children)
+                                    {
+                                        @RenderNode(fld, node.Children)
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fb-grid">@RenderNode(node, _schema.Children)</div>
+                    }
+                }
+            }
+        </section>
+
+        <!-- Propiedades -->
+        <aside class="fb-props">
+            @if (_headerSel)
+            {
+                <div class="fb-props-title">Encabezado del documento</div>
+                <div class="fb-prop"><label>Institucion</label><input class="fb-input" @bind="_schema.Header!.Institucion" @bind:event="oninput" placeholder="IPS DOKTRINO RT" /></div>
+                <div class="fb-prop"><label>Lema</label><input class="fb-input" @bind="_schema.Header!.Tagline" @bind:event="oninput" placeholder="Atencion Humana, Agil y Oportuna" /></div>
+                <div class="fb-prop"><label>Titulo del documento</label><input class="fb-input" @bind="_schema.Header!.Titulo" @bind:event="oninput" placeholder="(usa el nombre del formulario)" /></div>
+
+                <div class="fb-props-subtitle">Logo</div>
+                @if (!string.IsNullOrWhiteSpace(_schema.Header!.LogoUrl))
+                {
+                    <div class="fb-logo-prev"><img src="@_schema.Header!.LogoUrl" alt="logo" /></div>
+                    <button class="fb-btn" @onclick="ClearHeaderLogo">Quitar logo</button>
+                }
+                else
+                {
+                    <InputFile class="fb-input" accept="image/*" OnChange="OnHeaderLogoSelected" />
+                    <div class="fb-hint">Sube el logo de la IPS (PNG/JPG, max 4 MB). Si no, se usa el icono por defecto.</div>
+                }
+
+                <div class="fb-props-subtitle">Campos de cabecera</div>
+                @foreach (var c in _schema.Header!.Campos)
+                {
+                    <div class="fb-col-row">
+                        <input class="fb-input" placeholder="Etiqueta" @bind="c.Label" @bind:event="oninput" />
+                        <button class="fb-mini fb-mini-danger" title="Quitar" @onclick="() => RemoveHeaderField(c)">&times;</button>
+                    </div>
+                }
+                <button class="fb-btn" @onclick="AddHeaderField">+ Campo</button>
+
+                <button class="fb-btn fb-btn-danger" @onclick="RemoveHeader">Eliminar encabezado</button>
+            }
+            else if (_selected is null)
+            {
+                <div class="fb-props-empty">Selecciona el encabezado o un elemento del lienzo para editar sus propiedades.</div>
+            }
+            else if (_selected.IsSection)
+            {
+                <div class="fb-props-title">Seccion</div>
+                <div class="fb-prop"><label>Titulo</label><input class="fb-input" @bind="_selected.Label" @bind:event="oninput" /></div>
+                <button class="fb-btn fb-btn-danger" @onclick="() => Delete(_selected)">Eliminar seccion</button>
+            }
+            else if (_selected.IsText)
+            {
+                <div class="fb-props-title">Texto</div>
+                <div class="fb-prop">
+                    <label>Estilo</label>
+                    <select class="fb-input" @bind="_selected.TextStyle">
+                        <option value="heading">Titulo</option>
+                        <option value="subheading">Subtitulo</option>
+                        <option value="paragraph">Parrafo</option>
+                    </select>
+                </div>
+                <div class="fb-prop"><label>Contenido</label><textarea class="fb-input" rows="3" @bind="_selected.Content" @bind:event="oninput"></textarea></div>
+                <button class="fb-btn fb-btn-danger" @onclick="() => Delete(_selected)">Eliminar texto</button>
+            }
+            else
+            {
+                <div class="fb-props-title">@(_selected.IsTable ? "Tabla" : "Campo")</div>
+                <div class="fb-prop">
+                    <label>Tipo de campo</label>
+                    <select class="fb-input" @bind="_selected.FieldType">
+                        @foreach (var ft in FieldTypes)
+                        {
+                            <option value="@ft.Key">@ft.Value</option>
+                        }
+                    </select>
+                </div>
+                <div class="fb-prop"><label>@(_selected.IsTable ? "Titulo de la tabla" : "Etiqueta")</label><input class="fb-input" @bind="_selected.Label" @bind:event="oninput" @bind:after="SyncName" /></div>
+                <div class="fb-prop"><label>Nombre / id</label><input class="fb-input fb-mono" @bind="_selected.Name" @bind:event="oninput" /></div>
+                <div class="fb-prop">
+                    <label>Ancho (columnas 1-12)</label>
+                    <input class="fb-input" type="number" min="1" max="12" @bind="_selected.WidthColumns" />
+                </div>
+
+                @if (_selected.IsTable)
+                {
+                    <div class="fb-props-subtitle">Columnas de la tabla</div>
+                    @if (_selected.Columns is not null)
+                    {
+                        @foreach (var col in _selected.Columns)
+                        {
+                            <div class="fb-col-edit">
+                                <div class="fb-col-row">
+                                    <input class="fb-input" placeholder="Etiqueta" @bind="col.Label" @bind:event="oninput" />
+                                    <button class="fb-mini" title="Subir columna" @onclick="() => MoveColumnUp(col)">↑</button>
+                                    <button class="fb-mini" title="Bajar columna" @onclick="() => MoveColumnDown(col)">↓</button>
+                                    <button class="fb-mini fb-mini-danger" title="Quitar columna" @onclick="() => RemoveColumn(col)">×</button>
+                                </div>
+                                <div class="fb-col-row">
+                                    <input class="fb-input fb-mono" placeholder="nombre" @bind="col.Name" @bind:event="oninput" />
+                                    <select class="fb-input" @bind="col.FieldType">
+                                        <option value="text">Texto</option>
+                                        <option value="number">Numero</option>
+                                        <option value="date">Fecha</option>
+                                        <option value="select">Lista</option>
+                                        <option value="autocomplete">Autocompletar</option>
+                                    </select>
+                                </div>
+                                @if (col.FieldType is "select" or "autocomplete")
+                                {
+                                    <select class="fb-input" @bind="col.Catalog">
+                                        @foreach (var c in Catalogs)
+                                        {
+                                            <option value="@c.Key">@c.Value</option>
+                                        }
+                                    </select>
+                                    @if (col.Catalog == "estatico" || string.IsNullOrEmpty(col.Catalog))
+                                    {
+                                        // Opciones libres una por linea + toggle de modo
+                                        // estricto/libre. Si Catalog viene null se asume
+                                        // estatico (camino mas comun en HC).
+                                        <textarea class="fb-input fb-mono" rows="3"
+                                                  placeholder="Una opcion por linea"
+                                                  value="@ColumnOptionsText(col)"
+                                                  @oninput="e => SetColumnOptions(col, e.Value?.ToString())"></textarea>
+                                        <label class="fb-check">
+                                            <input type="checkbox" @bind="col.AllowCustom" />
+                                            Permitir valor libre (fuera de la lista)
+                                        </label>
+                                    }
+                                }
+                                <input class="fb-input" placeholder="Valor por defecto"
+                                       @bind="col.DefaultValue" @bind:event="oninput" />
+                                <input class="fb-input" placeholder="Texto de ayuda (placeholder) — opcional"
+                                       @bind="col.Placeholder" @bind:event="oninput" />
+
+                                @{
+                                    // Otras columnas con valores discretos que pueden actuar como disparadoras.
+                                    // Aceptamos cualquier select/autocomplete (asi sea AllowCustom o con
+                                    // opciones por fila) y tambien columnas text con Options a nivel columna
+                                    // que el viewer promueve a select. Excluye la columna actual.
+                                    var triggerCandidates = (_selected!.Columns ?? new())
+                                        .Where(o => !ReferenceEquals(o, col)
+                                            && !string.IsNullOrWhiteSpace(o.Name)
+                                            && (o.FieldType == "select" || o.FieldType == "autocomplete"
+                                                || (o.Options is { Count: > 0 })))
+                                        .ToList();
+                                }
+                                @if (triggerCandidates.Count > 0)
+                                {
+                                    <div class="fb-col-cond">
+                                        <small>Habilitar solo si...</small>
+                                        <div class="fb-col-row">
+                                            <select class="fb-input" @bind="col.EnabledByColumn">
+                                                <option value="">(siempre habilitada)</option>
+                                                @foreach (var t in triggerCandidates)
+                                                {
+                                                    <option value="@t.Name">@t.Label</option>
+                                                }
+                                            </select>
+                                            <input class="fb-input" placeholder="= valor"
+                                                   @bind="col.EnabledByValue" @bind:event="oninput"
+                                                   disabled="@string.IsNullOrEmpty(col.EnabledByColumn)" />
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    <button class="fb-btn" @onclick="AddColumn">+ Columna</button>
+
+                    @* ---- Editor de filas pre-semilladas + opciones por celda ---- *@
+                    @if (_selected.Columns is { Count: > 0 } cols2)
+                    {
+                        var seedRows = _selected.SeedRows ?? new List<List<string?>>();
+                        <div class="fb-prop fb-seed-opts">
+                            <label>Filas pre-semilladas (@seedRows.Count)</label>
+                            <div class="fb-hint">
+                                Cada celda con valor = texto fijo (no editable por el usuario).
+                                Vacia = el usuario la rellena. Las opciones por fila solo aplican a
+                                celdas editables; sirven para sobreescribir las opciones generales
+                                de la columna en filas concretas (ej. "Atrofia" usa NO SE OBSERVA /
+                                LEVE; "Pupilas" usa SI / NO).
+                            </div>
+                            <div class="fb-seed-actions">
+                                <button class="fb-btn" @onclick="() => _seedOptsOpen = !_seedOptsOpen">
+                                    @(_seedOptsOpen ? "Ocultar" : "Mostrar") editor de filas
+                                </button>
+                                <button class="fb-btn fb-btn-primary" @onclick="() => AddSeedRow(_selected)">+ Agregar fila</button>
+                            </div>
+                            @if (_seedOptsOpen)
+                            {
+                                @if (seedRows.Count == 0)
+                                {
+                                    <div class="fb-hint" style="margin-top:8px;">Aun no hay filas. Usa "+ Agregar fila" para empezar.</div>
+                                }
+                                @for (var r = 0; r < seedRows.Count; r++)
+                                {
+                                    var rowIdx = r;
+                                    var seedRow = seedRows[r];
+                                    while (seedRow.Count < cols2.Count) { seedRow.Add(null); }
+                                    var firstLabel = !string.IsNullOrWhiteSpace(seedRow[0]) ? seedRow[0]! : $"(fila {r + 1})";
+                                    <div class="fb-seed-row">
+                                        <div class="fb-seed-row-h">
+                                            <span>@firstLabel</span>
+                                            <button class="fb-mini fb-mini-danger" title="Eliminar fila"
+                                                    @onclick="() => RemoveSeedRow(_selected, rowIdx)">×</button>
+                                        </div>
+                                        @{ var colIdx2 = 0; }
+                                        @foreach (var col in cols2)
+                                        {
+                                            var c2 = col;
+                                            var ci2 = colIdx2;
+                                            var seedVal2 = ci2 < seedRow.Count ? seedRow[ci2] : null;
+                                            <div class="fb-seed-cell">
+                                                <small>@(c2.Label) <code>@(c2.Name)</code></small>
+                                                <input class="fb-input fb-mono"
+                                                       placeholder="Texto fijo (vacio = editable por usuario)"
+                                                       value="@seedVal2"
+                                                       @oninput="e => SetSeedCellValue(_selected, rowIdx, ci2, e.Value?.ToString())" />
+                                                @if (string.IsNullOrEmpty(seedVal2))
+                                                {
+                                                    <textarea class="fb-input fb-mono" rows="2"
+                                                              placeholder="Opciones por fila (una por linea) — vacio = usa opciones de la columna"
+                                                              value="@SeedCellOptionsText(_selected, rowIdx, ci2)"
+                                                              @oninput="e => SetSeedCellOptions(_selected, rowIdx, ci2, e.Value?.ToString())"></textarea>
+                                                }
+                                            </div>
+                                            colIdx2++;
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="fb-prop"><label>Placeholder</label><input class="fb-input" @bind="_selected.Placeholder" @bind:event="oninput" /></div>
+                    <label class="fb-check"><input type="checkbox" @bind="_selected.Required" /> Requerido</label>
+
+                    @* Dictado por voz: solo tiene sentido en areas de texto largas.
+                       El visor mostrara un boton flotante para iniciar la transcripcion. *@
+                    @if (_selected.FieldType == "textarea")
+                    {
+                        <label class="fb-check"><input type="checkbox" @bind="_selected.EnableVoice" /> &#127908; Permitir dictado por voz (Whisper)</label>
+                    }
+
+                    @if (_selected.FieldType is "select" or "autocomplete")
+                    {
+                        <div class="fb-prop">
+                            <label>Origen de la lista</label>
+                            <select class="fb-input" @bind="_selected.Catalog">
+                                @foreach (var c in Catalogs)
+                                {
+                                    <option value="@c.Key">@c.Value</option>
+                                }
+                            </select>
+                        </div>
+                        @if (_selected.Catalog == "estatico")
+                        {
+                            <div class="fb-prop">
+                                <label>Opciones (una por linea)</label>
+                                <textarea class="fb-input" rows="4" value="@OptionsText" @oninput="OnOptionsInput"></textarea>
+                            </div>
+                            <label class="fb-check">
+                                <input type="checkbox" @bind="_selected.AllowCustom" />
+                                Permitir valor libre (fuera de la lista)
+                            </label>
+                            <div class="fb-hint">
+                                Sin marcar: el usuario solo puede elegir una opcion (select estricto).
+                                Marcado: input con sugerencias — puede elegir o escribir lo que sea.
+                            </div>
+                        }
+                    }
+                    else if (_selected.FieldType == "calculated")
+                    {
+                        <div class="fb-prop">
+                            <label>Formula</label>
+                            <input class="fb-input fb-mono" @bind="_selected.Formula" @bind:event="oninput" placeholder="edad(fecha_nacimiento)" />
+                            <div class="fb-hint">Funciones: edad(fecha), sumar(a,b), restar(a,b), hoy(). Referencia campos por su nombre.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fb-prop"><label>Valor por defecto</label><input class="fb-input" @bind="_selected.DefaultValue" @bind:event="oninput" /></div>
+                    }
+                }
+
+                <button class="fb-btn fb-btn-danger" @onclick="() => Delete(_selected)">@(_selected.IsTable ? "Eliminar tabla" : "Eliminar campo")</button>
+            }
+        </aside>
+    </div>
+</div>
+
+@* ===== Modal: Rutas de prefill ===== *@
+@if (_showPrefillModal)
+{
+    <div class="pr-backdrop" @onclick="ClosePrefillRoutesModal"></div>
+    <div class="pr-modal">
+        <div class="pr-h">
+            <div>
+                <h3>Rutas de prefill</h3>
+                <small>Formulario: <strong>@_codigo - @_nombre</strong></small>
+            </div>
+            <button class="pr-close" @onclick="ClosePrefillRoutesModal">&times;</button>
+        </div>
+        <div class="pr-body">
+            @if (_prefillError is not null) { <div class="fb-alert">@_prefillError</div> }
+            @if (_prefillOk is not null) { <div class="fb-ok">@_prefillOk</div> }
+
+            <div class="pr-info">
+                Define las <strong>rutas</strong> de prefill: cada ruta es un mapeo nombrado entre los campos
+                de un modulo origen (Paciente, Profesional...) y los campos de este formulario.
+                Cuando se inicia una instancia, los campos destino se llenan automaticamente con el dato del origen.
+            </div>
+
+            <div class="pr-routes">
+                @if (_prefillRoutes.Routes.Count == 0)
+                {
+                    <div class="pr-empty">Aun no hay rutas configuradas.</div>
+                }
+                @foreach (var route in _prefillRoutes.Routes)
+                {
+                    <div class="pr-route">
+                        <div class="pr-route-h">
+                            <input class="pr-name" @bind="route.Name" placeholder="Nombre de la ruta (ej. Paciente)" />
+                            <select class="pr-source-sel" @bind="route.SourceModule">
+                                @foreach (var mod in PrefillSourceCatalog.Campos.Keys)
+                                {
+                                    <option value="@mod">@PrefillSourceCatalog.NombreLegible(mod)</option>
+                                }
+                            </select>
+                            <button class="fb-btn fb-btn-danger" @onclick="() => RemoveRoute(route)" title="Eliminar ruta">&times;</button>
+                        </div>
+
+                        <div class="pr-mappings">
+                            <div class="pr-map-h">
+                                <span>Campo origen (@route.SourceModule)</span>
+                                <span>&rarr;</span>
+                                <span>Campo destino (este formulario)</span>
+                                <span></span>
+                            </div>
+                            @{
+                                var sourceFields = PrefillSourceCatalog.Campos.TryGetValue(route.SourceModule, out var sf) ? sf : Array.Empty<string>();
+                                var targetFields = GetSchemaFieldNames();
+                            }
+                            @foreach (var m in route.Mappings)
+                            {
+                                <div class="pr-map-row">
+                                    <select class="pr-sel" @bind="m.Source">
+                                        <option value="">Selecciona...</option>
+                                        @foreach (var s in sourceFields) { <option value="@s">@s</option> }
+                                    </select>
+                                    <span class="pr-arrow">&rarr;</span>
+                                    <select class="pr-sel" @bind="m.Target" @bind:after="() => OnTargetChanged(m)">
+                                        <option value="">Selecciona...</option>
+                                        @foreach (var t in targetFields) { <option value="@t">@t</option> }
+                                    </select>
+                                    <button class="pr-mini" @onclick="() => RemoveMapping(route, m)" title="Quitar">&times;</button>
+                                </div>
+                                var tableNode = GetTableNode(m.Target);
+                                if (tableNode is not null && PrefillSourceCatalog.CamposColumna.TryGetValue(m.Source ?? "", out var colSourceFields))
+                                {
+                                    <div class="pr-col-map">
+                                        <div class="pr-col-map-h">
+                                            Mapeo columna-a-columna: cada columna de la tabla destino se llena con un campo de la fuente.
+                                        </div>
+                                        @foreach (var col in tableNode.Columns ?? new())
+                                        {
+                                            <div class="pr-col-map-row">
+                                                <div class="pr-col-map-label">@col.Label <small>(@col.Name)</small></div>
+                                                <span class="pr-arrow">&larr;</span>
+                                                <select class="pr-sel pr-col-sel"
+                                                        value="@GetColumnSource(m, col.Id)"
+                                                        @onchange="e => SetColumnSource(m, col.Id, e.Value?.ToString())">
+                                                    <option value="">(auto por nombre)</option>
+                                                    @foreach (var cs in colSourceFields) { <option value="@cs">@cs</option> }
+                                                </select>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                            <button class="fb-btn pr-add-map" @onclick="() => AddMapping(route)">+ Agregar mapeo</button>
+                        </div>
+                    </div>
+                }
+
+                <button class="fb-btn fb-btn-primary pr-add-route" @onclick="AddRoute">+ Nueva ruta</button>
+            </div>
+        </div>
+        <div class="pr-f">
+            <button class="fb-btn" @onclick="ClosePrefillRoutesModal">Cancelar</button>
+            <button class="fb-btn fb-btn-primary" @onclick="SavePrefillRoutesAsync" disabled="@_prefillBusy">
+                @(_prefillBusy ? "Guardando..." : "Guardar rutas")
+            </button>
+        </div>
+    </div>
+}
+
+@* ===== Modal: Historial de versiones ===== *@
+@if (_showVersionModal)
+{
+    <div class="pr-backdrop" @onclick="CloseVersionModal"></div>
+    <div class="pr-modal">
+        <div class="pr-h">
+            <div>
+                <h3>Historial de versiones</h3>
+                <small>Formulario: <strong>@_codigo - @_nombre</strong> &middot;
+                       @_versions.Count de 20 maximo &middot;
+                       <em>cada cambio guarda un snapshot del estado anterior.</em></small>
+            </div>
+            <button class="pr-close" @onclick="CloseVersionModal">&times;</button>
+        </div>
+        <div class="pr-body">
+            @if (_versionError is not null) { <div class="fb-alert">@_versionError</div> }
+            @if (_versionOk is not null) { <div class="fb-ok">@_versionOk</div> }
+
+            @if (_versionBusy)
+            {
+                <div class="pr-empty">Cargando historial...</div>
+            }
+            else if (_versions.Count == 0)
+            {
+                <div class="pr-empty">No hay versiones previas guardadas para este formulario.</div>
+            }
+            else if (_versionPreview is not null)
+            {
+                <div class="vh-preview-h">
+                    <button class="fb-btn" @onclick="() => _versionPreview = null">&larr; Volver a la lista</button>
+                    <strong>Snapshot del @(_versionPreview.SnapshotAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss"))</strong>
+                </div>
+                <div class="vh-preview-meta">
+                    <div><label>Codigo:</label> @_versionPreview.Codigo</div>
+                    <div><label>Nombre:</label> @_versionPreview.Nombre</div>
+                    <div><label>Version:</label> @(_versionPreview.Version ?? "—")</div>
+                    <div><label>Tipo:</label> @(_versionPreview.Tipo ?? "—")</div>
+                    <div><label>Activo:</label> @(_versionPreview.Activo ? "Si" : "No")</div>
+                </div>
+                <details>
+                    <summary>schema_json (@_versionPreview.SchemaJson.Length chars)</summary>
+                    <pre class="vh-json">@_versionPreview.SchemaJson</pre>
+                </details>
+                @if (!string.IsNullOrEmpty(_versionPreview.PrefillRoutesJson))
+                {
+                    <details>
+                        <summary>prefill_routes_json</summary>
+                        <pre class="vh-json">@_versionPreview.PrefillRoutesJson</pre>
+                    </details>
+                }
+            }
+            else
+            {
+                <table class="vh-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th><th>Nombre</th><th>Codigo</th>
+                            <th>Version</th><th>Tipo</th><th>Activo</th><th>Motivo</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var v in _versions)
+                        {
+                            <tr>
+                                <td>@v.SnapshotAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td>@v.Nombre</td>
+                                <td><code>@v.Codigo</code></td>
+                                <td>@(v.Version ?? "—")</td>
+                                <td>@(v.Tipo ?? "—")</td>
+                                <td>@(v.Activo ? "Si" : "No")</td>
+                                <td>@(v.Motivo ?? "auto")</td>
+                                <td class="vh-acts">
+                                    <button class="fb-btn fb-btn-sm" @onclick="() => VerSnapshotAsync(v.Id)">Ver</button>
+                                    <button class="fb-btn fb-btn-sm fb-btn-primary"
+                                            disabled="@_versionBusy"
+                                            @onclick="() => RestaurarSnapshotAsync(v.Id, v.SnapshotAt)">
+                                        Restaurar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="pr-f">
+            <button class="fb-btn" @onclick="CloseVersionModal">Cerrar</button>
+        </div>
+    </div>
+}
+
+<style>
+    .vh-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .vh-table th { text-align: left; padding: 8px 10px; background: #f1f5f9; color: #334155; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #cbd5e1; }
+    .vh-table td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    .vh-table code { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 11px; background: #f8fafc; padding: 1px 6px; border-radius: 4px; }
+    .vh-acts { white-space: nowrap; text-align: right; }
+    .vh-acts .fb-btn { padding: 4px 10px; font-size: 11.5px; }
+    .vh-preview-h { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px dashed #cbd5e1; margin-bottom: 12px; }
+    .vh-preview-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px 14px; margin-bottom: 12px; font-size: 12px; color: #0f172a; }
+    .vh-preview-meta label { color: #64748b; font-weight: 700; margin-right: 4px; }
+    .vh-json { background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 6px; font-family: 'JetBrains Mono','Consolas',monospace; font-size: 11px; max-height: 320px; overflow: auto; }
+</style>
+
+<style>
+    .pr-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 1000; }
+    .pr-modal { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); width: 920px; max-width: 95vw; max-height: calc(100vh - 80px); background: #fff; border-radius: 12px; box-shadow: 0 30px 80px rgba(15,23,42,.35); z-index: 1001; display: flex; flex-direction: column; overflow: hidden; }
+    .pr-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; }
+    .pr-h h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    .pr-h small { color: #64748b; font-size: 12px; }
+    .pr-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+    .pr-body { padding: 16px 18px; overflow: auto; flex: 1; }
+    .pr-f { padding: 12px 18px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; justify-content: flex-end; }
+    .pr-info { padding: 10px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; font-size: 12px; color: #1e40af; margin-bottom: 14px; }
+    .pr-empty { padding: 30px; text-align: center; color: #94a3b8; font-style: italic; }
+    .pr-route { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+    .pr-route-h { display: grid; grid-template-columns: 1fr 180px 40px; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .pr-name { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-size: 13px; }
+    .pr-source-sel { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; }
+    .pr-mappings { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+    .pr-map-h { display: grid; grid-template-columns: 1fr 20px 1fr 32px; gap: 6px; align-items: center; font-size: 10.5px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+    .pr-map-row { display: grid; grid-template-columns: 1fr 20px 1fr 32px; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .pr-arrow { color: #1565c0; font-weight: 700; text-align: center; }
+    .pr-sel { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; width: 100%; }
+    .pr-mini { background: none; border: none; color: #b91c1c; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
+    .pr-add-map { font-size: 11.5px; margin-top: 6px; }
+    .pr-add-route { width: 100%; margin-top: 4px; }
+
+    /* Bloque de condicional de habilitacion por columna (FormBuilder) */
+    .fb-col-cond { margin-top: 4px; padding: 6px 8px; background: #eff6ff; border: 1px dashed #93c5fd; border-radius: 4px; }
+    .fb-col-cond small { color: #1e40af; font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; display: block; margin-bottom: 4px; }
+    .fb-col-cond .fb-col-row { gap: 6px; }
+
+    /* Editor de opciones por fila seed (panel derecho cuando se selecciona tabla) */
+    .fb-seed-opts { margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
+    .fb-seed-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .fb-seed-row { margin-top: 8px; padding: 8px; background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; }
+    .fb-seed-row-h { font-weight: 700; font-size: 12px; color: #854d0e; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .fb-seed-cell { margin-top: 6px; }
+    .fb-seed-cell small { display: block; color: #6b7280; font-size: 10.5px; margin-bottom: 3px; }
+    .fb-seed-cell code { background: #f1f5f9; padding: 0 4px; border-radius: 3px; font-size: 10px; }
+
+    /* Mini mapeo columna-a-columna cuando el destino es una tabla. Se muestra
+       indentado bajo el row del mapeo, para dejar claro que pertenece a el. */
+    .pr-col-map { margin: 4px 0 10px 24px; background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 10px; }
+    .pr-col-map-h { font-size: 11px; color: #854d0e; margin-bottom: 6px; font-style: italic; }
+    .pr-col-map-row { display: grid; grid-template-columns: 1fr 20px 1fr; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .pr-col-map-label { font-size: 12px; color: #1f2937; }
+    .pr-col-map-label small { color: #6b7280; font-size: 10.5px; margin-left: 4px; }
+    .pr-col-sel { background: #fff; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private static readonly Dictionary<string, string> FieldTypes = new()
+    {
+        ["text"] = "Texto",
+        ["textarea"] = "Area de texto",
+        ["number"] = "Numero",
+        ["date"] = "Fecha",
+        ["email"] = "Email",
+        ["select"] = "Lista",
+        ["autocomplete"] = "Autocompletar",
+        ["calculated"] = "Calculado",
+        ["table"] = "Tabla"
+    };
+
+    private static readonly Dictionary<string, string> Catalogs = new()
+    {
+        ["estatico"] = "Opciones fijas",
+        ["cie11"] = "CIE-11 (diagnosticos)",
+        ["cups"] = "CUPS (procedimientos)",
+        ["medicamentos"] = "Medicamentos",
+        ["profesionales"] = "Profesionales",
+        ["ips"] = "IPS / sedes",
+        ["generos"] = "Generos"
+    };
+
+    private List<FormDefinitionDto> _forms = new();
+    private FormSchema _schema = new();
+    private FormNode? _selected;
+    private bool _headerSel;
+    private Guid? _currentId;
+    private string _codigo = "";
+    private string? _codigoSecundario = null;
+    private string _nombre = "";
+    private string? _tipo;
+    private string? _version;
+    private bool _activo = true;
+    private bool _busy;
+    private string? _error;
+    private string? _ok;
+
+    // ── Modal Historial de versiones ──
+    private bool _showVersionModal;
+    private bool _versionBusy;
+    private string? _versionError;
+    private string? _versionOk;
+    private List<FormDefinitionSnapshotDto> _versions = new();
+    private FormDefinitionSnapshotDetailDto? _versionPreview;
+
+    private async Task OpenVersionHistoryAsync()
+    {
+        if (_currentId is null) { return; }
+        _versionError = null; _versionOk = null;
+        _versionPreview = null;
+        _showVersionModal = true;
+        await RecargarVersionesAsync();
+    }
+
+    private void CloseVersionModal()
+    {
+        _showVersionModal = false;
+        _versionPreview = null;
+        _versionError = null; _versionOk = null;
+    }
+
+    private async Task RecargarVersionesAsync()
+    {
+        if (_currentId is null) { return; }
+        _versionBusy = true;
+        try { _versions = (await VersionSvc.ListarAsync(_currentId.Value)).ToList(); }
+        catch (Exception ex) { _versionError = "No se pudo cargar el historial: " + ex.Message; }
+        finally { _versionBusy = false; }
+    }
+
+    private async Task VerSnapshotAsync(Guid snapshotId)
+    {
+        _versionError = null;
+        try { _versionPreview = await VersionSvc.ObtenerAsync(snapshotId); }
+        catch (Exception ex) { _versionError = "No se pudo cargar el detalle: " + ex.Message; }
+    }
+
+    private async Task RestaurarSnapshotAsync(Guid snapshotId, DateTimeOffset snapshotAt)
+    {
+        var fecha = snapshotAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm:ss");
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"Reemplazar la version actual por el snapshot del {fecha}? Esto generara un nuevo snapshot del estado actual, asi que la restauracion tambien es reversible.");
+        if (!confirmed) { return; }
+
+        _versionError = null; _versionOk = null;
+        _versionBusy = true;
+        try
+        {
+            var userId = await ActorAsync();
+            var ok = await VersionSvc.RestaurarAsync(snapshotId, userId);
+            if (!ok) { _versionError = "El snapshot no existe o no pertenece al formulario actual."; return; }
+
+            _versionOk = $"Restauracion aplicada (snapshot del {fecha}).";
+            // Recargar el formulario activo para que la UI refleje el estado restaurado.
+            // Mismo procedimiento que OnPickForm (FromJson + reset de seleccion).
+            if (_currentId is Guid id)
+            {
+                var d = await FormsSvc.GetAsync(id);
+                if (d is not null)
+                {
+                    _codigo = d.Codigo; _codigoSecundario = d.CodigoSecundario;
+                    _nombre = d.Nombre; _tipo = d.Tipo; _version = d.Version; _activo = d.Activo;
+                    _schema = FormSchema.FromJson(d.SchemaJson);
+                    _prefillRoutes = PrefillRouteSet.FromJson(d.PrefillRoutesJson);
+                    _selected = null; _headerSel = false;
+                }
+            }
+            await RecargarVersionesAsync();
+        }
+        catch (Exception ex) { _versionError = "No se pudo restaurar: " + ex.Message; }
+        finally { _versionBusy = false; }
+    }
+
+    // Modal rutas de prefill
+    private bool _showPrefillModal;
+    private PrefillRouteSet _prefillRoutes = new();
+    private bool _prefillBusy;
+    private string? _prefillError;
+    private string? _prefillOk;
+
+    private void OpenPrefillRoutesModal()
+    {
+        if (_currentId is null) { return; }
+        _prefillError = null; _prefillOk = null;
+        _showPrefillModal = true;
+    }
+
+    private void ClosePrefillRoutesModal() => _showPrefillModal = false;
+
+    private void AddRoute() => _prefillRoutes.Routes.Add(new PrefillRoute { Name = "Paciente", SourceModule = "paciente" });
+    private void RemoveRoute(PrefillRoute r) => _prefillRoutes.Routes.Remove(r);
+    private void AddMapping(PrefillRoute r) => r.Mappings.Add(new PrefillFieldMap());
+    private void RemoveMapping(PrefillRoute r, PrefillFieldMap m) => r.Mappings.Remove(m);
+
+    /// <summary>Cuando el usuario cambia el target, limpia el mapeo de columnas
+    /// si el nuevo target ya no es una tabla. Evita arrastrar config inutil
+    /// y reduce ruido en el JSON guardado.</summary>
+    private void OnTargetChanged(PrefillFieldMap m)
+    {
+        if (GetTableNode(m.Target) is null) { m.ColumnMappings = null; }
+    }
+
+    /// <summary>Devuelve el FormNode de tipo tabla cuyo Name = targetName, o null.</summary>
+    private FormNode? GetTableNode(string? targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName)) { return null; }
+        FormNode? found = null;
+        void Walk(IEnumerable<FormNode> ns)
+        {
+            foreach (var n in ns)
+            {
+                if (found is not null) { return; }
+                if (n.IsSection && n.Children is not null) { Walk(n.Children); continue; }
+                if (n.IsTable && string.Equals(n.Name, targetName, StringComparison.OrdinalIgnoreCase))
+                { found = n; return; }
+            }
+        }
+        Walk(_schema.Children);
+        return found;
+    }
+
+    /// <summary>Lectura del mapeo columna -> source. Vacio cuando no hay aun.</summary>
+    private string GetColumnSource(PrefillFieldMap m, string columnId)
+    {
+        if (m.ColumnMappings is null) { return ""; }
+        return m.ColumnMappings.TryGetValue(columnId, out var v) ? v ?? "" : "";
+    }
+
+    /// <summary>Escritura. Si el valor esta vacio, quita la entrada (vuelve a heuristica).</summary>
+    private void SetColumnSource(PrefillFieldMap m, string columnId, string? value)
+    {
+        m.ColumnMappings ??= new Dictionary<string, string>();
+        if (string.IsNullOrWhiteSpace(value)) { m.ColumnMappings.Remove(columnId); }
+        else { m.ColumnMappings[columnId] = value!; }
+        if (m.ColumnMappings.Count == 0) { m.ColumnMappings = null; }
+    }
+
+    /// <summary>Lista de Name de los campos del schema actual para el dropdown destino.
+    /// Incluye tablas: las rutas de historiaMedica (medicamentos.lista_numerada, etc.)
+    /// expanden los items de la HC en filas de la tabla destino.</summary>
+    private List<string> GetSchemaFieldNames()
+    {
+        var result = new List<string>();
+        void Walk(IEnumerable<FormNode> nodes)
+        {
+            foreach (var n in nodes)
+            {
+                if (n.IsSection && n.Children is not null) { Walk(n.Children); continue; }
+                if (n.IsText) { continue; }
+                if (!string.IsNullOrWhiteSpace(n.Name)) { result.Add(n.Name); }
+            }
+        }
+        Walk(_schema.Children);
+        return result.Distinct().OrderBy(s => s).ToList();
+    }
+
+    private async Task SavePrefillRoutesAsync()
+    {
+        if (_currentId is not Guid id) { return; }
+        _prefillError = null; _prefillOk = null; _prefillBusy = true;
+        try
+        {
+            // Limpiar entradas vacias.
+            foreach (var r in _prefillRoutes.Routes)
+            {
+                r.Mappings = r.Mappings.Where(m => !string.IsNullOrWhiteSpace(m.Source) && !string.IsNullOrWhiteSpace(m.Target)).ToList();
+            }
+            _prefillRoutes.Routes = _prefillRoutes.Routes.Where(r => !string.IsNullOrWhiteSpace(r.Name)).ToList();
+
+            var json = _prefillRoutes.ToJson();
+            var ok = await FormsSvc.UpdatePrefillRoutesAsync(id, json, await ActorAsync());
+            if (!ok) { _prefillError = "No se pudo guardar."; return; }
+            _prefillOk = $"Rutas guardadas ({_prefillRoutes.Routes.Count}).";
+        }
+        catch (Exception ex) { _prefillError = "Error: " + ex.Message; }
+        finally { _prefillBusy = false; }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadListAsync();
+
+    private async Task LoadListAsync()
+    {
+        _forms = (await FormsSvc.ListAsync()).ToList();
+    }
+
+    private void NewForm()
+    {
+        _currentId = null;
+        _codigo = ""; _codigoSecundario = null; _nombre = ""; _tipo = null; _version = null; _activo = true;
+        _schema = new FormSchema();
+        _selected = null; _headerSel = false;
+        _error = null; _ok = null;
+    }
+
+    /// <summary>
+    /// Borra definitivamente el formulario abierto. Pide confirmacion (con el
+    /// nombre real para evitar borrados por accidente), llama al servicio, recarga
+    /// la lista y limpia el editor.
+    /// </summary>
+    private async Task AutoEnlazarPacienteAsync()
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            "Auto-enlazar campos Paciente en TODOS los formularios? Esto agrega mapeos prefill inferidos del nombre/etiqueta de cada campo. Los mapeos que ya existen no se modifican.");
+        if (!ok) { return; }
+        _busy = true; _error = _ok = null;
+        try
+        {
+            var r = await FormsSvc.AutoEnlazarPacienteEnTodosAsync(await ActorAsync());
+            _ok = $"Listo. {r.FormulariosRevisados} revisados, {r.FormulariosActualizados} actualizados (+{r.MapeosAgregados} mapeos), {r.FormulariosSinCambios} sin cambios.";
+            // Si el form actual fue uno de los actualizados, recargar sus rutas en memoria.
+            if (_currentId is Guid id)
+            {
+                var detail = await FormsSvc.GetAsync(id);
+                if (detail is not null)
+                {
+                    _prefillRoutes = PrefillRouteSet.FromJson(detail.PrefillRoutesJson);
+                }
+            }
+        }
+        catch (Exception ex) { _error = "No se pudo auto-enlazar: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteFormAsync()
+    {
+        if (_currentId is not Guid id) { return; }
+
+        var label = string.IsNullOrWhiteSpace(_nombre) ? _codigo : _nombre;
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            $"Eliminar definitivamente el formulario \"{label}\"? Esta accion no se puede deshacer.");
+        if (!ok) { return; }
+
+        _busy = true; _error = _ok = null;
+        try
+        {
+            var deleted = await FormsSvc.DeleteAsync(id, await ActorAsync());
+            if (!deleted)
+            {
+                _error = "El formulario ya no existe o no se pudo eliminar.";
+                return;
+            }
+            await LoadListAsync();
+            NewForm();
+            _ok = $"Formulario \"{label}\" eliminado.";
+        }
+        catch (Exception ex) { _error = "No se pudo eliminar: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private void AddHeader()
+    {
+        _schema.Header = FormHeader.Default();
+        _headerSel = true;
+        _selected = null;
+        _ok = null;
+    }
+
+    private void SelectHeader()
+    {
+        if (_schema.Header is null) { return; }
+        _headerSel = true;
+        _selected = null;
+        _ok = null;
+    }
+
+    private void RemoveHeader()
+    {
+        _schema.Header = null;
+        _headerSel = false;
+    }
+
+    private void AddHeaderField()
+    {
+        _schema.Header ??= FormHeader.Default();
+        _schema.Header.Campos.Add(new FormHeaderField { Label = "Nuevo campo" });
+    }
+
+    private void RemoveHeaderField(FormHeaderField c) => _schema.Header?.Campos.Remove(c);
+
+    private void ClearHeaderLogo()
+    {
+        if (_schema.Header is not null) { _schema.Header.LogoUrl = null; }
+    }
+
+    private async Task OnHeaderLogoSelected(InputFileChangeEventArgs e)
+    {
+        if (_schema.Header is null) { return; }
+        var file = e.File;
+        const long max = 4L * 1024 * 1024;
+        if (file.Size <= 0 || file.Size > max) { _error = "El logo debe pesar menos de 4 MB."; return; }
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(max).CopyToAsync(ms);
+            var ext = Path.GetExtension(file.Name);
+            var dir = Path.Combine(Env.WebRootPath, "uploads", "forms");
+            Directory.CreateDirectory(dir);
+            var name = $"hdr-{Guid.NewGuid():N}{ext}";
+            await File.WriteAllBytesAsync(Path.Combine(dir, name), ms.ToArray());
+            _schema.Header.LogoUrl = $"/uploads/forms/{name}";
+        }
+        catch { _error = "No se pudo subir el logo."; }
+    }
+
+    private async Task OnPickForm(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(raw) || !Guid.TryParse(raw, out var id))
+        {
+            return;
+        }
+        var d = await FormsSvc.GetAsync(id);
+        if (d is null) { return; }
+        _currentId = d.Id;
+        _codigo = d.Codigo; _codigoSecundario = d.CodigoSecundario; _nombre = d.Nombre; _tipo = d.Tipo; _version = d.Version; _activo = d.Activo;
+        _schema = FormSchema.FromJson(d.SchemaJson);
+        _prefillRoutes = PrefillRouteSet.FromJson(d.PrefillRoutesJson);
+        _selected = null; _headerSel = false;
+        _error = null; _ok = null;
+    }
+
+    private void AddSection()
+    {
+        var s = new FormNode { Type = "section", Label = "Nueva seccion", Children = new() };
+        _schema.Children.Add(s);
+        Select(s);
+    }
+
+    // ===================== Drag & drop desde paleta =====================
+    // Cuando el usuario arrastra un boton de la paleta, guardamos el tipo en este campo
+    // (HTML5 dataTransfer en Blazor Server no llega serializado al server). Al soltar
+    // sobre el lienzo o una seccion, leemos esta variable y creamos el nodo en el
+    // contenedor destino.
+
+    private string? _dragType;          // ej. "field:text", "field:number", "structure:section", "text:heading"
+    private FormNode? _dragOverNode;    // seccion sobre la que se esta hovering (para resaltarla)
+
+    private void OnDragStart(string dragType)
+    {
+        _dragType = dragType;
+    }
+
+    private void OnDragEnd()
+    {
+        _dragType = null;
+        _dragOverNode = null;
+    }
+
+    private void OnDragEnterSection(FormNode section)
+    {
+        if (_dragType is null) { return; }
+        _dragOverNode = section;
+    }
+
+    private void OnDragLeaveSection(FormNode section)
+    {
+        if (ReferenceEquals(_dragOverNode, section)) { _dragOverNode = null; }
+    }
+
+    private bool IsDragOver(FormNode? section) => ReferenceEquals(_dragOverNode, section);
+
+    /// <summary>Crea el nodo correspondiente al _dragType en la lista destino indicada.</summary>
+    private void HandleDrop(List<FormNode> targetList)
+    {
+        if (string.IsNullOrEmpty(_dragType)) { return; }
+        var dt = _dragType;
+        _dragType = null;
+        _dragOverNode = null;
+
+        var parts = dt.Split(':', 2);
+        var category = parts[0];
+        var subtype = parts.Length > 1 ? parts[1] : "";
+
+        switch (category)
+        {
+            case "structure" when subtype == "section":
+                // Una seccion solo cabe en la raiz, no anidamos.
+                var sec = new FormNode { Type = "section", Label = "Nueva seccion", Children = new() };
+                _schema.Children.Add(sec);
+                Select(sec);
+                break;
+            case "structure" when subtype == "header":
+                AddHeader();
+                break;
+            case "text":
+                var t = new FormNode
+                {
+                    Type = "text",
+                    TextStyle = subtype,
+                    WidthColumns = 12,
+                    Content = subtype switch
+                    {
+                        "heading" => "Titulo de seccion",
+                        "subheading" => "Subtitulo",
+                        _ => "Texto del parrafo."
+                    }
+                };
+                targetList.Add(t);
+                Select(t);
+                break;
+            case "field":
+                var f = new FormNode
+                {
+                    Type = "field",
+                    FieldType = subtype,
+                    Label = subtype == "table" ? "Nueva tabla" : "Nuevo campo",
+                    Name = "",
+                    WidthColumns = subtype is "textarea" or "table" ? 12 : 6,
+                    Catalog = subtype is "select" or "autocomplete" ? "estatico" : null,
+                    Columns = subtype == "table"
+                        ? new List<FormColumn>
+                        {
+                            new() { Label = "Codigo", Name = "codigo", FieldType = "text" },
+                            new() { Label = "Descripcion", Name = "descripcion", FieldType = "text" }
+                        }
+                        : null
+                };
+                targetList.Add(f);
+                Select(f);
+                break;
+        }
+    }
+
+    private void OnDropOnCanvas() => HandleDrop(_schema.Children);
+    private void OnDropOnSection(FormNode section)
+    {
+        section.Children ??= new();
+        HandleDrop(section.Children);
+    }
+
+    private void AddField(string fieldType)
+    {
+        var f = new FormNode
+        {
+            Type = "field",
+            FieldType = fieldType,
+            Label = fieldType == "table" ? "Nueva tabla" : "Nuevo campo",
+            Name = "",
+            WidthColumns = fieldType is "textarea" or "table" ? 12 : 6,
+            Catalog = fieldType is "select" or "autocomplete" ? "estatico" : null,
+            Columns = fieldType == "table"
+                ? new List<FormColumn>
+                {
+                    new() { Label = "Codigo", Name = "codigo", FieldType = "text" },
+                    new() { Label = "Descripcion", Name = "descripcion", FieldType = "text" }
+                }
+                : null
+        };
+        GetTargetList().Add(f);
+        Select(f);
+    }
+
+    private void AddText(string style)
+    {
+        var t = new FormNode
+        {
+            Type = "text",
+            TextStyle = style,
+            WidthColumns = 12,
+            Content = style switch
+            {
+                "heading" => "Titulo de seccion",
+                "subheading" => "Subtitulo",
+                _ => "Texto del parrafo."
+            }
+        };
+        GetTargetList().Add(t);
+        Select(t);
+    }
+
+    private void AddColumn()
+    {
+        if (_selected?.IsTable == true)
+        {
+            _selected.Columns ??= new();
+            _selected.Columns.Add(new FormColumn { Label = "Columna", FieldType = "text" });
+        }
+    }
+
+    private void RemoveColumn(FormColumn col)
+    {
+        _selected?.Columns?.Remove(col);
+    }
+
+    private void MoveColumnUp(FormColumn col) => MoveColumn(col, delta: -1);
+    private void MoveColumnDown(FormColumn col) => MoveColumn(col, delta: +1);
+
+    /// <summary>Reordena una columna de la tabla seleccionada. Mueve la columna en
+    /// Columns Y reordena en paralelo cada SeedRows[i] (los valores fijos por
+    /// celda) y los keys de SeedRowCellOptions (que indexan opciones por
+    /// "rowIdx_colIdx"). Sin esto los overrides apuntarian a la columna
+    /// equivocada despues del swap.</summary>
+    private void MoveColumn(FormColumn col, int delta)
+    {
+        if (_selected?.Columns is not { } cols) { return; }
+        var i = cols.IndexOf(col);
+        if (i < 0) { return; }
+        var j = i + delta;
+        if (j < 0 || j >= cols.Count) { return; }
+
+        // 1) Swap en Columns.
+        (cols[i], cols[j]) = (cols[j], cols[i]);
+
+        // 2) Swap del valor en cada SeedRows[r] (cada fila tiene una List<string?>
+        //    paralela a Columns). while-padding cubre filas mas cortas que el array.
+        if (_selected.SeedRows is { } rows)
+        {
+            foreach (var row in rows)
+            {
+                while (row.Count <= Math.Max(i, j)) { row.Add(null); }
+                (row[i], row[j]) = (row[j], row[i]);
+            }
+        }
+
+        // 3) Reindexar SeedRowCellOptions: los keys "r_i" pasan a "r_j" y viceversa.
+        //    Construyo un dict nuevo para no chocar con keys colisionando durante
+        //    el rename in-place.
+        if (_selected.SeedRowCellOptions is { Count: > 0 } opts)
+        {
+            var renombrado = new Dictionary<string, List<string>>();
+            foreach (var kv in opts)
+            {
+                var parts = kv.Key.Split('_', 2);
+                if (parts.Length != 2 || !int.TryParse(parts[1], out var colIdx))
+                {
+                    renombrado[kv.Key] = kv.Value;
+                    continue;
+                }
+                var nuevoCol = colIdx == i ? j : (colIdx == j ? i : colIdx);
+                renombrado[$"{parts[0]}_{nuevoCol}"] = kv.Value;
+            }
+            _selected.SeedRowCellOptions = renombrado;
+        }
+    }
+
+    // Donde cae un campo nuevo: en la seccion seleccionada, o en la seccion del campo
+    // seleccionado, o en la raiz.
+    private List<FormNode> GetTargetList()
+    {
+        if (_selected is not null)
+        {
+            if (_selected.IsSection)
+            {
+                _selected.Children ??= new();
+                return _selected.Children;
+            }
+            var parent = _schema.Children.FirstOrDefault(n => n.IsSection && n.Children is not null && n.Children.Contains(_selected));
+            if (parent?.Children is not null) { return parent.Children; }
+        }
+        return _schema.Children;
+    }
+
+    private void Select(FormNode node) { _selected = node; _headerSel = false; _ok = null; }
+    private bool IsSelected(FormNode node) => ReferenceEquals(_selected, node);
+
+    private void Delete(FormNode node)
+    {
+        if (_schema.Children.Remove(node)) { _selected = null; return; }
+        foreach (var s in _schema.Children.Where(n => n.IsSection && n.Children is not null))
+        {
+            if (s.Children!.Remove(node)) { _selected = null; return; }
+        }
+    }
+
+    private void MoveUp(FormNode node, List<FormNode> list)
+    {
+        var i = list.IndexOf(node);
+        if (i > 0) { list.RemoveAt(i); list.Insert(i - 1, node); }
+    }
+
+    private void MoveDown(FormNode node, List<FormNode> list)
+    {
+        var i = list.IndexOf(node);
+        if (i >= 0 && i < list.Count - 1) { list.RemoveAt(i); list.Insert(i + 1, node); }
+    }
+
+    private void SyncName()
+    {
+        if (_selected is not null && string.IsNullOrWhiteSpace(_selected.Name))
+        {
+            _selected.Name = Slug(_selected.Label);
+        }
+    }
+
+    private static string Slug(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "";
+        var chars = s.Trim().ToLowerInvariant()
+            .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u").Replace("ñ", "n")
+            .Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
+        var slug = new string(chars);
+        while (slug.Contains("__")) slug = slug.Replace("__", "_");
+        return slug.Trim('_');
+    }
+
+    private string OptionsText => _selected?.Options is null ? "" : string.Join("\n", _selected.Options);
+
+    /// <summary>Lectura del textarea de opciones de una columna de tabla.</summary>
+    private static string ColumnOptionsText(FormColumn col)
+        => col.Options is null ? "" : string.Join("\n", col.Options);
+
+    /// <summary>Escritura del textarea: parsea linea por linea y guarda en col.Options.</summary>
+    private static void SetColumnOptions(FormColumn col, string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) { col.Options = null; return; }
+        col.Options = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    /// <summary>Estado de visibilidad del editor de opciones por fila seed.</summary>
+    private bool _seedOptsOpen = false;
+
+    /// <summary>Lectura del textarea de opciones por celda seed. Cae a "" si no hay nada.</summary>
+    private static string SeedCellOptionsText(FormNode table, int rowIdx, int colIdx)
+    {
+        if (table.SeedRowCellOptions is null) { return ""; }
+        return table.SeedRowCellOptions.TryGetValue($"{rowIdx}_{colIdx}", out var opts)
+            ? string.Join("\n", opts) : "";
+    }
+
+    /// <summary>Escritura. Si el texto esta vacio, quita la entrada del dict.</summary>
+    private static void SetSeedCellOptions(FormNode table, int rowIdx, int colIdx, string? text)
+    {
+        var key = $"{rowIdx}_{colIdx}";
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            table.SeedRowCellOptions?.Remove(key);
+            if (table.SeedRowCellOptions is { Count: 0 }) { table.SeedRowCellOptions = null; }
+            return;
+        }
+        table.SeedRowCellOptions ??= new Dictionary<string, List<string>>();
+        table.SeedRowCellOptions[key] = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    /// <summary>Agrega una fila al final de SeedRows. Para columnas tipo select
+    /// estricto se pre-rellena con col.DefaultValue (si esta) o la primera opcion
+    /// de la lista, para que el doctor abra la HC con un valor sensato y solo
+    /// tenga que cambiar las celdas que no aplican. Las columnas tipo text/date/
+    /// number/autocomplete quedan en null (sin valor inicial agresivo).</summary>
+    private void AddSeedRow(FormNode table)
+    {
+        if (!table.IsTable || table.Columns is null || table.Columns.Count == 0) { return; }
+        table.SeedRows ??= new List<List<string?>>();
+        var nuevaFila = new List<string?>();
+        foreach (var c in table.Columns)
+        {
+            nuevaFila.Add(ValorInicialCelda(c));
+        }
+        table.SeedRows.Add(nuevaFila);
+        _seedOptsOpen = true;
+    }
+
+    /// <summary>Default para una celda recien creada en + Agregar fila.
+    /// Solo aplica a select estricto (no datalist) para no forzar texto en
+    /// campos de entrada libre. Devuelve null si no hay default razonable.</summary>
+    private static string? ValorInicialCelda(FormColumn c)
+    {
+        if (c.FieldType == "select" && !c.AllowCustom)
+        {
+            if (!string.IsNullOrWhiteSpace(c.DefaultValue)) { return c.DefaultValue; }
+            if (c.Options is { Count: > 0 }) { return c.Options[0]; }
+        }
+        return null;
+    }
+
+    /// <summary>Elimina la fila rowIdx de SeedRows y re-numera las llaves de
+    /// SeedRowCellOptions para que las filas posteriores conserven sus opciones.
+    /// Si la fila tenia overrides, esos overrides se descartan.</summary>
+    private void RemoveSeedRow(FormNode table, int rowIdx)
+    {
+        if (table.SeedRows is null || rowIdx < 0 || rowIdx >= table.SeedRows.Count) { return; }
+        table.SeedRows.RemoveAt(rowIdx);
+        if (table.SeedRows.Count == 0) { table.SeedRows = null; }
+
+        if (table.SeedRowCellOptions is { Count: > 0 } opts)
+        {
+            var nuevo = new Dictionary<string, List<string>>();
+            foreach (var kv in opts)
+            {
+                var parts = kv.Key.Split('_', 2);
+                if (parts.Length != 2 || !int.TryParse(parts[0], out var r))
+                {
+                    nuevo[kv.Key] = kv.Value;
+                    continue;
+                }
+                if (r == rowIdx) { continue; }
+                var nuevaR = r > rowIdx ? r - 1 : r;
+                nuevo[$"{nuevaR}_{parts[1]}"] = kv.Value;
+            }
+            table.SeedRowCellOptions = nuevo.Count == 0 ? null : nuevo;
+        }
+    }
+
+    /// <summary>Escribe el valor fijo de una celda seed. Vacio => null (celda
+    /// editable por el usuario en el formulario final).</summary>
+    private static void SetSeedCellValue(FormNode table, int rowIdx, int colIdx, string? text)
+    {
+        if (table.SeedRows is null || rowIdx < 0 || rowIdx >= table.SeedRows.Count) { return; }
+        var fila = table.SeedRows[rowIdx];
+        while (fila.Count <= colIdx) { fila.Add(null); }
+        fila[colIdx] = string.IsNullOrEmpty(text) ? null : text;
+    }
+
+    private void OnOptionsInput(ChangeEventArgs e)
+    {
+        if (_selected is null) return;
+        var text = e.Value?.ToString() ?? "";
+        _selected.Options = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null; _ok = null;
+        if (string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))
+        {
+            _error = "El nombre y el codigo son obligatorios.";
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var actor = await ActorAsync();
+            var req = new SaveFormDefinitionRequest(_currentId, _codigo, _nombre, _version, _tipo, _schema.ToJson(), _activo, CodigoSecundario: _codigoSecundario);
+            var saved = await FormsSvc.SaveAsync(req, actor);
+            if (saved is null)
+            {
+                _error = "No se pudo guardar (sin tenant activo o formulario no encontrado).";
+                return;
+            }
+            _currentId = saved.Id;
+            await LoadListAsync();
+            _ok = $"Formulario \"{saved.Nombre}\" guardado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<Guid> ActorAsync()
+    {
+        if (AuthState is null) return Guid.Empty;
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private static string WidthBasis(FormNode f)
+    {
+        var pct = Math.Clamp(f.WidthColumns, 1, 12) / 12.0 * 100.0;
+        return $"calc({pct.ToString(System.Globalization.CultureInfo.InvariantCulture)}% - 10px)";
+    }
+
+    private RenderFragment RenderNode(FormNode n, List<FormNode> list) =>
+        n.IsText ? RenderText(n, list) : (n.IsTable ? RenderTable(n, list) : RenderField(n, list));
+
+    private RenderFragment RenderText(FormNode n, List<FormNode> list) => @<div class="fb-textblock fb-ts-@n.TextStyle @(IsSelected(n) ? "sel" : "")" style="@($"flex-basis:{WidthBasis(n)}")" @onclick="() => Select(n)" @onclick:stopPropagation="true">
+        <div class="fb-field-top">
+            <span class="fb-tb-content">@(string.IsNullOrWhiteSpace(n.Content) ? "(texto)" : n.Content)</span>
+            <span class="fb-node-actions">
+                <button class="fb-mini" title="Subir" @onclick="() => MoveUp(n, list)" @onclick:stopPropagation="true">↑</button>
+                <button class="fb-mini" title="Bajar" @onclick="() => MoveDown(n, list)" @onclick:stopPropagation="true">↓</button>
+                <button class="fb-mini fb-mini-danger" title="Eliminar" @onclick="() => Delete(n)" @onclick:stopPropagation="true">×</button>
+            </span>
+        </div>
+    </div>;
+
+    private RenderFragment RenderTable(FormNode n, List<FormNode> list) => @<div class="fb-field @(IsSelected(n) ? "sel" : "")" style="@($"flex-basis:{WidthBasis(n)}")" @onclick="() => Select(n)" @onclick:stopPropagation="true">
+        <div class="fb-field-top">
+            <span class="fb-field-label">@(string.IsNullOrWhiteSpace(n.Label) ? "Tabla" : n.Label)</span>
+            <span class="fb-node-actions">
+                <button class="fb-mini" title="Subir" @onclick="() => MoveUp(n, list)" @onclick:stopPropagation="true">↑</button>
+                <button class="fb-mini" title="Bajar" @onclick="() => MoveDown(n, list)" @onclick:stopPropagation="true">↓</button>
+                <button class="fb-mini fb-mini-danger" title="Eliminar" @onclick="() => Delete(n)" @onclick:stopPropagation="true">×</button>
+            </span>
+        </div>
+        <table class="fb-prev-table">
+            <thead>
+                <tr>
+                    @if (n.Columns is not null)
+                    {
+                        @foreach (var c in n.Columns)
+                        {
+                            <th>@(string.IsNullOrWhiteSpace(c.Label) ? "Columna" : c.Label)</th>
+                        }
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    @if (n.Columns is not null)
+                    {
+                        @foreach (var c in n.Columns)
+                        {
+                            <td>@FieldTypeLabel(c.FieldType)</td>
+                        }
+                    }
+                </tr>
+            </tbody>
+        </table>
+        <div class="fb-field-meta">Tabla repetible &middot; @(n.Columns?.Count ?? 0) columnas</div>
+    </div>;
+
+    private RenderFragment RenderField(FormNode f, List<FormNode> list) => @<div class="fb-field @(IsSelected(f) ? "sel" : "")" style="@($"flex-basis:{WidthBasis(f)}")" @onclick="() => Select(f)" @onclick:stopPropagation="true">
+        <div class="fb-field-top">
+            <span class="fb-field-label">@(string.IsNullOrWhiteSpace(f.Label) ? "(sin etiqueta)" : f.Label)@(f.Required ? " *" : "")</span>
+            <span class="fb-node-actions">
+                <button class="fb-mini" title="Subir" @onclick="() => MoveUp(f, list)" @onclick:stopPropagation="true">↑</button>
+                <button class="fb-mini" title="Bajar" @onclick="() => MoveDown(f, list)" @onclick:stopPropagation="true">↓</button>
+                <button class="fb-mini fb-mini-danger" title="Eliminar" @onclick="() => Delete(f)" @onclick:stopPropagation="true">×</button>
+            </span>
+        </div>
+        <div class="fb-field-preview">
+            @if (f.FieldType == "textarea")
+            {
+                <textarea class="fb-prev" rows="2" placeholder="@f.Placeholder" disabled></textarea>
+            }
+            else if (f.FieldType is "select" or "autocomplete")
+            {
+                <select class="fb-prev" disabled>
+                    <option>@(f.Catalog == "estatico" ? "Opciones fijas" : Catalogs.GetValueOrDefault(f.Catalog ?? "", "lista"))</option>
+                </select>
+            }
+            else if (f.FieldType == "date")
+            {
+                <input class="fb-prev" type="date" disabled />
+            }
+            else if (f.FieldType == "number")
+            {
+                <input class="fb-prev" type="number" placeholder="@f.Placeholder" disabled />
+            }
+            else if (f.FieldType == "calculated")
+            {
+                <input class="fb-prev fb-mono" value="@($"= {f.Formula}")" disabled />
+            }
+            else
+            {
+                <input class="fb-prev" type="text" placeholder="@f.Placeholder" disabled />
+            }
+        </div>
+        <div class="fb-field-meta">@FieldTypeLabel(f.FieldType) · @(string.IsNullOrWhiteSpace(f.Name) ? "sin nombre" : f.Name)</div>
+    </div>;
+
+    private static string FieldTypeLabel(string? ft) => ft is not null && FieldTypes.TryGetValue(ft, out var v) ? v : "Campo";
+}

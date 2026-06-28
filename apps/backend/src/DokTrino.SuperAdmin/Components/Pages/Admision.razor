@@ -1,0 +1,869 @@
+@page "/admision"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IPacienteService Svc
+@inject IAseguradoraService AseSvc
+@inject ISucursalService SucSvc
+@inject ICatalogoPacienteService CatSvc
+@inject IGeografiaService GeoSvc
+@inject ICie11Service Cie11Svc
+@inject INotaMedicaService NotaSvc
+@inject IJSRuntime JS
+
+<PageTitle>Admision de Pacientes - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Operacion Clinica</div>
+        <h1 class="ase-title">Admision de Pacientes</h1>
+    </div>
+    <button class="btn btn-primary btn-sm" @onclick="New">+ Nuevo paciente</button>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-grid">
+    <div class="ase-card ase-list">
+        <div class="ase-card-h">Pacientes (@_lista.Count)</div>
+        <input class="form-control form-control-sm mb-2" placeholder="Buscar por nombre o documento..." value="@_filtro" @oninput="OnFiltro" />
+        @foreach (var p in _lista)
+        {
+            <button class="ase-li @(p.Id == _id ? "sel" : "")" @onclick="() => Select(p.Id)">
+                <div class="ase-li-name">@p.NombreCompleto</div>
+                <div class="ase-li-sub">@p.NumeroDocumento &middot; @(p.Ciudad ?? "-") &middot; @(p.Aseguradora ?? "Sin aseguradora")</div>
+                <div class="ase-li-sub">@(p.Sede ?? "Sin sede") &middot; @(p.Estado ?? "Sin estado")</div>
+            </button>
+        }
+        @if (_lista.Count == 0) { <div class="ase-empty">Sin pacientes.</div> }
+    </div>
+
+    <div class="ase-detail">
+        @if (!_showForm)
+        {
+            <div class="ase-card"><div class="ase-empty">Selecciona o registra un paciente.</div></div>
+        }
+        else
+        {
+            <div class="ase-card">
+                <div class="pac-tabs">
+                    <button class="pac-tab @(_tab == "generales" ? "active" : "")" @onclick="@(() => _tab = "generales")">Datos Generales</button>
+                    <button class="pac-tab @(_tab == "adicionales" ? "active" : "")" @onclick="@(() => _tab = "adicionales")">Datos Adicionales</button>
+                    <button class="pac-tab @(_tab == "detalle" ? "active" : "")" @onclick="@(() => _tab = "detalle")">Detalle</button>
+                    <button class="pac-tab @(_tab == "documentos" ? "active" : "")" @onclick="OnAbrirDocumentosTab" disabled="@(_id is null)">Documentos@(_docs.Count > 0 ? $" ({_docs.Count})" : "")</button>
+                </div>
+
+                @* ===== TAB DATOS GENERALES ===== *@
+                @if (_tab == "generales")
+                {
+                    <div class="ase-card-h">Identificacion</div>
+                    <div class="ase-form">
+                        <div class="ase-f"><label>Numero Documento *</label><input class="form-control form-control-sm" @bind="_doc" /></div>
+                        <div class="ase-f"><label>Tipo Documento</label>
+                            <select class="form-select form-select-sm" @bind="_tipoDoc">
+                                <option>CC</option><option>CE</option><option>TI</option><option>RC</option><option>PA</option><option>MS</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Primer Nombre</label><input class="form-control form-control-sm" @bind="_pNombre" /></div>
+                        <div class="ase-f"><label>Segundo Nombre</label><input class="form-control form-control-sm" @bind="_sNombre" /></div>
+                        <div class="ase-f"><label>Primer Apellido</label><input class="form-control form-control-sm" @bind="_pApellido" /></div>
+                        <div class="ase-f"><label>Segundo Apellido</label><input class="form-control form-control-sm" @bind="_sApellido" /></div>
+                        <div class="ase-f"><label>Fecha Nacimiento</label><input type="date" class="form-control form-control-sm" @bind="_fnac" /></div>
+                        <div class="ase-f"><label>Edad</label><input type="number" class="form-control form-control-sm" @bind="_edad" /></div>
+                    </div>
+
+                    <div class="ase-card-h" style="margin-top:14px;">Datos administrativos PAD</div>
+                    <div class="ase-form">
+                        <div class="ase-f"><label>IPS Que Comenta</label>
+                            <select class="form-select form-select-sm" value="@_ipsComenta" @onchange="OnIpsComentaChanged">
+                                <option value="">Seleccione Elemento</option>
+                                @foreach (var a in _aseguradoras) { <option value="@a.Id">@a.Nombre (@a.Codigo)</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Codigo de Aceptacion</label><input class="form-control form-control-sm" @bind="_codAcept" /></div>
+                        <div class="ase-f"><label>Fecha Comentan</label><input type="date" class="form-control form-control-sm" @bind="_fComenta" /></div>
+                        <div class="ase-f"><label>Entidad Aseguradora</label>
+                            <select class="form-select form-select-sm" @bind="_aseId">
+                                <option value="">Seleccione Elemento</option>
+                                @foreach (var a in _aseguradoras) { <option value="@a.Id">@a.Nombre (@a.Codigo)</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>FECHA INGRESO PAD</label><input type="date" class="form-control form-control-sm" @bind="_fIngreso" /></div>
+                        <div class="ase-f"><label>FECHA EGRESO PAD</label><input type="date" class="form-control form-control-sm" @bind="_fEgreso" /></div>
+                        <div class="ase-f"><label>Dias Estancia</label><input type="number" class="form-control form-control-sm" @bind="_diasEst" /></div>
+                        <div class="ase-f"><label>Op. de Ingreso (dias)</label><input type="number" class="form-control form-control-sm" @bind="_opIngreso" /></div>
+                    </div>
+
+                    <div class="ase-card-h" style="margin-top:14px;">Clasificacion</div>
+                    <div class="ase-form">
+                        <div class="ase-f"><label>Incapacidad</label>
+                            <select class="form-select form-select-sm" @bind="_incapacidad">
+                                <option value="">--</option><option>SI</option><option>NO</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Grupo RH</label>
+                            <select class="form-select form-select-sm" @bind="_grupoRh">
+                                <option value="">--</option><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Tipo Usuario</label>
+                            <select class="form-select form-select-sm" @bind="_tipoUsuario">
+                                <option value="">--</option>
+                                @foreach (var c in CatItems(CatalogoPacienteTipo.TipoUsuario)) { <option value="@c.Id">@c.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Estado</label>
+                            <select class="form-select form-select-sm" @bind="_estado">
+                                <option value="">Seleccione Elemento</option><option>ACTIVO</option><option>INACTIVO</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Clasificacion Paciente</label>
+                            <select class="form-select form-select-sm" @bind="_clasifPaciente">
+                                <option value="">--</option>
+                                @foreach (var c in CatItems(CatalogoPacienteTipo.ClasificacionPaciente)) { <option value="@c.Id">@c.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Clasificacion Grupo de Patologia</label>
+                            <select class="form-select form-select-sm" @bind="_clasifGrupo">
+                                <option value="">--</option>
+                                @foreach (var c in CatItems(CatalogoPacienteTipo.ClasificacionGrupoPatologia)) { <option value="@c.Id">@c.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Contrato 1</label>
+                            <select class="form-select form-select-sm" @bind="_contrato1" disabled="@(_contratosAse.Count == 0)">
+                                <option value="">@(_contratosAse.Count == 0 ? "Selecciona IPS que comenta" : "Seleccione Elemento")</option>
+                                @foreach (var c in _contratosAse) { <option value="@c.Id">@c.CodigoContrato</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Contrato 2</label>
+                            <select class="form-select form-select-sm" @bind="_contrato2" disabled="@(_contratosAse.Count == 0)">
+                                <option value="">@(_contratosAse.Count == 0 ? "Selecciona IPS que comenta" : "Seleccione Elemento")</option>
+                                @foreach (var c in _contratosAse) { <option value="@c.Id">@c.CodigoContrato</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Contrato 3</label>
+                            <select class="form-select form-select-sm" @bind="_contrato3" disabled="@(_contratosAse.Count == 0)">
+                                <option value="">@(_contratosAse.Count == 0 ? "Selecciona IPS que comenta" : "Seleccione Elemento")</option>
+                                @foreach (var c in _contratosAse) { <option value="@c.Id">@c.CodigoContrato</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Estrato Social</label>
+                            <select class="form-select form-select-sm" @bind="_estrato">
+                                <option value="">--</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>NO REFIERE</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Sexo</label>
+                            <select class="form-select form-select-sm" @bind="_sexo">
+                                <option value="">--</option><option>MASCULINO</option><option>FEMENINO</option><option>INDETERMINADO</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Zona</label>
+                            <select class="form-select form-select-sm" @bind="_zona">
+                                <option value="">--</option><option>URBANA</option><option>RURAL</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="ase-card-h" style="margin-top:14px;">Diagnostico</div>
+                    <div class="ase-form">
+                        <div class="ase-f">
+                            <label>CIE10 / CIE-11</label>
+                            <div class="cie-input-row">
+                                <input class="form-control form-control-sm mono" @bind="_cie10Codigo" placeholder="Codigo" />
+                                <button class="btn btn-danger btn-sm" title="Buscar diagnostico" @onclick="OpenCieModal">Buscar</button>
+                            </div>
+                        </div>
+                        <div class="ase-f ase-f-wide"><label>Diagnostico Principal</label><input class="form-control form-control-sm" @bind="_dxPrincipal" /></div>
+                        <div class="ase-f"><label>Tutela</label>
+                            <select class="form-select form-select-sm" @bind="_tutela">
+                                <option value="">--</option><option>SI</option><option>NO</option>
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Tipo Tutela</label>
+                            <select class="form-select form-select-sm" @bind="_tipoTutela">
+                                <option value="">--</option>
+                                @foreach (var c in CatItems(CatalogoPacienteTipo.TipoTutela)) { <option value="@c.Id">@c.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Med Contratado</label>
+                            <select class="form-select form-select-sm" @bind="_medContratado">
+                                <option value="">Seleccione Elemento</option>
+                                @foreach (var c in CatItems(CatalogoPacienteTipo.MedContratado)) { <option value="@c.Id">@c.Nombre</option> }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="ase-card-h" style="margin-top:14px;">Geografia y contacto</div>
+                    <div class="ase-form">
+                        <div class="ase-f"><label>Pais Residencia</label>
+                            <select class="form-select form-select-sm" value="@_paisResidencia" @onchange="OnPaisResidenciaChanged">
+                                <option value="">--</option>
+                                @foreach (var p in _paises) { <option value="@p.Id">@p.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Pais Origen</label>
+                            <select class="form-select form-select-sm" @bind="_paisOrigen">
+                                <option value="">--</option>
+                                @foreach (var p in _paises) { <option value="@p.Id">@p.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Departamento</label>
+                            <select class="form-select form-select-sm" value="@_departamento" @onchange="OnDepartamentoChanged" disabled="@(_departamentos.Count == 0)">
+                                <option value="">--</option>
+                                @foreach (var d in _departamentos) { <option value="@d.Id">@d.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f"><label>Municipio</label>
+                            <select class="form-select form-select-sm" @bind="_municipio" disabled="@(_municipios.Count == 0)">
+                                <option value="">--</option>
+                                @foreach (var m in _municipios) { <option value="@m.Id">@m.Nombre</option> }
+                            </select>
+                        </div>
+                        <div class="ase-f ase-f-wide"><label>Direccion</label><input class="form-control form-control-sm" @bind="_dir" /></div>
+                        <div class="ase-f"><label>Barrio</label><input class="form-control form-control-sm" @bind="_barrio" /></div>
+                        <div class="ase-f"><label>Ciudad</label><input class="form-control form-control-sm" @bind="_ciudad" /></div>
+                        <div class="ase-f"><label>Telefono</label>
+                            <div style="display:flex;gap:6px;">
+                                <select class="form-select form-select-sm" style="max-width:110px;" @bind="_codPaisTel">
+                                    @foreach (var cp in _codigosPais) { <option value="@cp.Codigo">@cp.Codigo @cp.Pais</option> }
+                                </select>
+                                <input class="form-control form-control-sm" @bind="_tel" placeholder="Solo numero" />
+                            </div>
+                        </div>
+                        <div class="ase-f"><label>Correo Electronico</label><input class="form-control form-control-sm" @bind="_email" /></div>
+                        <div class="ase-f"><label>Sede Atencion</label>
+                            <select class="form-select form-select-sm" @bind="_sedeId">
+                                <option value="">--</option>
+                                @foreach (var s in _sedes) { <option value="@s.Id">@s.Nombre</option> }
+                            </select>
+                        </div>
+                    </div>
+                }
+
+                @* ===== TAB DATOS ADICIONALES ===== *@
+                @if (_tab == "adicionales")
+                {
+                    <div class="ase-card-h">Estado civil, ocupacion, regimen</div>
+                    <div class="ase-form">
+                        <div class="ase-f"><label>Estado civil</label>
+                            <select class="form-select form-select-sm" @bind="_estadoCivil"><option value="">--</option><option>SOLTERO</option><option>CASADO</option><option>UNION LIBRE</option><option>VIUDO</option><option>DIVORCIADO</option><option>NO REFIERE</option></select>
+                        </div>
+                        <div class="ase-f"><label>Ocupacion</label>
+                            <input class="form-control form-control-sm" @bind="_ocupacion" list="ocupaciones-sug" placeholder="Escribe o selecciona..." />
+                            <datalist id="ocupaciones-sug">
+                                <option value="NO APLICA"></option>
+                                <option value="NO REFIERE"></option>
+                            </datalist>
+                        </div>
+                        <div class="ase-f"><label>Regimen</label>
+                            <select class="form-select form-select-sm" @bind="_regimen"><option value="">--</option><option>CONTRIBUTIVO</option><option>SUBSIDIADO</option><option>PARTICULAR</option><option>ESPECIAL</option></select>
+                        </div>
+                    </div>
+
+                    <div class="ase-card-h" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">
+                        <span>Contactos de emergencia</span>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AgregarContactoEmergencia">+ Agregar contacto</button>
+                    </div>
+                    @if (_contactos.Count == 0)
+                    {
+                        <div class="ase-empty" style="padding:14px;">Sin contactos. Pulsa "+ Agregar contacto" para registrar uno.</div>
+                    }
+                    @for (var i = 0; i < _contactos.Count; i++)
+                    {
+                        var idx = i;
+                        var c = _contactos[idx];
+                        <div class="ase-form" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
+                            <div class="ase-f ase-f-wide"><label>Nombre (#@(idx + 1))</label>
+                                <input class="form-control form-control-sm" @bind="c.Nombre" />
+                            </div>
+                            <div class="ase-f"><label>Parentesco</label>
+                                <input class="form-control form-control-sm" @bind="c.Parentesco" placeholder="Madre, padre, conyuge..." />
+                            </div>
+                            <div class="ase-f ase-f-wide"><label>Telefono</label>
+                                <div style="display:flex;gap:6px;">
+                                    <select class="form-select form-select-sm" style="max-width:110px;" @bind="c.CodigoPais">
+                                        @foreach (var cp in _codigosPais) { <option value="@cp.Codigo">@cp.Codigo @cp.Pais</option> }
+                                    </select>
+                                    <input class="form-control form-control-sm" @bind="c.Telefono" placeholder="Solo numero" />
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-link text-danger btn-sm" style="align-self:end;" @onclick="() => QuitarContactoEmergencia(idx)" title="Quitar contacto">&#128465; Quitar</button>
+                        </div>
+                    }
+
+                    <label class="ase-chk" style="margin-top:8px;"><input type="checkbox" @bind="_activo" /> <span>Activo</span></label>
+                }
+
+                @* ===== TAB DETALLE ===== *@
+                @if (_tab == "detalle")
+                {
+                    <div class="ase-card-h">Detalle clinico (proximo modulo)</div>
+                    <div class="ase-empty">
+                        Aqui ira la HC del paciente, historial de ingresos, ordenes clinicas, notas medicas y formularios diligenciados.
+                        Por ahora se reservan los cimientos del paciente.
+                    </div>
+                }
+
+                @* ===== TAB DOCUMENTOS DEL PACIENTE ===== *@
+                @if (_tab == "documentos")
+                {
+                    <div class="ase-card-h" style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>Documentos adjuntos del paciente</span>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="RecargarDocsPacienteAsync" disabled="@_docsBusy" title="Refrescar lista">&#128260; Refrescar</button>
+                    </div>
+                    <div class="text-muted" style="font-size:11.5px;margin-bottom:10px;">
+                        Todos los archivos cargados a notas medicas (firmas, ordenes, anexos) aparecen aqui. Usa "Refrescar" si acabas de capturar una firma por WhatsApp.
+                    </div>
+                    @if (_docsError is not null)
+                    {
+                        <div class="ase-alert">Error al cargar documentos: @_docsError</div>
+                    }
+                    @if (_docsBusy)
+                    {
+                        <div class="ase-empty"><em>Cargando documentos...</em></div>
+                    }
+                    else if (_docs.Count == 0)
+                    {
+                        <div class="ase-empty">Aun no hay documentos adjuntos para este paciente.</div>
+                    }
+                    else
+                    {
+                        <div class="ase-table-wrap">
+                            <table class="table table-sm pac-docs-tbl">
+                                <thead>
+                                    <tr>
+                                        <th>Categoria</th>
+                                        <th>Nombre del archivo</th>
+                                        <th>Nota</th>
+                                        <th>Fecha nota</th>
+                                        <th>Subido</th>
+                                        <th>Tamano</th>
+                                        <th style="width:120px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var d in _docs)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (!string.IsNullOrWhiteSpace(d.Categoria))
+                                                {
+                                                    <span class="pac-doc-cat">@d.Categoria</span>
+                                                }
+                                                else { <span class="text-muted">-</span> }
+                                            </td>
+                                            <td title="@d.Anotaciones">@d.NombreOriginal</td>
+                                            <td><span class="text-muted">@(d.CodigoNota ?? d.NotaMedicaId.ToString()[..8])</span></td>
+                                            <td>@(d.FechaNota?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                            <td>@d.CreatedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@FormatTam(d.Tamano)</td>
+                                            <td>
+                                                <a class="btn btn-outline-secondary btn-sm" href="@d.RutaArchivo" target="_blank" title="Abrir / descargar">&#128190; Ver</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+
+                <div class="ase-actions" style="margin-top:18px;">
+                    <button class="btn btn-primary btn-sm" @onclick="Save" disabled="@_busy">@(_busy ? "Guardando..." : "Guardar paciente")</button>
+                    @if (_id is not null)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="Desactivar" disabled="@_busy" title="Marcar como inactivo sin borrar el historial clinico">Desactivar</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="Delete" disabled="@_busy" title="Eliminar definitivamente. Solo se puede si el paciente no tiene HC, notas ni asignaciones.">Eliminar</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@* ===== Modal de busqueda CIE-11 (WHO ICD-11 API) ===== *@
+@if (_cieModal)
+{
+    <div class="cie-backdrop" @onclick="CloseCieModal"></div>
+    <div class="cie-modal">
+        <div class="cie-modal-h">
+            <h3>Buscar Diagnostico o Codigo</h3>
+            <button class="cie-modal-close" @onclick="CloseCieModal">&times;</button>
+        </div>
+        <div class="cie-modal-body">
+            <div class="cie-search-row">
+                <input class="form-control form-control-sm" placeholder="Ej.: diabetes, covid, 5A11..."
+                       @bind="_cieQuery" @bind:event="oninput"
+                       @onkeyup="OnCieKeyUp" />
+                <button class="btn btn-danger btn-sm" @onclick="SearchCie" disabled="@_cieBusy">@(_cieBusy ? "..." : "Buscar")</button>
+            </div>
+            @if (_cieError is not null) { <div class="ase-alert" style="margin-top:10px;">@_cieError</div> }
+            <div class="cie-result-h">Resultados de la Busqueda</div>
+            <div class="cie-result-list">
+                @if (_cieBusy) { <div class="cie-empty">Buscando en WHO ICD-11...</div> }
+                else if (_cieResults.Count == 0) { <div class="cie-empty">Escribe un termino y pulsa Buscar.</div> }
+                else
+                {
+                    @foreach (var r in _cieResults)
+                    {
+                        <button class="cie-result-item" @onclick="() => SelectCieAsync(r)">
+                            @if (!string.IsNullOrWhiteSpace(r.Code))
+                            {
+                                <span class="cie-code">@r.Code</span>
+                            }
+                            <span class="cie-title">@r.Title</span>
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .pac-tabs { display: flex; gap: 4px; border-bottom: 1.5px solid #e2e8f0; margin-bottom: 18px; padding-bottom: 0; }
+    .pac-tab:disabled { opacity: .5; cursor: not-allowed; }
+    .pac-docs-tbl { font-size: 12.5px; }
+    .pac-docs-tbl thead th { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .04em; background: #f1f5f9; }
+    .pac-doc-cat { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; }
+    .ase-table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+    .pac-tab { background: none; border: none; padding: 10px 18px; font-size: 13.5px; font-weight: 600; color: #64748b; cursor: pointer; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; transition: all .15s; }
+    .pac-tab:hover { color: #1565c0; }
+    .pac-tab.active { color: #1565c0; border-bottom-color: #1565c0; }
+    .cie-input-row { display:flex; gap:6px; }
+    .cie-input-row input { flex:1; }
+    .cie-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 950; }
+    .cie-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 720px; max-width: 95vw; max-height: 80vh; background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(15,23,42,.25); z-index: 951; display: flex; flex-direction: column; }
+    .cie-modal-h { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e2e8f0; }
+    .cie-modal-h h3 { margin:0; font-size:16px; font-weight:700; color:#0f172a; }
+    .cie-modal-close { background:none; border:none; font-size:22px; line-height:1; cursor:pointer; color:#64748b; }
+    .cie-modal-body { padding:18px; overflow:auto; }
+    .cie-search-row { display:flex; gap:6px; }
+    .cie-search-row input { flex:1; }
+    .cie-result-h { font-size:12.5px; font-weight:700; color:#334155; margin: 14px 0 6px 0; }
+    .cie-result-list { border:1px solid #e2e8f0; border-radius:8px; min-height:200px; max-height:380px; overflow:auto; background:#fafafa; }
+    .cie-empty { padding:60px 20px; text-align:center; color:#94a3b8; font-size:13px; }
+    .cie-result-item { display:flex; align-items:center; gap:12px; width:100%; padding:10px 14px; background:#fff; border:none; border-bottom:1px solid #f1f5f9; cursor:pointer; text-align:left; transition: background .15s; }
+    .cie-result-item:hover { background:#eff6ff; }
+    .cie-title { flex:1; font-size:13px; color:#0f172a; }
+    .cie-id { font-family: monospace; font-size:10px; color:#94a3b8; }
+    .cie-code { font-family: monospace; font-size: 12px; font-weight: 700; color: #0f172a; background:#fef3c7; padding: 3px 8px; border-radius: 4px; min-width: 64px; text-align: center; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<PacienteDto> _lista = new();
+    private List<AseguradoraDto> _aseguradoras = new();
+    private List<SucursalDto> _sedes = new();
+    private List<CatalogoPacienteDto> _catalogos = new();
+    private string _filtro = "";
+
+    private IEnumerable<CatalogoPacienteDto> CatItems(DokTrino.Domain.Enums.CatalogoPacienteTipo tipo)
+        => _catalogos.Where(c => c.Tipo == tipo && c.Activo);
+
+    private bool _showForm;
+    private string _tab = "generales";
+    private Guid? _id;
+
+    // Tab Documentos: lista de adjuntos del paciente activo.
+    private List<DocumentoPacienteDto> _docs = new();
+    private bool _docsBusy;
+
+    private async Task OnAbrirDocumentosTab()
+    {
+        _tab = "documentos";
+        await RecargarDocsPacienteAsync();
+    }
+
+    private string? _docsError;
+
+    private async Task RecargarDocsPacienteAsync()
+    {
+        if (_id is not Guid pid) { _docs = new(); return; }
+        _docsBusy = true; _docsError = null;
+        try { _docs = (await NotaSvc.ListarDocumentosPorPacienteAsync(pid)).ToList(); }
+        catch (Exception ex) { _docs = new(); _docsError = ex.Message; }
+        finally { _docsBusy = false; }
+    }
+
+    private static string FormatTam(long bytes)
+    {
+        if (bytes < 1024) { return bytes + " B"; }
+        if (bytes < 1024 * 1024) { return (bytes / 1024.0).ToString("0.#") + " KB"; }
+        return (bytes / (1024.0 * 1024)).ToString("0.##") + " MB";
+    }
+
+    // Identificacion
+    private string _doc = "", _tipoDoc = "CC";
+    private string? _pNombre, _sNombre, _pApellido, _sApellido;
+    private DateOnly? _fnac;
+    private int? _edad;
+
+    // Admin PAD
+    private string? _codAcept;
+    private DateOnly? _fComenta, _fIngreso, _fEgreso;
+    private string _aseId = "";
+    private string _ipsComenta = "";
+    private List<ContratoDto> _contratosAse = new();
+    private int? _diasEst, _opIngreso;
+
+    // Clasificacion
+    private string? _incapacidad, _grupoRh, _estado;
+    private string _tipoUsuario = "", _clasifPaciente = "", _clasifGrupo = "";
+    private string _contrato1 = "", _contrato2 = "", _contrato3 = "";
+    private string? _estrato, _sexo, _estadoCivil, _zona, _ocupacion, _regimen;
+
+    // Diagnostico
+    private string? _dxPrincipal, _tutela;
+    private string _tipoTutela = "";
+    private string _medContratado = "";
+    private string? _cie10Codigo;
+
+    // Modal CIE-11
+    private bool _cieModal;
+    private string _cieQuery = "";
+    private List<Cie11SearchItem> _cieResults = new();
+    private bool _cieBusy;
+    private string? _cieError;
+
+    private void OpenCieModal()
+    {
+        _cieModal = true; _cieQuery = ""; _cieResults = new(); _cieError = null;
+    }
+    private void CloseCieModal() => _cieModal = false;
+    private async Task OnCieKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { await SearchCie(); }
+    }
+    private async Task SearchCie()
+    {
+        if (string.IsNullOrWhiteSpace(_cieQuery)) { return; }
+        _cieError = null; _cieBusy = true; _cieResults = new();
+        try { _cieResults = (await Cie11Svc.SearchAsync(_cieQuery.Trim())).ToList(); }
+        catch (InvalidOperationException ex) { _cieError = ex.Message; }
+        catch (Exception ex) { _cieError = "Error tecnico: " + ex.Message; }
+        finally { _cieBusy = false; }
+    }
+    private async Task SelectCieAsync(Cie11SearchItem item)
+    {
+        _cieError = null;
+        try
+        {
+            var d = await Cie11Svc.GetDetailAsync(item.EntityId);
+            if (d is null || string.IsNullOrEmpty(d.Code))
+            {
+                _cieError = "No se pudo obtener el codigo del diagnostico seleccionado.";
+                return;
+            }
+            _cie10Codigo = d.Code;
+            _dxPrincipal = d.Title;
+            _cieModal = false;
+        }
+        catch (InvalidOperationException ex) { _cieError = ex.Message; }
+        catch (Exception ex) { _cieError = "Error tecnico: " + ex.Message; }
+    }
+    private static string TrimId(string id)
+    {
+        if (string.IsNullOrEmpty(id)) { return ""; }
+        var slash = id.LastIndexOf('/');
+        return slash > 0 ? id[(slash + 1)..] : id;
+    }
+
+    // Geografia
+    private string? _dir, _barrio, _ciudad;
+    private string _codPaisTel = "+57";
+    private string? _tel, _email;
+    private string _sedeId = "";
+
+    // Selects en cascada de geografia.
+    private List<PaisDto> _paises = new();
+    private List<DepartamentoDto> _departamentos = new();
+    private List<MunicipioDto> _municipios = new();
+    private string _paisResidencia = "", _paisOrigen = "", _departamento = "", _municipio = "";
+
+    // Emergencia (legacy, mantenido como fallback de display)
+    private string? _emerNombre, _emerParentesco, _emerTel;
+    private bool _activo = true;
+
+    /// <summary>Lista N de contactos de emergencia editables. La primera fila
+    /// sustituye a los campos legacy al guardar.</summary>
+    private List<ContactoEmergenciaEdit> _contactos = new();
+
+    /// <summary>Catalogo simple de codigos de pais frecuentes. Si necesitas mas,
+    /// se agregan aqui; no requiere migracion.</summary>
+    private static readonly (string Codigo, string Pais)[] _codigosPais = new[]
+    {
+        ("+57",  "Colombia"),
+        ("+58",  "Venezuela"),
+        ("+593", "Ecuador"),
+        ("+51",  "Peru"),
+        ("+56",  "Chile"),
+        ("+54",  "Argentina"),
+        ("+591", "Bolivia"),
+        ("+52",  "Mexico"),
+        ("+1",   "EE.UU./Canada"),
+        ("+34",  "Espana")
+    };
+
+    private void AgregarContactoEmergencia()
+    {
+        _contactos.Add(new ContactoEmergenciaEdit { CodigoPais = "+57", Orden = _contactos.Count + 1 });
+    }
+
+    private void QuitarContactoEmergencia(int idx)
+    {
+        if (idx < 0 || idx >= _contactos.Count) { return; }
+        _contactos.RemoveAt(idx);
+        for (var i = 0; i < _contactos.Count; i++) { _contactos[i].Orden = i + 1; }
+    }
+
+    /// <summary>Modelo editable de UI para un contacto de emergencia. No persiste
+    /// directo: en Save se convierte a PacienteContactoEmergenciaDto.</summary>
+    private sealed class ContactoEmergenciaEdit
+    {
+        public Guid? Id { get; set; }
+        public string Nombre { get; set; } = "";
+        public string? Parentesco { get; set; }
+        public string CodigoPais { get; set; } = "+57";
+        public string? Telefono { get; set; }
+        public int Orden { get; set; }
+    }
+
+    private bool _busy; private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _aseguradoras = (await AseSvc.ListAseguradorasAsync()).ToList();
+        _sedes = (await SucSvc.ListAsync()).ToList();
+        _catalogos = (await CatSvc.ListAsync(null)).ToList();
+        _paises = (await GeoSvc.ListPaisesAsync()).ToList();
+        await LoadLista();
+    }
+
+    private async Task OnIpsComentaChanged(ChangeEventArgs e)
+    {
+        _ipsComenta = e.Value?.ToString() ?? "";
+        _contrato1 = _contrato2 = _contrato3 = "";
+        if (Guid.TryParse(_ipsComenta, out var iid))
+        {
+            _contratosAse = (await AseSvc.ListContratosAsync(iid)).ToList();
+        }
+        else { _contratosAse = new(); }
+    }
+
+    private async Task OnPaisResidenciaChanged(ChangeEventArgs e)
+    {
+        _paisResidencia = e.Value?.ToString() ?? "";
+        _departamento = ""; _municipio = ""; _municipios = new();
+        if (Guid.TryParse(_paisResidencia, out var pid))
+        {
+            _departamentos = (await GeoSvc.ListDepartamentosAsync(pid)).ToList();
+        }
+        else { _departamentos = new(); }
+    }
+
+    private async Task OnDepartamentoChanged(ChangeEventArgs e)
+    {
+        _departamento = e.Value?.ToString() ?? "";
+        _municipio = "";
+        if (Guid.TryParse(_departamento, out var did))
+        {
+            _municipios = (await GeoSvc.ListMunicipiosAsync(did)).ToList();
+        }
+        else { _municipios = new(); }
+    }
+
+    private async Task LoadLista() => _lista = (await Svc.ListAsync(string.IsNullOrWhiteSpace(_filtro) ? null : _filtro)).ToList();
+    private async Task OnFiltro(ChangeEventArgs e) { _filtro = e.Value?.ToString() ?? ""; await LoadLista(); }
+
+    private void New()
+    {
+        _id = null;
+        _doc = ""; _tipoDoc = "CC";
+        _pNombre = _sNombre = _pApellido = _sApellido = null;
+        _fnac = null; _edad = null;
+        _codAcept = null; _fComenta = _fIngreso = _fEgreso = null; _aseId = "";
+        _ipsComenta = ""; _contratosAse = new();
+        _diasEst = _opIngreso = null;
+        _incapacidad = _grupoRh = _estado = null;
+        _tipoUsuario = _clasifPaciente = _clasifGrupo = "";
+        _contrato1 = _contrato2 = _contrato3 = "";
+        _estrato = _sexo = _estadoCivil = _zona = _ocupacion = _regimen = null;
+        _dxPrincipal = _tutela = null;
+        _tipoTutela = "";
+        _medContratado = "";
+        _cie10Codigo = null;
+        _dir = _barrio = _ciudad = null;
+        _codPaisTel = "+57";
+        _tel = _email = null; _sedeId = "";
+        _paisResidencia = _paisOrigen = _departamento = _municipio = "";
+        _departamentos = new(); _municipios = new();
+        _emerNombre = _emerParentesco = _emerTel = null; _activo = true;
+        _contactos = new();
+        _showForm = true; _tab = "generales"; _error = _ok = null;
+    }
+
+    private async Task Select(Guid id)
+    {
+        var d = await Svc.GetAsync(id);
+        if (d is null) { return; }
+        _id = d.Id;
+        _doc = d.NumeroDocumento; _tipoDoc = d.TipoDocumento;
+        _pNombre = d.PrimerNombre; _sNombre = d.SegundoNombre; _pApellido = d.PrimerApellido; _sApellido = d.SegundoApellido;
+        _fnac = d.FechaNacimiento; _edad = d.Edad;
+        _codAcept = d.CodigoAceptacion; _fComenta = d.FechaComentan;
+        _fIngreso = d.FechaIngresoPad; _fEgreso = d.FechaEgresoPad;
+        _aseId = d.AseguradoraId?.ToString() ?? "";
+        _ipsComenta = d.IpsComentaId?.ToString() ?? "";
+        // Cargar contratos de la IPS que comenta del paciente para los selects.
+        if (d.IpsComentaId is Guid iid) { _contratosAse = (await AseSvc.ListContratosAsync(iid)).ToList(); }
+        else { _contratosAse = new(); }
+        _diasEst = d.DiasEstancia; _opIngreso = d.OpIngresoDias;
+        _incapacidad = d.Incapacidad; _grupoRh = d.GrupoRh; _estado = d.Estado;
+        _tipoUsuario = d.TipoUsuarioId?.ToString() ?? "";
+        _clasifPaciente = d.ClasificacionPacienteId?.ToString() ?? "";
+        _clasifGrupo = d.ClasificacionGrupoPatologiaId?.ToString() ?? "";
+        _contrato1 = d.Contrato1Id?.ToString() ?? "";
+        _contrato2 = d.Contrato2Id?.ToString() ?? "";
+        _contrato3 = d.Contrato3Id?.ToString() ?? "";
+        _estrato = d.EstratoSocial; _sexo = d.Sexo; _estadoCivil = d.EstadoCivil; _zona = d.Zona;
+        _ocupacion = d.Ocupacion; _regimen = d.Regimen;
+        _dxPrincipal = d.DiagnosticoPrincipal; _tutela = d.Tutela;
+        _tipoTutela = d.TipoTutelaId?.ToString() ?? "";
+        _medContratado = d.MedContratadoId?.ToString() ?? "";
+        _cie10Codigo = d.Cie10Codigo;
+        _dir = d.Direccion; _barrio = d.Barrio; _ciudad = d.Ciudad;
+        _codPaisTel = string.IsNullOrWhiteSpace(d.CodigoPaisTelefono) ? "+57" : d.CodigoPaisTelefono!;
+        _tel = d.Telefono; _email = d.Email;
+        _sedeId = d.SedeAtencionId?.ToString() ?? "";
+        _paisResidencia = d.PaisResidenciaId?.ToString() ?? "";
+        _paisOrigen = d.PaisOrigenId?.ToString() ?? "";
+        _departamento = d.DepartamentoId?.ToString() ?? "";
+        _municipio = d.MunicipioId?.ToString() ?? "";
+        if (Guid.TryParse(_paisResidencia, out var pid)) { _departamentos = (await GeoSvc.ListDepartamentosAsync(pid)).ToList(); }
+        else { _departamentos = new(); }
+        if (Guid.TryParse(_departamento, out var did)) { _municipios = (await GeoSvc.ListMunicipiosAsync(did)).ToList(); }
+        else { _municipios = new(); }
+        _emerNombre = d.ContactoEmergencia; _emerParentesco = d.Parentesco; _emerTel = d.TelefonoEmergencia; _activo = d.Activo;
+        // Lista de contactos: si vino del backend la usamos; si esta vacia pero hay
+        // datos legacy (paciente viejo), creamos una fila con esos datos.
+        _contactos = d.ContactosEmergencia
+            .Select(c => new ContactoEmergenciaEdit
+            {
+                Id = c.Id,
+                Nombre = c.Nombre,
+                Parentesco = c.Parentesco,
+                CodigoPais = string.IsNullOrWhiteSpace(c.CodigoPais) ? "+57" : c.CodigoPais,
+                Telefono = c.Telefono,
+                Orden = c.Orden
+            }).ToList();
+        if (_contactos.Count == 0 && !string.IsNullOrWhiteSpace(d.ContactoEmergencia))
+        {
+            _contactos.Add(new ContactoEmergenciaEdit
+            {
+                Nombre = d.ContactoEmergencia!,
+                Parentesco = d.Parentesco,
+                CodigoPais = "+57",
+                Telefono = d.TelefonoEmergencia,
+                Orden = 1
+            });
+        }
+        _showForm = true; _tab = "generales"; _error = _ok = null;
+    }
+
+    private async Task Save()
+    {
+        _error = _ok = null; _busy = true;
+        try
+        {
+            Guid? ase = Guid.TryParse(_aseId, out var ag) ? ag : null;
+            Guid? sede = Guid.TryParse(_sedeId, out var sg) ? sg : null;
+            Guid? Try(string s) => Guid.TryParse(s, out var g) ? g : null;
+            var req = new SavePacienteRequest(
+                _id,
+                _doc, _tipoDoc, _pNombre, _sNombre, _pApellido, _sApellido, null,
+                _fnac, _edad,
+                Try(_ipsComenta), _codAcept, _fComenta,
+                ase, _fIngreso, _fEgreso, _diasEst, _opIngreso,
+                _incapacidad, _grupoRh, Try(_tipoUsuario), _estado,
+                Try(_clasifPaciente), Try(_clasifGrupo),
+                _estrato, _sexo, _estadoCivil, _zona, _ocupacion, _regimen,
+                Try(_contrato1), Try(_contrato2), Try(_contrato3),
+                null, _cie10Codigo, _dxPrincipal,
+                _tutela, Try(_tipoTutela), Try(_medContratado),
+                Try(_paisResidencia), Try(_paisOrigen), Try(_departamento), Try(_municipio),
+                _dir, _barrio, _ciudad,
+                _codPaisTel, _tel, _email,
+                sede,
+                _emerNombre, _emerParentesco, _emerTel,
+                _contactos
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Nombre))
+                    .Select((c, i) => new PacienteContactoEmergenciaDto(
+                        c.Id, c.Nombre.Trim(), c.Parentesco?.Trim(),
+                        string.IsNullOrWhiteSpace(c.CodigoPais) ? "+57" : c.CodigoPais.Trim(),
+                        c.Telefono?.Trim(),
+                        c.Orden > 0 ? c.Orden : i + 1))
+                    .ToList(),
+                _activo);
+            var saved = await Svc.SaveAsync(req, await Actor());
+            if (saved is null) { _error = "No se pudo guardar (sin tenant activo)."; return; }
+            await Select(saved.Id); await LoadLista(); _ok = $"Paciente \"{saved.NombreCompleto}\" guardado.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Delete()
+    {
+        if (_id is not Guid id) { return; }
+        _busy = true; _error = null; _ok = null;
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("confirm",
+                "Eliminar definitivamente este paciente? Esta accion no se puede deshacer.");
+            if (!ok) { return; }
+            await Svc.DeleteAsync(id, await Actor());
+            _showForm = false; _id = null; await LoadLista(); _ok = "Paciente eliminado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Mensaje legible del servicio (paciente con HC/notas/asignaciones).
+            _error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            // Error inesperado (incluye violaciones de FK no anticipadas).
+            _error = "No se pudo eliminar el paciente: " + ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Desactivar()
+    {
+        if (_id is not Guid id) { return; }
+        _busy = true; _error = null; _ok = null;
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("confirm",
+                "Marcar este paciente como inactivo? El historial clinico se conserva. Podras reactivarlo despues editando.");
+            if (!ok) { return; }
+            await Svc.DesactivarAsync(id, await Actor());
+            await LoadLista();
+            _ok = "Paciente desactivado.";
+            // Reflejar el cambio en el form sin cerrar.
+            _activo = false;
+        }
+        catch (Exception ex) { _error = "No se pudo desactivar: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}

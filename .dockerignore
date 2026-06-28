@@ -1,0 +1,37 @@
+# Build / IDE
+**/bin
+**/obj
+**/.vs
+**/.vscode
+**/.idea
+**/TestResults
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Logs / runtime
+**/*.log
+**/logs
+**/*.pid
+docker-data/
+stable-bin/
+
+# Docs / notes (no copiar a la imagen)
+docs/
+README.md
+CLAUDE.md
+*.md
+
+# Secrets / dev local
+appsettings.Development.json
+appsettings.Local.json
+**/secrets.json
+.env
+.env.*
+
+# Datos pesados
+*.csv
+*.xlsx
+*.bak

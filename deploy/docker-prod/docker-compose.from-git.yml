@@ -1,0 +1,90 @@
+# =========================================================================
+#  Stack de PRODUCCION de DokTrino IPS RT - variante BUILD-FROM-GIT.
+#
+#  Esta version NO usa GHCR: clona la rama indicada del repo publico
+#  https://github.com/alexandercuartas665/DOKTRINO.git directamente en el
+#  server y construye la imagen ahi mismo. Util cuando no quieres mantener
+#  un registry ni configurar credenciales para pull.
+#
+#  Requisitos en el server:
+#    - Docker Desktop / Engine 24+ con Compose v2 (BuildKit habilitado por default)
+#    - Salida HTTPS a github.com:443
+#    - ~3 GB libres para la imagen (.NET SDK + runtime + Chromium)
+#
+#  Uso en el server (RDP o consola):
+#    1) Crea la carpeta E:\DOCKER\doktrino y copia adentro:
+#         - docker-compose.from-git.yml  (este archivo)
+#         - .env                          (basado en .env.example)
+#    2) cd E:\DOCKER\doktrino
+#    3) docker compose -f docker-compose.from-git.yml build         # primer build (~5-10 min)
+#    4) docker compose -f docker-compose.from-git.yml up -d
+#    5) Apunta tu reverse proxy global a http://127.0.0.1:${DOKTRINO_PORT}
+#       con WebSockets habilitados (Blazor Server / SignalR).
+#
+#  Updates (cuando hagas commit nuevo en la rama):
+#    docker compose -f docker-compose.from-git.yml build --no-cache
+#    docker compose -f docker-compose.from-git.yml up -d
+# =========================================================================
+
+name: doktrino-prod
+
+services:
+  doktrino-app:
+    # Build directo desde el repo publico, en la rama indicada por DOKTRINO_BRANCH (.env).
+    # Sintaxis git context: <url>#<ref>  (ref = branch, tag, o commit sha).
+    build:
+      context: "https://github.com/alexandercuartas665/DOKTRINO.git#${DOKTRINO_BRANCH:-main}"
+      dockerfile: apps/backend/Dockerfile.superadmin
+    image: doktrino-superadmin:local
+    container_name: doktrino-app
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      ASPNETCORE_HTTP_PORTS: 8080
+      DOKTRINO_DB_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      DOKTRINO_RUN_MIGRATIONS: "true"
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    ports:
+      # Publica SOLO al loopback del server (no expuesto a internet).
+      # Tu reverse proxy global hace TLS y forwardea a este puerto.
+      - "${DOKTRINO_PORT:-5380}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - doktrino-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: doktrino-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - doktrino-pgdata:/var/lib/postgresql/data
+    networks:
+      - doktrino-net
+    # En produccion NO publicamos al host. Solo red interna.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  doktrino-pgdata:
+
+networks:
+  doktrino-net:
+    driver: bridge

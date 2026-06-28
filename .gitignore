@@ -1,0 +1,78 @@
+# =========================
+# .NET / Visual Studio
+# =========================
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+.vs/
+*.user
+*.suo
+*.userprefs
+*.usertasks
+*.swp
+*.opensdf
+*.sdf
+*.unsuccessfulbuild
+*.cache
+*.tlog
+*.lastbuildstate
+*.opendb
+*.VC.db
+*.VC.opendb
+
+# Rider / JetBrains
+.idea/
+*.iml
+
+# VS Code (mantener settings compartidos opcional)
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# Build output
+artifacts/
+publish/
+*.dll
+*.pdb
+*.exe
+!stable-bin/*.exe
+!stable-bin/*.dll
+TestResults/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# EF Core
+*.dbmdl
+*.jfm
+
+# Secrets / config local
+appsettings.Development.json
+appsettings.Local.json
+**/secrets.json
+*.user.props
+.env
+.env.local
+.env.*.local
+
+# Docker / logs runtime
+docker-data/
+*.log
+logs/
+*.pid
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Data dumps / datasets temporales
+*.csv
+*.xlsx
+*.bak
+*.tmp

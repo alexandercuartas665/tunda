@@ -1,0 +1,1052 @@
+@using DokTrino.SuperAdmin.Components.Forms
+@inject IJSRuntime JS
+
+@* ============================================================
+   FormViewer: renderiza un FormSchema como una vista
+   EDITABLE (no editor). Cabecera institucional + secciones +
+   campos. Los valores diligenciados viven en el dict Valores.
+   ============================================================ *@
+
+@if (Schema is null)
+{
+    <div class="fv-empty">Sin formato cargado.</div>
+}
+else
+{
+    // Top-level sections para el TOC. Solo se muestra el indice si hay 3+
+    // secciones (formularios chicos no lo necesitan y queda mas limpio).
+    var topSections = Schema.Children.Where(c => c.IsSection).ToList();
+    var showToc = topSections.Count >= 3;
+    <div class="fv-shell">
+
+        @if (showToc)
+        {
+            @* Boton flotante sticky en esquina superior derecha. Click abre
+               popover con la lista de secciones. Outside-click o seleccion
+               cierran el popover. No reserva ancho del form. *@
+            <div class="fv-toc-floater" data-toc-floater>
+                <div class="fv-toc-anchor">
+                    <button type="button" class="fv-toc-btn" data-toc-toggle title="Saltar a seccion">
+                        <span class="fv-toc-btn-i">&#9776;</span>
+                        <span class="fv-toc-btn-t">Secciones</span>
+                    </button>
+                    <div class="fv-toc-pop" data-toc-pop role="menu">
+                        <div class="fv-toc-pop-h">IR A SECCION</div>
+                        @foreach (var sec in topSections)
+                        {
+                            <a href="#sec-@sec.Id" data-toc-link="@sec.Id" class="fv-toc-link" role="menuitem">
+                                @sec.Label
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="fv-doc">
+
+        @* ----- Cabecera ----- *@
+        @if (Schema.Header is not null || !string.IsNullOrEmpty(Titulo))
+        {
+            var hd = Schema.Header ?? new FormHeader();
+            <div class="fv-head">
+                <div class="fv-head-logo">
+                    @if (!string.IsNullOrWhiteSpace(hd.LogoUrl))
+                    {
+                        <img src="@hd.LogoUrl" alt="logo" />
+                    }
+                    else
+                    {
+                        <div class="fv-logo-fallback">@(!string.IsNullOrWhiteSpace(hd.Institucion) ? hd.Institucion : "IPS")</div>
+                    }
+                    <div class="fv-head-tag">@hd.Tagline</div>
+                </div>
+                <div class="fv-head-title">
+                    <h3>@(string.IsNullOrWhiteSpace(hd.Titulo) ? Titulo : hd.Titulo)</h3>
+                    <div class="fv-head-nit">@Subtitulo</div>
+                </div>
+                <div class="fv-head-meta">
+                    @foreach (var cabF in hd.Campos)
+                    {
+                        var hdrKey = "hdr:" + cabF.Id;
+                        var hdrReadOnly = ReadOnly || (ReadOnlyKeys is not null && ReadOnlyKeys.Contains(hdrKey));
+                        <div class="fv-head-meta-row">
+                            <label>@cabF.Label:</label>
+                            @if (hdrReadOnly)
+                            {
+                                @* readonly + tabindex=-1 evita que el cursor entre al click; el style refuerza visualmente *@
+                                <input class="form-control form-control-sm fv-auto"
+                                       value="@GetValue(hdrKey)" readonly tabindex="-1" />
+                            }
+                            else
+                            {
+                                <input class="form-control form-control-sm"
+                                       value="@GetValue(hdrKey)"
+                                       @onchange="e => SetValue(hdrKey, e.Value?.ToString())" />
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* ----- Cuerpo: secciones + campos ----- *@
+        @foreach (var node in Schema.Children)
+        {
+            if (node.IsSection)
+            {
+                <div class="fv-section" id="sec-@node.Id" data-toc-section="@node.Id">
+                    <div class="fv-section-h">@node.Label</div>
+                    <div class="fv-grid">
+                        @if (node.Children is not null)
+                        {
+                            @foreach (var f in node.Children)
+                            {
+                                @RenderField(f)
+                            }
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="fv-grid fv-grid-root">
+                    @RenderField(node)
+                </div>
+            }
+        }
+        </div>@* /fv-doc *@
+    </div>@* /fv-shell *@
+}
+
+@* Picker CIE-11 unico, compartido por todas las celdas autocomplete con catalog=cie11
+   de esta instancia del viewer. El AbrirCie11Picker(cellKey) setea el target y abre. *@
+<Cie11Picker @bind-Visible="_cie11PickerOpen" OnSelected="OnCie11Selected" />
+
+<style>
+    /* Celdas deshabilitadas por condicional EnabledByColumn. Se ven grises claras
+       para que el doctor entienda que no aplica en esa fila. El cursor pasa a
+       not-allowed al sobrevolar. Solo aplica a inputs/selects con la clase
+       explicita en la celda; no toca otros disabled del resto del formulario
+       (prefill, readonly de columna, etc.). */
+    .fv-tbl-cell-off input,
+    .fv-tbl-cell-off select {
+        background-color: #f1f5f9 !important;
+        color: #94a3b8 !important;
+        cursor: not-allowed;
+        border-color: #e2e8f0 !important;
+    }
+    .fv-tbl-cell-off { background-color: #fafbfc; }
+
+    /* Input + lupita para celdas autocomplete tipo CIE-11 */
+    .fv-tbl-autocomp { display: flex; gap: 4px; align-items: stretch; }
+    .fv-tbl-autocomp input { flex: 1; min-width: 0; }
+    .fv-tbl-lupa { padding: 2px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
+
+    /* ==================== TOC: boton flotante con popover ====================
+       Para no robar ancho al form, el TOC vive como boton sticky en la
+       esquina superior derecha del shell. Click abre un popover con la lista
+       de secciones; outside-click o seleccion cierran. Visible solo cuando el
+       form tiene 3+ secciones top-level. */
+    .fv-shell { position: relative; }
+
+    .fv-toc-floater {
+        /* Anclado al viewport del modal via JS (top/right computados desde el
+           rect del scroll-ancestor). position:sticky no funciona aqui porque
+           hay un ancestro intermedio con overflow:auto que rompe el contexto. */
+        position: fixed;
+        top: 8px;
+        right: 16px;
+        z-index: 60;
+        pointer-events: none;
+    }
+    .fv-toc-anchor {
+        position: relative;
+        pointer-events: auto;
+    }
+    .fv-toc-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px 5px 8px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(15,23,42,.08);
+        transition: background-color .12s, color .12s, border-color .12s;
+    }
+    .fv-toc-btn:hover { background: #eff6ff; color: #1565c0; border-color: #93c5fd; }
+    .fv-toc-btn-i { font-size: 14px; line-height: 1; }
+    .fv-toc-btn.open { background: #1565c0; color: #fff; border-color: #1565c0; }
+
+    .fv-toc-pop {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        min-width: 220px;
+        max-width: 280px;
+        max-height: 60vh;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 6px 0;
+        box-shadow: 0 12px 32px rgba(15,23,42,.18);
+        display: none;
+    }
+    .fv-toc-pop.open { display: block; }
+    .fv-toc-pop-h {
+        padding: 6px 14px 8px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 0.6px;
+    }
+    .fv-toc-link {
+        display: block;
+        padding: 7px 14px;
+        font-size: 12.5px;
+        color: #475569;
+        text-decoration: none;
+        border-left: 3px solid transparent;
+        line-height: 1.35;
+        transition: background-color .12s, color .12s, border-color .12s;
+        cursor: pointer;
+    }
+    .fv-toc-link:hover { background: #eff6ff; color: #1565c0; text-decoration: none; }
+    .fv-toc-link.active {
+        background: #eff6ff;
+        color: #1565c0;
+        border-left-color: #1565c0;
+        font-weight: 700;
+    }
+
+    /* Las secciones de destino necesitan un scroll-margin para que el header
+       del modal no las tape cuando se hace scrollIntoView. */
+    .fv-section { scroll-margin-top: 12px; }
+
+    /* ==================== Dictado por voz (Whisper) ====================
+       Wrapper relative para que el boton se ancle dentro del textarea.
+       El popover de estado lo crea el JS sobre el body (singleton). */
+    .fv-voice-wrap { position: relative; }
+    .fv-voice-wrap > textarea { padding-right: 38px; }
+    .fv-voice-btn {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #475569;
+        font-size: 14px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 4px rgba(15,23,42,.08);
+        transition: background-color .12s, color .12s, border-color .12s;
+        z-index: 5;
+    }
+    .fv-voice-btn:hover { background: #eff6ff; color: #1565c0; border-color: #93c5fd; }
+    .fv-voice-btn.recording { background: #dc2626; color: #fff; border-color: #b91c1c; animation: fv-voice-pulse 1.2s infinite; }
+    @@keyframes fv-voice-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+        70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+</style>
+
+@code {
+    [Parameter] public FormSchema? Schema { get; set; }
+    [Parameter] public Dictionary<string, string?> Valores { get; set; } = new();
+    [Parameter] public string? Titulo { get; set; }
+    [Parameter] public string? Subtitulo { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    /// <summary>
+    /// Conjunto de Names de campos cuyo valor viene de una fuente derivada
+    /// (sourceModule = "historiaMedica"). El FormViewer los renderiza como
+    /// disabled y muestra un badge "auto" para que el usuario sepa que no debe
+    /// editarlos a mano (su valor se recalcula desde la fuente).
+    /// </summary>
+    [Parameter] public HashSet<string>? ReadOnlyKeys { get; set; }
+    [Parameter] public EventCallback<KeyValuePair<string, string?>> OnValueChanged { get; set; }
+
+    /// <summary>True si el nodo concreto debe renderizarse readonly: porque el visor
+    /// entero esta en modo lectura, o porque su Name esta en ReadOnlyKeys.</summary>
+    private bool IsNodeReadOnly(FormNode n) =>
+        ReadOnly || (!string.IsNullOrEmpty(n.Name) && ReadOnlyKeys is not null && ReadOnlyKeys.Contains(n.Name));
+
+    private string? GetValue(string key) => Valores.TryGetValue(key, out var v) ? v : null;
+
+    private async Task SetValue(string key, string? value)
+    {
+        Valores[key] = value;
+        // Recalcular todos los campos calculated tras cualquier cambio.
+        // Cada calculated puede depender de N campos; lo mas simple es revaluar todo.
+        // Para fórmulas que dependen de OTROS calculated (ej: cases(total)), hacemos
+        // dos pasadas para que el orden de declaracion no importe.
+        RecalculateAll();
+        RecalculateAll();
+        if (OnValueChanged.HasDelegate) { await OnValueChanged.InvokeAsync(new(key, value)); }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Calcular valores iniciales al abrir/cambiar de schema.
+        RecalculateAll();
+        RecalculateAll();
+    }
+
+    /// <summary>Re-arma el observer del TOC despues de cada render. El JS hace
+    /// limpieza idempotente — desconecta el observer anterior antes de crear
+    /// uno nuevo, asi cambiar de documento (de Barthel a Norton, p.ej.) refresca
+    /// los anclajes sin acumular listeners zombies.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("doktrinoFormToc.setup");
+            await JS.InvokeVoidAsync("doktrinoVoice.setup");
+        }
+        catch (Microsoft.JSInterop.JSDisconnectedException) { /* circuito cerrado */ }
+        catch (TaskCanceledException) { /* navegacion en curso */ }
+    }
+
+    private void RecalculateAll()
+    {
+        if (Schema is null) { return; }
+        foreach (var n in WalkNodes(Schema.Children))
+        {
+            if (n.FieldType == "calculated" && !string.IsNullOrWhiteSpace(n.Formula))
+            {
+                var key = n.Name ?? $"fld:{n.Id}";
+                Valores[key] = EvalFormula(n.Formula!, Valores);
+            }
+        }
+    }
+
+    private static IEnumerable<FormNode> WalkNodes(List<FormNode>? nodes)
+    {
+        if (nodes is null) { yield break; }
+        foreach (var n in nodes)
+        {
+            yield return n;
+            if (n.Children is not null)
+            {
+                foreach (var c in WalkNodes(n.Children)) { yield return c; }
+            }
+        }
+    }
+
+    // Evaluador minimo de formulas usado por campos calculated.
+    // Sintaxis soportada:
+    //   sum(a, b, c, ...)                   -> suma numerica de los campos por nombre
+    //   cases(ref, "lo-hi=Etiqueta; lo-hi=Etiqueta; default=X")  -> mapeo por rango
+    //   edad(fecha_nacimiento)              -> anios desde la fecha al hoy
+    private static string EvalFormula(string formula, Dictionary<string, string?> values)
+    {
+        var f = formula.Trim();
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+
+        // sum(...)
+        var mSum = System.Text.RegularExpressions.Regex.Match(
+            f, @"^sum\s*\(([^)]*)\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mSum.Success)
+        {
+            double total = 0;
+            // Para extraer el numero al principio de strings tipo "10 - Independiente..."
+            var numFirst = new System.Text.RegularExpressions.Regex(@"-?\d+(?:[.,]\d+)?");
+            foreach (var raw in mSum.Groups[1].Value.Split(','))
+            {
+                var name = raw.Trim();
+                if (string.IsNullOrEmpty(name)) { continue; }
+                if (!values.TryGetValue(name, out var v) || string.IsNullOrWhiteSpace(v)) { continue; }
+
+                // Primero intentamos parse directo (campos number puros).
+                if (double.TryParse(v, System.Globalization.NumberStyles.Any, ci, out var nDirect))
+                {
+                    total += nDirect;
+                    continue;
+                }
+                // Fallback: extraer el primer numero del string (selects tipo "10 - texto...").
+                var m = numFirst.Match(v);
+                if (m.Success &&
+                    double.TryParse(m.Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, ci, out var nExtract))
+                {
+                    total += nExtract;
+                }
+            }
+            return (total == Math.Floor(total) ? ((long)total).ToString(ci) : total.ToString(ci));
+        }
+
+        // sumprod(field1:peso1, field2:peso2, ...)  -> Sum(valorField * peso)
+        // Util para escalas donde cada item tiene un ponderador distinto
+        // (ej: Escala DokTrino de requerimiento de enfermeria).
+        var mSp = System.Text.RegularExpressions.Regex.Match(
+            f, @"^sumprod\s*\(([^)]*)\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mSp.Success)
+        {
+            double total = 0;
+            var numFirst = new System.Text.RegularExpressions.Regex(@"-?\d+(?:[.,]\d+)?");
+            foreach (var raw in mSp.Groups[1].Value.Split(','))
+            {
+                var pair = raw.Split(':');
+                if (pair.Length != 2) { continue; }
+                var name = pair[0].Trim();
+                if (!double.TryParse(pair[1].Trim().Replace(',', '.'),
+                        System.Globalization.NumberStyles.Any, ci, out var peso)) { continue; }
+                if (!values.TryGetValue(name, out var v) || string.IsNullOrWhiteSpace(v)) { continue; }
+
+                double n;
+                if (!double.TryParse(v, System.Globalization.NumberStyles.Any, ci, out n))
+                {
+                    var m = numFirst.Match(v);
+                    if (!m.Success ||
+                        !double.TryParse(m.Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, ci, out n))
+                    { continue; }
+                }
+                total += (n * peso);
+            }
+            // Mostrar con un decimal cuando no es entero (Enfermeria da fraccionarios).
+            return (total == Math.Floor(total)
+                ? ((long)total).ToString(ci)
+                : total.ToString("0.0", ci));
+        }
+
+        // cases(refName, "0-19=DEPENDENCIA TOTAL;20-35=DEPENDENCIA SEVERA;...")
+        var mCases = System.Text.RegularExpressions.Regex.Match(
+            f, @"^cases\s*\(\s*([A-Za-z0-9_]+)\s*,\s*""(.+)""\s*\)\s*$");
+        if (mCases.Success)
+        {
+            var refName = mCases.Groups[1].Value;
+            var rules = mCases.Groups[2].Value;
+            if (!values.TryGetValue(refName, out var refVal) || string.IsNullOrWhiteSpace(refVal))
+            {
+                return "";
+            }
+            double num;
+            if (!double.TryParse(refVal, System.Globalization.NumberStyles.Any, ci, out num))
+            {
+                // Mismo fallback que sum(): extraer el primer numero del string.
+                var m = System.Text.RegularExpressions.Regex.Match(refVal, @"-?\d+(?:[.,]\d+)?");
+                if (!m.Success ||
+                    !double.TryParse(m.Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, ci, out num))
+                {
+                    return "";
+                }
+            }
+            foreach (var rule in rules.Split(';'))
+            {
+                var parts = rule.Split(new[] { '=' }, 2);
+                if (parts.Length != 2) { continue; }
+                var range = parts[0].Trim();
+                var label = parts[1].Trim();
+                if (string.Equals(range, "default", StringComparison.OrdinalIgnoreCase)) { return label; }
+                var mr = System.Text.RegularExpressions.Regex.Match(
+                    range, @"^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)$");
+                if (mr.Success)
+                {
+                    var lo = double.Parse(mr.Groups[1].Value, ci);
+                    var hi = double.Parse(mr.Groups[2].Value, ci);
+                    if (num >= lo && num <= hi) { return label; }
+                }
+            }
+            return "";
+        }
+
+        // edad(fecha_nacimiento) - util en HC.
+        var mEdad = System.Text.RegularExpressions.Regex.Match(
+            f, @"^edad\s*\(\s*([A-Za-z0-9_]+)\s*\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mEdad.Success)
+        {
+            if (values.TryGetValue(mEdad.Groups[1].Value, out var dv) && !string.IsNullOrWhiteSpace(dv) &&
+                DateTime.TryParse(dv, ci, System.Globalization.DateTimeStyles.None, out var dob))
+            {
+                var today = DateTime.Today;
+                var age = today.Year - dob.Year;
+                if (dob.Date > today.AddYears(-age)) { age--; }
+                return age.ToString(ci);
+            }
+            return "";
+        }
+
+        // ── Calculadores clinicos (IMC + clasificacion, tension, perimetro abdominal) ──
+        // Helper local que lee el valor de un field y extrae el primer numero
+        // (mismo fallback que sum/sumprod/cases: parse directo, sino primer match
+        // de numero embebido en strings tipo "120 - Normal"). Devuelve null si
+        // no hay valor o no contiene numero valido.
+        double? LeerNum(string fieldName)
+        {
+            if (!values.TryGetValue(fieldName, out var v) || string.IsNullOrWhiteSpace(v)) { return null; }
+            if (double.TryParse(v, System.Globalization.NumberStyles.Any, ci, out var nDirect)) { return nDirect; }
+            var mNum = System.Text.RegularExpressions.Regex.Match(v, @"-?\d+(?:[.,]\d+)?");
+            if (mNum.Success &&
+                double.TryParse(mNum.Value.Replace(',', '.'), System.Globalization.NumberStyles.Any, ci, out var nExtract))
+            {
+                return nExtract;
+            }
+            return null;
+        }
+
+        // imc(pesoName, tallaName) -> peso (kg) / talla (m)^2, un decimal.
+        // Heuristica de unidades: si talla > 3 asumimos cm y dividimos por 100;
+        // si <= 3 asumimos que ya viene en metros (ej "1.70").
+        var mImc = System.Text.RegularExpressions.Regex.Match(
+            f, @"^imc\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([A-Za-z0-9_]+)\s*\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mImc.Success)
+        {
+            var peso = LeerNum(mImc.Groups[1].Value);
+            var talla = LeerNum(mImc.Groups[2].Value);
+            if (peso is null || talla is null || peso.Value <= 0 || talla.Value <= 0) { return ""; }
+            var tallaM = talla.Value > 3 ? talla.Value / 100.0 : talla.Value;
+            if (tallaM <= 0) { return ""; }
+            var imc = peso.Value / (tallaM * tallaM);
+            return imc.ToString("0.0", ci);
+        }
+
+        // imcClass(imcRefName) -> clasificacion OMS sobre el campo IMC calculado.
+        var mImcClass = System.Text.RegularExpressions.Regex.Match(
+            f, @"^imcClass\s*\(\s*([A-Za-z0-9_]+)\s*\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mImcClass.Success)
+        {
+            var imcVal = LeerNum(mImcClass.Groups[1].Value);
+            if (imcVal is null) { return ""; }
+            var v = imcVal.Value;
+            if (v < 18.5) { return "Bajo peso"; }
+            if (v < 25.0) { return "Normal"; }
+            if (v < 30.0) { return "Sobrepeso"; }
+            if (v < 35.0) { return "Obesidad grado I"; }
+            if (v < 40.0) { return "Obesidad grado II"; }
+            return "Obesidad grado III";
+        }
+
+        // tensionClass(sisName, diaName) -> clasificacion ESH/ESC 2018.
+        // Regla: "la categoria mas alta gana" => evaluamos sis y dia por separado,
+        // tomamos el peor de los dos. Sufijo "(sistolica aislada)" cuando sis>=140
+        // y dia<90 (hipertension sistolica aislada del adulto mayor).
+        var mTen = System.Text.RegularExpressions.Regex.Match(
+            f, @"^tensionClass\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([A-Za-z0-9_]+)\s*\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mTen.Success)
+        {
+            var sis = LeerNum(mTen.Groups[1].Value);
+            var dia = LeerNum(mTen.Groups[2].Value);
+            if (sis is null || dia is null) { return ""; }
+            var s = sis.Value;
+            var d = dia.Value;
+            int GradoSis(double x) => x >= 180 ? 5 : x >= 160 ? 4 : x >= 140 ? 3 : x >= 130 ? 2 : x >= 120 ? 1 : 0;
+            int GradoDia(double x) => x >= 110 ? 5 : x >= 100 ? 4 : x >=  90 ? 3 : x >=  85 ? 2 : x >=  80 ? 1 : 0;
+            var peor = Math.Max(GradoSis(s), GradoDia(d));
+            var clase = peor switch
+            {
+                5 => "HTA grado 3",
+                4 => "HTA grado 2",
+                3 => "HTA grado 1",
+                2 => "Normal alta",
+                1 => "Normal",
+                _ => "Optima"
+            };
+            if (s >= 140 && d < 90) { clase += " (sistolica aislada)"; }
+            return clase;
+        }
+
+        // perimetroRiesgo(perimetroName, sexoName) -> riesgo cardiometabolico
+        // segun perimetro abdominal (cm) y sexo. Sin sexo legible -> "".
+        var mPer = System.Text.RegularExpressions.Regex.Match(
+            f, @"^perimetroRiesgo\s*\(\s*([A-Za-z0-9_]+)\s*,\s*([A-Za-z0-9_]+)\s*\)\s*$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (mPer.Success)
+        {
+            var per = LeerNum(mPer.Groups[1].Value);
+            if (per is null) { return ""; }
+            if (!values.TryGetValue(mPer.Groups[2].Value, out var sexoVal) || string.IsNullOrWhiteSpace(sexoVal)) { return ""; }
+            var sexo = sexoVal.Trim().ToUpperInvariant();
+            var p = per.Value;
+            var esHombre = sexo == "MASCULINO" || sexo == "HOMBRE" || sexo == "M";
+            var esMujer  = sexo == "FEMENINO"  || sexo == "MUJER"  || sexo == "F";
+            if (esHombre)
+            {
+                if (p < 94) { return "Bajo riesgo"; }
+                if (p <= 102) { return "Riesgo aumentado"; }
+                return "Riesgo alto";
+            }
+            if (esMujer)
+            {
+                if (p < 80) { return "Bajo riesgo"; }
+                if (p <= 88) { return "Riesgo aumentado"; }
+                return "Riesgo alto";
+            }
+            return "";
+        }
+
+        return ""; // formula no reconocida -> dejamos vacio
+    }
+
+    private RenderFragment RenderField(FormNode node) => __builder =>
+    {
+        var span = Math.Clamp(node.WidthColumns <= 0 ? 12 : node.WidthColumns, 1, 12);
+        <div class="@($"fv-col fv-col-{span}")">
+            @if (node.IsText)
+            {
+                if (node.TextStyle == "heading")
+                {
+                    <h4 class="fv-h">@node.Content</h4>
+                }
+                else if (node.TextStyle == "subheading")
+                {
+                    <h5 class="fv-sh">@node.Content</h5>
+                }
+                else
+                {
+                    <p class="fv-p">@node.Content</p>
+                }
+            }
+            else if (node.IsTable)
+            {
+                <label class="fv-lbl">@node.Label @(node.Required ? "*" : "")</label>
+                <div class="fv-tbl-wrap">
+                    <table class="table table-sm fv-tbl">
+                        <thead>
+                            <tr>
+                                @if (node.Columns is not null)
+                                {
+                                    @foreach (var c in node.Columns)
+                                    {
+                                        <th>@c.Label</th>
+                                    }
+                                    @if (!node.LockRows)
+                                    {
+                                        <th style="width:32px"></th>
+                                    }
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var key = $"tbl:{node.Id}";
+                                var seedCount = node.SeedRows?.Count ?? 0;
+                                // GetRowCount cuenta solo las filas EXTRAS (las que el usuario agrega).
+                                // Para tablas LockRows=true el contador se ignora.
+                                var extraRows = node.LockRows ? 0 : GetRowCount(key);
+                                var totalRows = seedCount + extraRows;
+                            }
+                            @for (int i = 0; i < totalRows; i++)
+                            {
+                                var idx = i;
+                                var isSeed = i < seedCount;
+                                var seedRow = isSeed ? node.SeedRows![i] : null;
+                                <tr class="@(isSeed ? "fv-tbl-seed-row" : "")">
+                                    @if (node.Columns is not null)
+                                    {
+                                        var colIdx = 0;
+                                        @foreach (var c in node.Columns)
+                                        {
+                                            // Si esta fila es semilla y la celda tiene valor en seedRow,
+                                            // mostramos texto fijo. Si esta vacia (null/empty), es editable.
+                                            var seedVal = (seedRow is not null && colIdx < seedRow.Count) ? seedRow[colIdx] : null;
+                                            var cellKey = $"{key}:{idx}:{c.Id}";
+                                            // Override de opciones por celda seed: si la tabla tiene
+                                            // SeedRowCellOptions[i][colIdx] poblado, esas son las
+                                            // opciones que se usan al renderizar el select de esta
+                                            // celda especifica (ignora c.Options del FormColumn).
+                                            List<string>? cellOptions = null;
+                                            if (isSeed && node.SeedRowCellOptions is not null
+                                                && node.SeedRowCellOptions.TryGetValue($"{i}_{colIdx}", out var co))
+                                            {
+                                                cellOptions = co;
+                                            }
+                                            // Solo tratamos seedVal como ETIQUETA FIJA cuando la columna
+                                            // es texto puro sin opciones (primera columna tipo "Atrofia",
+                                            // "Cabeza"). Para columnas select/autocomplete o cualquier
+                                            // columna con opciones (incluyendo override por fila), seedVal
+                                            // se interpreta como VALOR INICIAL editable.
+                                            var hasOptionsHere = cellOptions is not null
+                                                || (c.Options is { Count: > 0 });
+                                            var esEtiquetaFija = !string.IsNullOrEmpty(seedVal)
+                                                && c.FieldType == "text" && !hasOptionsHere;
+                                            var habilitada = esEtiquetaFija || IsCellEnabled(node, idx, c);
+                                            var tdClass = !habilitada ? "fv-tbl-cell-off" : "";
+                                            <td class="@tdClass">
+                                                @if (esEtiquetaFija)
+                                                {
+                                                    <span class="fv-tbl-seed-cell">@seedVal</span>
+                                                }
+                                                else
+                                                {
+                                                    @RenderTableCell(c, cellKey, cellOptions, seedVal, !habilitada, node, idx)
+                                                }
+                                            </td>
+                                            colIdx++;
+                                        }
+                                        @if (!node.LockRows)
+                                        {
+                                            <td>
+                                                @if (!isSeed)
+                                                {
+                                                    // El idx que ve RemoveRow es el indice en el espacio EXTRAS.
+                                                    var extraIdx = idx - seedCount;
+                                                    <button class="btn btn-link btn-sm fv-tbl-rm" @onclick="() => RemoveRow(key, extraIdx)" disabled="@ReadOnly">&times;</button>
+                                                }
+                                            </td>
+                                        }
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!node.LockRows)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm fv-tbl-add" @onclick="() => AddRow(key)" disabled="@ReadOnly">+ Agregar fila</button>
+                    }
+                </div>
+            }
+            else
+            {
+                var auto = !string.IsNullOrEmpty(node.Name) && ReadOnlyKeys is not null && ReadOnlyKeys.Contains(node.Name);
+                <label class="fv-lbl">
+                    @node.Label @(node.Required ? "*" : "")
+                    @if (auto) { <span class="fv-auto-badge" title="Este campo se llena automaticamente desde la HC. No se edita manualmente.">auto</span> }
+                </label>
+                @RenderInput(node)
+            }
+        </div>
+    };
+
+    /// <summary>Detecta si un Name corresponde a un campo de firma. Usado para
+    /// renderizar un preview de imagen cuando el valor es una URL de PNG.</summary>
+    private static bool IsFirmaField(string? name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        name.Contains("firma", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True si el valor parece una URL renderizable como <img>: ruta
+    /// relativa (/uploads/...), http(s)://, o data:image/...</summary>
+    private static bool IsImageUrlLike(string? v) =>
+        !string.IsNullOrWhiteSpace(v) &&
+        (v.StartsWith('/') ||
+         v.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+         v.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+         v.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase));
+
+    private RenderFragment RenderInput(FormNode node) => __builder =>
+    {
+        var key = node.Name ?? $"fld:{node.Id}";
+        var val = GetValue(key) ?? node.DefaultValue ?? "";
+        var ro = IsNodeReadOnly(node);
+
+        // Caso especial: campo de firma con URL -> mostrar la imagen ademas
+        // del input de texto. Esto cubre firma_paciente_consent,
+        // firma_profesional_consent, y cualquier otro campo cuyo name contenga
+        // "firma" y reciba una URL como valor (clip de FirmasPrefillHelper o
+        // pegado manualmente por el usuario).
+        if (IsFirmaField(node.Name) && IsImageUrlLike(val))
+        {
+            <div class="fv-firma-prev">
+                <img src="@val" alt="firma" class="fv-firma-img"
+                     style="max-height:90px;max-width:100%;border:1px solid #e2e8f0;border-radius:4px;background:#fff;padding:4px;display:block;margin-bottom:6px;" />
+            </div>
+            <input type="text" class="form-control form-control-sm"
+                   disabled="@ro" value="@val"
+                   @onchange="e => SetValue(key, e.Value?.ToString())" />
+            return;
+        }
+
+        switch (node.FieldType)
+        {
+            case "textarea":
+                if (node.EnableVoice && !ro)
+                {
+                    var voiceId = $"voice-{Math.Abs(key.GetHashCode())}-{node.Id}";
+                    <div class="fv-voice-wrap">
+                        <textarea id="@voiceId" class="form-control form-control-sm" rows="3" placeholder="@node.Placeholder"
+                                  disabled="@ro" value="@val"
+                                  @onchange="e => SetValue(key, e.Value?.ToString())"></textarea>
+                        <button type="button" class="fv-voice-btn" data-voice-target="@voiceId" title="Dictar por voz (Whisper)">&#127908;</button>
+                    </div>
+                }
+                else
+                {
+                    <textarea class="form-control form-control-sm" rows="3" placeholder="@node.Placeholder"
+                              disabled="@ro" value="@val"
+                              @onchange="e => SetValue(key, e.Value?.ToString())"></textarea>
+                }
+                break;
+            case "number":
+                <input type="number" class="form-control form-control-sm" placeholder="@node.Placeholder"
+                       disabled="@ro" value="@val"
+                       @onchange="e => SetValue(key, e.Value?.ToString())" />
+                break;
+            case "date":
+                <input type="date" class="form-control form-control-sm"
+                       disabled="@ro" value="@val"
+                       @onchange="e => SetValue(key, e.Value?.ToString())" />
+                break;
+            case "email":
+                <input type="email" class="form-control form-control-sm" placeholder="@node.Placeholder"
+                       disabled="@ro" value="@val"
+                       @onchange="e => SetValue(key, e.Value?.ToString())" />
+                break;
+            case "select":
+                @if (node.AllowCustom)
+                {
+                    // Modo libre: input con sugerencias (datalist). El usuario
+                    // puede elegir una opcion o escribir cualquier cosa.
+                    var listId = $"dl_{node.Id}";
+                    <input class="form-control form-control-sm" list="@listId"
+                           placeholder="@node.Placeholder" disabled="@ro" value="@val"
+                           onfocus="this.dataset.prev=this.value; this.value='';"
+                           onblur="if(!this.value && this.dataset.prev){this.value=this.dataset.prev;}"
+                           @onchange="e => SetValue(key, e.Value?.ToString())" />
+                    <datalist id="@listId">
+                        @if (node.Options is not null)
+                        {
+                            @foreach (var o in node.Options) { <option value="@o" /> }
+                        }
+                    </datalist>
+                }
+                else
+                {
+                    <select class="form-select form-select-sm" disabled="@ro" value="@val"
+                            @onchange="e => SetValue(key, e.Value?.ToString())">
+                        <option value="">Seleccione...</option>
+                        @if (node.Options is not null)
+                        {
+                            @foreach (var o in node.Options)
+                            {
+                                <option value="@o">@o</option>
+                            }
+                        }
+                    </select>
+                }
+                break;
+            case "autocomplete":
+                <input class="form-control form-control-sm" placeholder="@(node.Placeholder ?? $"Buscar en {node.Catalog}...")"
+                       disabled="@ro" value="@val"
+                       @onchange="e => SetValue(key, e.Value?.ToString())" />
+                break;
+            case "calculated":
+                <input class="form-control form-control-sm fv-calc"
+                       readonly
+                       value="@val"
+                       placeholder="(automatico: @node.Formula)"
+                       title="@($"Calculado por formula: {node.Formula}")" />
+                break;
+            default:
+                <input type="text" class="form-control form-control-sm" placeholder="@node.Placeholder"
+                       disabled="@ro" value="@val"
+                       @onchange="e => SetValue(key, e.Value?.ToString())" />
+                break;
+        }
+    };
+
+    private RenderFragment RenderTableCell(FormColumn c, string key, List<string>? overrideOptions = null, string? initialValue = null, bool forceDisabled = false, FormNode? tableNode = null, int rowIdx = 0) => __builder =>
+    {
+        // Orden de precedencia: valor del doctor > seedVal (default editable) > "".
+        // Esto permite que filas pre-semilladas arranquen con un valor preseleccionado
+        // (ej. "NO REFIERE" en columnas tipo lista) y al mismo tiempo el doctor pueda
+        // sobreescribirlo. Si el doctor lo borra, el SetValue persiste el string vacio.
+        var val = GetValue(key) ?? initialValue ?? "";
+        // forceDisabled = la condicional de habilitacion por trigger no se satisface.
+        // Lo combinamos con el ReadOnly normal para que el <input>/select salga gris.
+        var ro = ReadOnly || forceDisabled || (ReadOnlyKeys is not null && ReadOnlyKeys.Contains(key));
+        // Si esta forzada deshabilitada, no mostramos valor (invariante "deshabilitada = vacia").
+        // El cleanup en el dict ya se hizo en OnTableCellChanged cuando se cambio el trigger;
+        // este branch cubre el render inicial donde DefaultValuesHelper ya filtro.
+        if (forceDisabled) { val = ""; }
+        // Si la celda seed trae opciones especificas, esas mandan; si no, las
+        // de la columna. Asi una tabla puede tener un "default" de columna y
+        // sobre-escribir por fila para casos como Examen Fisico (Atrofia con
+        // sus propias opciones, Pupilas con las suyas).
+        var opts = overrideOptions ?? c.Options;
+        // Reglas: si la celda tiene opciones definidas, render como select aunque
+        // el fieldType de la columna sea "text". Esto facilita configurar tablas
+        // tipo Examen Fisico sin tener que cambiar el fieldType de la columna.
+        var effectiveType = (opts is not null && opts.Count > 0 && c.FieldType == "text") ? "select" : c.FieldType;
+        // Render-time fallback: si la celda quedo sin valor (ni del doctor ni seed)
+        // y es un select/autocomplete con opciones, mostramos la primera como default
+        // visual. No aplica si la celda esta forzadamente deshabilitada (debe quedar vacia).
+        if (!forceDisabled
+            && string.IsNullOrEmpty(val)
+            && opts is { Count: > 0 }
+            && (effectiveType == "select" || effectiveType == "autocomplete"))
+        {
+            val = opts[0];
+        }
+        // Wrapper que enruta el SetValue para reaccionar a cambios en columnas trigger.
+        // Si la columna actual es disparador de otras, al cambiar su valor las
+        // dependientes se re-evaluan y se limpian las que ya no satisfacen.
+        Func<string?, Task> setCell = v => OnTableCellChangedAsync(tableNode, rowIdx, c, key, v);
+        // Placeholder explicito de la columna: si esta vacio NO mostramos hint
+        // (antes caia a c.Catalog o "Elige o escribe" hardcodeado). El builder
+        // expone un input para escribirlo por columna.
+        var ph = c.Placeholder ?? "";
+        switch (effectiveType)
+        {
+            case "number":
+                <input type="number" class="form-control form-control-sm" disabled="@ro" value="@val"
+                       placeholder="@ph"
+                       @onchange="e => setCell(e.Value?.ToString())" />
+                break;
+            case "date":
+                <input type="date" class="form-control form-control-sm" disabled="@ro" value="@val"
+                       placeholder="@ph"
+                       @onchange="e => setCell(e.Value?.ToString())" />
+                break;
+            case "select":
+                @if (c.AllowCustom)
+                {
+                    var listId = $"dlc_{c.Id}_{key.GetHashCode():X}";
+                    // Truco del datalist: en focus guardamos el valor actual y
+                    // limpiamos el input, asi al hacer click el browser muestra
+                    // TODAS las opciones (sin filtrar por el texto previo). Si
+                    // el usuario no escribe nada y sale, restauramos. Si elige
+                    // otra opcion o escribe, el onchange dispara y se actualiza.
+                    <input class="form-control form-control-sm" list="@listId"
+                           placeholder="@ph"
+                           disabled="@ro" value="@val"
+                           onfocus="this.dataset.prev=this.value; this.value='';"
+                           onblur="if(!this.value && this.dataset.prev){this.value=this.dataset.prev;}"
+                           @onchange="e => setCell(e.Value?.ToString())" />
+                    <datalist id="@listId">
+                        @if (opts is not null)
+                        {
+                            @foreach (var o in opts) { <option value="@o" /> }
+                        }
+                    </datalist>
+                }
+                else
+                {
+                    <select class="form-select form-select-sm" disabled="@ro" value="@val"
+                            @onchange="e => setCell(e.Value?.ToString())">
+                        <option value="">@(string.IsNullOrEmpty(ph) ? "Seleccione..." : ph)</option>
+                        @if (opts is not null)
+                        {
+                            @foreach (var o in opts) { <option value="@o">@o</option> }
+                        }
+                    </select>
+                }
+                break;
+            case "autocomplete":
+                // Por ahora solo CIE-11 esta cableado para celdas de tabla. Otros
+                // catalogos (medicamentos, cups...) caerian al else con un input
+                // de texto plano hasta que se les agregue su picker propio.
+                @if (string.Equals(c.Catalog, "cie11", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="fv-tbl-autocomp">
+                        <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
+                               placeholder="@ph"
+                               @onchange="e => setCell(e.Value?.ToString())" />
+                        <button type="button" class="btn btn-sm btn-outline-primary fv-tbl-lupa"
+                                disabled="@ro" title="Buscar diagnostico CIE-11"
+                                @onclick="() => AbrirCie11Picker(key)">
+                            &#128269;
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
+                           placeholder="@ph"
+                           @onchange="e => setCell(e.Value?.ToString())" />
+                }
+                break;
+            default:
+                <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
+                       placeholder="@ph"
+                       @onchange="e => setCell(e.Value?.ToString())" />
+                break;
+        }
+    };
+
+    /// <summary>Estado para el picker CIE-11 compartido por todas las celdas
+    /// autocomplete de tipo cie11 dentro de esta instancia del viewer.
+    /// _cie11TargetKey nos dice a que celda escribir el resultado.</summary>
+    private bool _cie11PickerOpen;
+    private string? _cie11TargetKey;
+
+    private void AbrirCie11Picker(string cellKey)
+    {
+        _cie11TargetKey = cellKey;
+        _cie11PickerOpen = true;
+    }
+
+    private async Task OnCie11Selected((string Code, string Title) item)
+    {
+        if (string.IsNullOrEmpty(_cie11TargetKey)) { return; }
+        // Formato "CODIGO - Titulo". Asi la impresion y el RDA leen un campo
+        // unico legible; parsear el codigo aparte despues es trivial (split en
+        // el primer guion). Si el titulo viene vacio, guardamos solo el codigo.
+        var texto = string.IsNullOrWhiteSpace(item.Title) ? item.Code : $"{item.Code} - {item.Title}";
+        await SetValue(_cie11TargetKey, texto);
+        _cie11TargetKey = null;
+    }
+
+    /// <summary>True si la celda esta habilitada segun su condicional. Si la columna
+    /// no tiene EnabledByColumn configurado, siempre devuelve true (comportamiento
+    /// normal). Si tiene, busca la celda hermana en la misma fila y compara
+    /// case-insensitive con trim. Si la columna trigger no existe en el schema,
+    /// devolvemos true (no rompe el formulario, asumimos config invalida).</summary>
+    private bool IsCellEnabled(FormNode? tableNode, int rowIdx, FormColumn col)
+    {
+        if (tableNode is null || string.IsNullOrEmpty(col.EnabledByColumn)) { return true; }
+        var triggerCol = tableNode.Columns?.FirstOrDefault(c =>
+            string.Equals(c.Name, col.EnabledByColumn, StringComparison.OrdinalIgnoreCase));
+        if (triggerCol is null) { return true; }
+        var triggerKey = $"tbl:{tableNode.Id}:{rowIdx}:{triggerCol.Id}";
+        var triggerVal = GetValue(triggerKey);
+        if (string.IsNullOrEmpty(col.EnabledByValue) || string.IsNullOrEmpty(triggerVal)) { return false; }
+        return string.Equals(triggerVal.Trim(), col.EnabledByValue.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>SetValue para celdas de tabla con cascade: tras guardar el nuevo
+    /// valor, si la columna actual es disparadora de otras columnas de la misma
+    /// fila, recorre las dependientes y limpia las que dejaron de cumplir su
+    /// condicion. Asi el invariante "celda deshabilitada = vacia" se mantiene.</summary>
+    private async Task OnTableCellChangedAsync(FormNode? tableNode, int rowIdx, FormColumn col, string key, string? newVal)
+    {
+        await SetValue(key, newVal);
+        if (tableNode?.Columns is null || string.IsNullOrWhiteSpace(col.Name)) { return; }
+        foreach (var depCol in tableNode.Columns)
+        {
+            if (string.IsNullOrEmpty(depCol.EnabledByColumn)) { continue; }
+            if (!string.Equals(depCol.EnabledByColumn, col.Name, StringComparison.OrdinalIgnoreCase)) { continue; }
+            // depCol depende de la columna que acabamos de cambiar. Re-evaluar.
+            if (IsCellEnabled(tableNode, rowIdx, depCol)) { continue; }
+            var depKey = $"tbl:{tableNode.Id}:{rowIdx}:{depCol.Id}";
+            if (!string.IsNullOrEmpty(GetValue(depKey)))
+            {
+                await SetValue(depKey, "");
+            }
+        }
+    }
+
+    private int GetRowCount(string key)
+    {
+        var raw = GetValue($"{key}:_rows");
+        if (int.TryParse(raw, out var n) && n >= 0) { return n; }
+        return 1; // siempre arranca con 1 fila editable
+    }
+
+    private async Task AddRow(string key)
+    {
+        var n = GetRowCount(key) + 1;
+        await SetValue($"{key}:_rows", n.ToString());
+    }
+
+    private async Task RemoveRow(string key, int idx)
+    {
+        var n = Math.Max(0, GetRowCount(key) - 1);
+        await SetValue($"{key}:_rows", n.ToString());
+    }
+}

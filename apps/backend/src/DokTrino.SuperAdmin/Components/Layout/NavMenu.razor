@@ -1,0 +1,368 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject ITenantAdminService TenantsSvc
+
+<div class="doktrino-brand doktrino-brand-stack">
+    <div class="doktrino-logo @( !_showAdmin && !string.IsNullOrWhiteSpace(_tenantLogoUrl) ? "doktrino-logo-wide" : "" )">
+        @* Para usuarios de tenant: si configuraron un logo en /mi-cuenta lo usamos
+           aqui; si no, mostramos el SVG por defecto. Para super-admin de plataforma
+           queda siempre el SVG (es la consola, no una agencia). El logo del tenant
+           se muestra ancho para que se vea completo (no recortado en cuadrado). *@
+        @if (!_showAdmin && !string.IsNullOrWhiteSpace(_tenantLogoUrl))
+        {
+            <img src="@_tenantLogoUrl" alt="Logo" />
+        }
+        else
+        {
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        }
+    </div>
+    <div class="doktrino-brand-text">
+        <div class="doktrino-brand-name">@(_showAdmin || string.IsNullOrWhiteSpace(_tenantName) ? "DokTrino" : _tenantName)</div>
+        <div class="doktrino-brand-sub">@(_showAdmin ? "Consola de gobierno" : (string.IsNullOrWhiteSpace(_tenantSlogan) ? "Salud Domiciliaria" : _tenantSlogan))</div>
+    </div>
+</div>
+
+<div class="doktrino-agency">
+    @if (_showAdmin)
+    {
+        <div class="lbl">Plataforma</div>
+        <div class="name">DokTrino</div>
+        <div class="meta">Consola de gobierno</div>
+    }
+    else
+    {
+        <div class="lbl">Agencia</div>
+        <div class="name">@(_tenantName ?? "Mi agencia")</div>
+        <div class="meta">@_roleLabel</div>
+    }
+</div>
+
+<nav class="doktrino-nav">
+    @if (_showTenant && _esProfesional)
+    {
+        @* Usuario derivado de un profesional: solo ve el modulo de Atencion (sus servicios asignados). *@
+        <div class="doktrino-nav-label">Mi trabajo</div>
+
+        <NavLink class="doktrino-nav-link" href="atencion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            <span>Atencion</span>
+        </NavLink>
+    }
+    else if (_showTenant)
+    {
+        <div class="doktrino-nav-label">Operacion Clinica</div>
+
+        <NavLink class="doktrino-nav-link" href="admision">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+            <span>Admision</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="asignacion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+            <span>Asignacion</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="coordinacion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+            <span>Coordinacion</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="atencion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            <span>Atencion</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="turnos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><circle cx="18" cy="18" r="4"/><path d="M18 16.5V18l1 1"/></svg>
+            <span>Turnos</span>
+        </NavLink>
+
+        @* Historias Clinicas y Notas Medicas no aparecen como modulos independientes.
+           Se acceden como submodulos modales desde /atencion (boton Historia Medica y Notas). *@
+
+        <NavLink class="doktrino-nav-link" href="ordenes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+            <span>Ordenes Clinicas</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="formularios">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+            <span>Formularios</span>
+        </NavLink>
+
+        <div class="doktrino-nav-label">Interoperabilidad</div>
+
+        <NavLink class="doktrino-nav-link" href="interoperabilidad/rda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"/><path d="M3 7l9 6 9-6"/><path d="M3 7l9-4 9 4"/><circle cx="18" cy="18" r="3" fill="#22c55e"/></svg>
+            <span>Consola RDA</span>
+        </NavLink>
+
+        <div class="doktrino-nav-label">Infraestructura & IA</div>
+
+        <NavLink class="doktrino-nav-link" href="lineas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+            <span>Lineas WhatsApp</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="agentes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+            <span>Agentes IA</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="automatizaciones">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+            <span>Automatizaciones</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="metricas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+            <span>Metricas</span>
+        </NavLink>
+
+        <div class="doktrino-nav-label">Configuracion del Sistema</div>
+
+        <NavLink class="doktrino-nav-link" href="cfg-turnos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><circle cx="18" cy="18" r="4"/><path d="M18 16.5V18l1 1"/></svg>
+            <span>Configuracion de Turnos</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-profesionales">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Profesionales</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-aseguradoras">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Entidades Aseguradoras</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-tipos-profesional">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+            <span>Tipos de Profesional</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-subcategorias">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+            <span>Subcategorias</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-servicios">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+            <span>Servicios</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-pacientes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+            <span>Configuracion Pacientes</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cie11">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+            <span>Configuracion CIE-11</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="medicamentos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 14-7 7-7-7"/><path d="M12 21V3"/><circle cx="12" cy="6" r="3"/></svg>
+            <span>Base de datos Medicamentos</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cups">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v18"/><path d="M3 7.5h11"/><path d="M3 16.5h11"/><path d="M18 8l4 4-4 4"/></svg>
+            <span>Base de datos CUPS</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="relaciones-formularios">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="6" x="2" y="4" rx="1"/><rect width="8" height="6" x="14" y="14" rx="1"/><path d="M10 7h4"/><path d="M14 7l-4 10"/></svg>
+            <span>Relaciones de formularios</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-tipologia-archivos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            <span>Tipologia Archivos</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="admin/sql-console">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            <span>Consola SQL</span>
+        </NavLink>
+
+        <div class="doktrino-nav-label">Configuracion de la Entidad</div>
+
+        <NavLink class="doktrino-nav-link" href="cfg-empresa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
+            <span>Configuracion de Empresa</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-interoperabilidad">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+            <span>Configuracion de Interoperabilidad</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-roles">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+            <span>Roles y Permisos</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="cfg-usuarios">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
+            <span>Administracion de Usuarios</span>
+        </NavLink>
+
+        @* MI AGENCIA: ultimo grupo del sidebar, contiene plantillas y mi cuenta. *@
+        <div class="doktrino-nav-label">Mi agencia</div>
+
+        <NavLink class="doktrino-nav-link" href="plantillas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg>
+            <span>Plantillas</span>
+        </NavLink>
+
+        @if (_esAdminAgencia)
+        {
+            @* Mi cuenta expone datos de la empresa, plan y facturacion: solo los admins
+               de la agencia (Owner / Admin) deberian poder verla. *@
+            <NavLink class="doktrino-nav-link" href="mi-cuenta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Mi cuenta</span>
+            </NavLink>
+        }
+    }
+
+    @if (_showAdmin)
+    {
+        <div class="doktrino-nav-label">Super Admin SaaS</div>
+
+        <NavLink class="doktrino-nav-link" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <span>Dashboard</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="tenants">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
+            <span>Agencias</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="plans">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+            <span>Planes</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="facturacion">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>
+            <span>Facturacion</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="auditoria">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></svg>
+            <span>Auditoria</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="servidor-evolution">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+            <span>Servidor Evolution</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="servidores-ia">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+            <span>Servidores de IA</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="marca">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+            <span>Marca</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="servidor-correo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <span>Servidor de correo</span>
+        </NavLink>
+
+        <NavLink class="doktrino-nav-link" href="login-google">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 5v4h-4"/></svg>
+            <span>Login con Google</span>
+        </NavLink>
+    }
+</nav>
+
+<div class="doktrino-user">
+    <div class="doktrino-avatar">@_avatar</div>
+    <div>
+        <div class="nm">@(_userName ?? "Usuario")</div>
+        <div class="rl">@_roleLabel</div>
+    </div>
+    <span class="doktrino-dot"></span>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // El menu se arma por rol: el operador de plataforma (platform_role) ve el grupo
+    // Super Admin SaaS y previsualiza los modulos del tenant; el usuario de agencia
+    // (tenant_id) ve solo sus grupos comerciales y Mi agencia.
+    private bool _showAdmin;
+    private bool _showTenant;
+    /// <summary>True cuando el usuario logueado es un profesional de campo (TenantUser con
+    /// ProfesionalId). En ese caso el menu lateral se reduce solo al item Atencion.</summary>
+    private bool _esProfesional;
+    /// <summary>True cuando el tenant_role es Owner o Admin. Solo estos perfiles ven
+    /// "Mi cuenta" (datos de la agencia, plan, facturacion).</summary>
+    private bool _esAdminAgencia;
+    private string? _userName;
+    private string? _tenantName;
+    private string? _tenantLogoUrl;
+    private string? _tenantSlogan;
+    private string _roleLabel = "Operador de plataforma";
+    private string _avatar = "SA";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+
+        if (AuthState is null)
+        {
+            return;
+        }
+
+        var state = await AuthState;
+        var isPlatformOperator = state.User.FindFirst("platform_role") is not null;
+        var tenantClaim = state.User.FindFirst("tenant_id")?.Value;
+        var isTenantUser = tenantClaim is not null;
+
+        _showAdmin = isPlatformOperator;
+        _showTenant = isPlatformOperator || isTenantUser;
+        _esProfesional = state.User.FindFirst("profesional_id") is not null;
+        var rol = state.User.FindFirst("tenant_role")?.Value ?? "";
+        _esAdminAgencia = isPlatformOperator || rol.Equals("Owner", StringComparison.OrdinalIgnoreCase) || rol.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+
+        _userName = state.User.Identity?.Name;
+        _avatar = Initials(_userName);
+
+        if (isPlatformOperator)
+        {
+            _roleLabel = "Operador de plataforma";
+        }
+        else if (isTenantUser)
+        {
+            _roleLabel = state.User.FindFirst("tenant_role")?.Value ?? "Agencia";
+            if (Guid.TryParse(tenantClaim, out var tenantId))
+            {
+                var tenant = await TenantsSvc.GetAsync(tenantId);
+                _tenantName = tenant?.Name;
+                _tenantLogoUrl = tenant?.LogoUrl;
+                _tenantSlogan = tenant?.Slogan;
+            }
+        }
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant()
+            : $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => StateHasChanged();
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

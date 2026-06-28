@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" width="200" height="80">
+  <rect width="200" height="80" rx="8" fill="#ffffff"/>
+  <path d="M14 56 L40 24 L48 24 L40 44 L62 44 L70 34 L78 34 L70 56 Z" fill="#e10600"/>
+  <text x="86" y="50" font-family="Arial, sans-serif" font-size="26" font-weight="700" fill="#222">avianca</text>
+</svg>
