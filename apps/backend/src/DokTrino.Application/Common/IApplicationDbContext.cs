@@ -61,6 +61,7 @@ public interface IApplicationDbContext
     DbSet<ProcesoActividad> ProcesoActividades { get; }
     DbSet<ProcesoInstancia> ProcesoInstancias { get; }
     DbSet<Tarea> Tareas { get; }
+    DbSet<PowerBiReporte> PowerBiReportes { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }

@@ -97,6 +97,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<ProcesoInstancia> ProcesoInstancias => Set<ProcesoInstancia>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
 
+    public DbSet<PowerBiReporte> PowerBiReportes => Set<PowerBiReporte>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Todos los enums se persisten como texto (legibles y estables ante reordenamientos).
@@ -803,6 +805,13 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Actividad).WithMany().HasForeignKey(x => x.ActividadId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.AsignadoId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.InstanciaId });
+        });
+
+        modelBuilder.Entity<PowerBiReporte>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.EmbedUrl).HasColumnType("text").IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Orden });
         });
     }
 

@@ -14,6 +14,9 @@ public sealed record SerieTrdDto(
     bool Seleccion,
     int Subseries);
 
+/// <summary>Resultado de una importacion masiva (ETL on-ramp).</summary>
+public sealed record ImportResultDto(int Creadas, int Omitidas, IReadOnlyList<string> Errores);
+
 /// <summary>Tipologia documental (tipo documental dentro de una serie/subserie).</summary>
 public sealed record TipologiaDto(
     Guid Id,

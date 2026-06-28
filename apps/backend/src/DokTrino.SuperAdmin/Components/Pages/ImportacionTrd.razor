@@ -1,0 +1,61 @@
+@page "/importacion-trd"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject ITrdService TrdSvc
+
+<PageTitle>Importacion TRD (ETL) - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Migracion / ETL</div>
+        <h1 class="ase-title">Importacion masiva de TRD (CSV)</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_res is not null) { <div class="ase-ok">Importacion: @_res.Creadas creadas, @_res.Omitidas omitidas (ya existian), @_res.Errores.Count con error.</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Pegar CSV de series</div>
+    <p class="text-muted" style="margin:0 0 8px;">Formato por linea: <code>sucursal,codigo,nombre,ag,ac</code> (ag/ac = anios opcionales). On-ramp del ETL: el cargue desde el SQL Server origen (76 tablas DOC_*) deposita en este mismo destino. Se omiten series ya existentes (sede+codigo).</p>
+    <textarea class="form-control" rows="8" @bind="_csv" style="font-family:monospace;" placeholder="PRINCIPAL,700,Convenios,2,10&#10;PRINCIPAL,800,Resoluciones,3,15"></textarea>
+    <div style="margin-top:8px;">
+        <button class="btn btn-primary btn-sm" @onclick="Importar" disabled="@_busy">@(_busy ? "Importando..." : "Importar")</button>
+    </div>
+</div>
+
+@if (_res is not null && _res.Errores.Count > 0)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Errores (@_res.Errores.Count)</div>
+        <ul>@foreach (var e in _res.Errores) { <li>@e</li> }</ul>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private string _csv = "";
+    private ImportResultDto? _res;
+    private bool _busy;
+    private string? _error;
+
+    private async Task Importar()
+    {
+        _error = null; _res = null; _busy = true;
+        try
+        {
+            _res = await TrdSvc.ImportarSeriesCsvAsync(_csv, await Actor());
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}

@@ -97,6 +97,38 @@ public sealed class TrdService : ITrdService
         return true;
     }
 
+    public async Task<ImportResultDto> ImportarSeriesCsvAsync(string csv, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return new ImportResultDto(0, 0, new[] { "Sin tenant activo." }); }
+        var creadas = 0; var omitidas = 0; var errores = new List<string>();
+        var lineas = (csv ?? string.Empty).Replace("\r\n", "\n").Split('\n');
+        var n = 0;
+        foreach (var raw in lineas)
+        {
+            n++;
+            var linea = raw.Trim();
+            if (linea.Length == 0) { continue; }
+            // Tolera encabezado.
+            if (n == 1 && linea.StartsWith("sucursal", StringComparison.OrdinalIgnoreCase)) { continue; }
+            var cols = linea.Split(',');
+            if (cols.Length < 3) { errores.Add($"Linea {n}: se esperan al menos 3 columnas (sucursal,codigo,nombre)."); continue; }
+            var sucursal = cols[0].Trim();
+            var codigo = cols[1].Trim();
+            var nombre = cols[2].Trim();
+            int? ag = cols.Length > 3 && int.TryParse(cols[3].Trim(), out var a) ? a : null;
+            int? ac = cols.Length > 4 && int.TryParse(cols[4].Trim(), out var c) ? c : null;
+            if (sucursal.Length == 0 || codigo.Length == 0 || nombre.Length == 0) { errores.Add($"Linea {n}: sede, codigo y nombre son obligatorios."); continue; }
+            if (await _db.SeriesDocumentales.AnyAsync(x => x.Sucursal == sucursal && x.Codigo == codigo, ct)) { omitidas++; continue; }
+
+            var serie = new SerieDocumental { TenantId = tenantId, Sucursal = sucursal, Codigo = codigo, Nombre = nombre, Activo = true };
+            _db.SeriesDocumentales.Add(serie);
+            _db.SerieDisposiciones.Add(new SerieDisposicion { TenantId = tenantId, Serie = serie, AgAnios = ag, AcAnios = ac });
+            creadas++;
+        }
+        if (creadas > 0) { await _db.SaveChangesAsync(ct); }
+        return new ImportResultDto(creadas, omitidas, errores);
+    }
+
     public async Task<IReadOnlyList<TipologiaDto>> ListTipologiasAsync(Guid? serieId = null, CancellationToken ct = default)
     {
         var q = _db.TipologiasDocumentales.AsNoTracking();
