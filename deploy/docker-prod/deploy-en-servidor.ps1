@@ -46,7 +46,7 @@ param(
     [int]$DokTrinoPort = 5380,
     [string]$PostgresDb = "doktrino",
     [string]$PostgresUser = "doktrino",
-    [string]$DokTrinoImage = "ghcr.io/alexandercuartas665/doktrino/superadmin:latest",
+    [string]$DokTrinoImage = "ghcr.io/alexandercuartas665/tunda/superadmin:latest",
     [string]$GhcrUser = "",
     [string]$GhcrToken = "",
     [switch]$SkipRestore,

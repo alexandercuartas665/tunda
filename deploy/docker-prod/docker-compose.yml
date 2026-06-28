@@ -24,7 +24,7 @@ name: doktrino-prod
 services:
   doktrino-app:
     # Cambia owner/repo si es tu fork. Default: la imagen publicada por el workflow.
-    image: ${DOKTRINO_IMAGE:-ghcr.io/alexandercuartas665/doktrino/superadmin:latest}
+    image: ${DOKTRINO_IMAGE:-ghcr.io/alexandercuartas665/tunda/superadmin:latest}
     container_name: doktrino-app
     restart: unless-stopped
     environment:

@@ -104,7 +104,7 @@ info "Image ID      : $SHA_ACTUAL"
 # Si pinearon un tag, actualizamos DOKTRINO_IMAGE en el .env
 if [[ -n "$IMAGE_TAG" ]]; then
     # Quita el tag anterior y pega el nuevo
-    NEW_IMAGE="ghcr.io/alexandercuartas665/doktrino/superadmin:${IMAGE_TAG}"
+    NEW_IMAGE="ghcr.io/alexandercuartas665/tunda/superadmin:${IMAGE_TAG}"
     if grep -E '^DOKTRINO_IMAGE=' .env >/dev/null; then
         sed -i.bak "s|^DOKTRINO_IMAGE=.*|DOKTRINO_IMAGE=$NEW_IMAGE|" .env
     else

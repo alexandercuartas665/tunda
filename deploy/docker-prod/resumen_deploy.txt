@@ -56,7 +56,7 @@ Continuo?  [s/N]: s
  DokTrino IPS RT - Deploy en server Linux
 =========================================================================
  DeployDir : /opt/doktrino
- Imagen    : ghcr.io/alexandercuartas665/doktrino/superadmin:latest
+ Imagen    : ghcr.io/alexandercuartas665/tunda/superadmin:latest
  Puerto    : 127.0.0.1:5380 -> doktrino-app:8080
  BD        : doktrino (usuario doktrino)
 
@@ -77,7 +77,7 @@ Continuo?  [s/N]: s
 
 ==> Descargando imagenes (docker compose pull)
 [+] pull 25/25
- ✔ Image ghcr.io/alexandercuartas665/doktrino/superadmin:latest Pulled                                                78.5s
+ ✔ Image ghcr.io/alexandercuartas665/tunda/superadmin:latest Pulled                                                78.5s
  ✔ Image postgres:16-alpine                                  Pulled                                                41.1s
     OK    Imagenes al dia
 

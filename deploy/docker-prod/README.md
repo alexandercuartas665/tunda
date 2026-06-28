@@ -19,8 +19,8 @@ Internet
 ## 1. En tu maquina (una sola vez): publicar la imagen
 
 Cada vez que pushees a `main`, GitHub Actions construye y publica:
-- `ghcr.io/alexandercuartas665/doktrino/superadmin:latest` (ultimo de main)
-- `ghcr.io/alexandercuartas665/doktrino/superadmin:sha-<7chars>` (immutable por commit)
+- `ghcr.io/alexandercuartas665/tunda/superadmin:latest` (ultimo de main)
+- `ghcr.io/alexandercuartas665/tunda/superadmin:sha-<7chars>` (immutable por commit)
 - Si haces tag `vX.Y.Z`: tambien `vX.Y.Z` y `vX.Y`.
 
 Mira el progreso en GitHub → **Actions** tab.
@@ -230,7 +230,7 @@ cd /opt/doktrino
 ### Pinear una version concreta
 En `.env`:
 ```env
-DOKTRINO_IMAGE=ghcr.io/alexandercuartas665/doktrino/superadmin:sha-abcd123
+DOKTRINO_IMAGE=ghcr.io/alexandercuartas665/tunda/superadmin:sha-abcd123
 ```
 Luego `docker compose up -d`.
 

@@ -12,8 +12,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # GHCR exige minusculas; el repo se llama DOKTRINO (uppercase) por eso lo fijamos hardcoded.
-  IMAGE_NAME: alexandercuartas665/doktrino/superadmin
+  # GHCR exige minusculas; el repo se llama tunda (codename); el producto es DokTrino. Imagen sigue el repo.
+  IMAGE_NAME: alexandercuartas665/tunda/superadmin
 
 jobs:
   build-and-push:

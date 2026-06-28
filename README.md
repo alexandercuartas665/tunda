@@ -10,7 +10,15 @@ SaaS de **gestión documental archivística** (TRD, radicación, archivo digital
 - **Fuente única de verdad:** vault Obsidian → `Sistema Destino (Migracion)/04. Notas para desarrollador/Repositorio y despliegue.md`.
 
 ## Estado
-**Esqueleto inicial.** La estructura de carpetas está creada espejo del repo DokTrino. El código aún no se ha clonado.
+**Fase 1 completada** (reutilización de plataforma Visal):
+- Código de Visal portado y renombrado `Visal.*` → `DokTrino.*` (namespaces, .sln, .csproj, env vars, DataProtection app name `DokTrino`).
+- Capa clínica retirada por completo (entidades, servicios, páginas, menú, rutas) — se conservan plataforma SaaS, motor de formularios, `Profesional` (colaborador), `Sucursal` y `TipologiaArchivo`. Migración EF `InitialCreate` regenerada limpia (sin tablas clínicas).
+- Recolor a azul Telepacífico (variable CSS central `--primary` en `app.css`, hue oklch 237).
+- `dotnet build` verde y arranque local verificado contra Postgres dev (login DokTrino, menú sin módulos clínicos).
+
+Aún **sin módulos documentales** (eso es Fase 2+).
+
+> Nota dev: en esta máquina los puertos de la doc (Postgres 5436, Redis 6383, Rabbit 5675/15675) chocan con otras pilas vivas; el `.env` local usa los siguientes libres (Postgres **5440**, Redis 6385, Rabbit 5680/15680). El `.env.example` conserva el mapa documentado.
 
 ## Documentación de la migración
 - **Vault Obsidian:** `C:\Users\acuartas\OneDrive - Bitcode IT Services S.A.S\Bitcode\13. Proyectos\038. DokTrino\OBSIDIAN.doktrino\`

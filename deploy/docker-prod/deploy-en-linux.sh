@@ -34,7 +34,7 @@
 #    --port         puerto local que expone doktrino-app (default: 5380)
 #    --db           nombre de la BD (default: doktrino)
 #    --user         usuario de la BD (default: doktrino)
-#    --image        imagen doktrino (default: ghcr.io/alexandercuartas665/doktrino/superadmin:latest)
+#    --image        imagen doktrino (default: ghcr.io/alexandercuartas665/tunda/superadmin:latest)
 #    --ghcr-user    usuario GitHub para GHCR si la imagen es privada
 #    --ghcr-token   PAT con read:packages
 #    --skip-restore no restaurar dump (solo deploy)
@@ -49,7 +49,7 @@ DUMP_PATH=""
 DOKTRINO_PORT="5380"
 POSTGRES_DB="doktrino"
 POSTGRES_USER="doktrino"
-DOKTRINO_IMAGE="ghcr.io/alexandercuartas665/doktrino/superadmin:latest"
+DOKTRINO_IMAGE="ghcr.io/alexandercuartas665/tunda/superadmin:latest"
 GHCR_USER=""
 GHCR_TOKEN=""
 SKIP_RESTORE=0

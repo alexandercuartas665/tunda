@@ -32,7 +32,7 @@ param(
     [Parameter(Mandatory)][string]$Password,
     [int]$PreferredPort = 5380,
     [string]$DeployDir = "E:\DOCKER\doktrino",
-    [string]$DokTrinoImage = "ghcr.io/alexandercuartas665/doktrino/superadmin:latest",
+    [string]$DokTrinoImage = "ghcr.io/alexandercuartas665/tunda/superadmin:latest",
     [string]$GhcrUser = "",
     [string]$GhcrToken = "",
     # Fingerprint SSH del server. Si lo pasas, se evita el autodetect (que se cuelga en ISE).
