@@ -10,4 +10,8 @@ public interface ITrdService
     Task<SerieTrdDto?> SaveSerieAsync(SaveSerieRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> DeleteSerieAsync(Guid id, Guid actor, CancellationToken ct = default);
     Task<int> SeedDemoAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<TipologiaDto>> ListTipologiasAsync(Guid? serieId = null, CancellationToken ct = default);
+    Task<TipologiaDto?> SaveTipologiaAsync(SaveTipologiaRequest req, Guid actor, CancellationToken ct = default);
+    Task<bool> DeleteTipologiaAsync(Guid id, Guid actor, CancellationToken ct = default);
 }

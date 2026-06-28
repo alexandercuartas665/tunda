@@ -14,6 +14,28 @@ public sealed record SerieTrdDto(
     bool Seleccion,
     int Subseries);
 
+/// <summary>Tipologia documental (tipo documental dentro de una serie/subserie).</summary>
+public sealed record TipologiaDto(
+    Guid Id,
+    string Sucursal,
+    string Codigo,
+    string Nombre,
+    string Tipo,
+    Guid? SerieId,
+    string? SerieNombre,
+    bool Activo);
+
+public sealed class SaveTipologiaRequest
+{
+    public Guid? Id { get; set; }
+    public string Sucursal { get; set; } = "PRINCIPAL";
+    public string Codigo { get; set; } = "";
+    public string Nombre { get; set; } = "";
+    public string Tipo { get; set; } = "general";
+    public Guid? SerieId { get; set; }
+    public bool Activo { get; set; } = true;
+}
+
 /// <summary>Modelo de entrada/edicion de una serie (mutable para enlazar con @bind en Blazor).</summary>
 public sealed class SaveSerieRequest
 {

@@ -97,6 +97,79 @@ public sealed class TrdService : ITrdService
         return true;
     }
 
+    public async Task<IReadOnlyList<TipologiaDto>> ListTipologiasAsync(Guid? serieId = null, CancellationToken ct = default)
+    {
+        var q = _db.TipologiasDocumentales.AsNoTracking();
+        if (serieId is Guid sid) { q = q.Where(t => t.SerieId == sid); }
+        return await q
+            .OrderBy(t => t.Sucursal).ThenBy(t => t.Codigo)
+            .Select(t => new TipologiaDto(
+                t.Id,
+                t.Sucursal,
+                t.Codigo,
+                t.Nombre,
+                t.Tipo,
+                t.SerieId,
+                t.SerieId == null ? null : _db.SeriesDocumentales.Where(s => s.Id == t.SerieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefault(),
+                t.Activo))
+            .ToListAsync(ct);
+    }
+
+    public async Task<TipologiaDto?> SaveTipologiaAsync(SaveTipologiaRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var sucursal = (req.Sucursal ?? string.Empty).Trim();
+        var codigo = (req.Codigo ?? string.Empty).Trim();
+        var nombre = (req.Nombre ?? string.Empty).Trim();
+        var tipo = string.IsNullOrWhiteSpace(req.Tipo) ? "general" : req.Tipo.Trim();
+        if (string.IsNullOrWhiteSpace(sucursal)) { throw new InvalidOperationException("La sede es obligatoria."); }
+        if (string.IsNullOrWhiteSpace(codigo)) { throw new InvalidOperationException("El codigo de la tipologia es obligatorio."); }
+        if (string.IsNullOrWhiteSpace(nombre)) { throw new InvalidOperationException("El nombre de la tipologia es obligatorio."); }
+
+        // La serie referenciada debe existir en el tenant (el filtro global ya la acota).
+        if (req.SerieId is Guid sid && !await _db.SeriesDocumentales.AnyAsync(s => s.Id == sid, ct))
+        {
+            throw new InvalidOperationException("La serie seleccionada no existe.");
+        }
+
+        TipologiaDocumental? tip;
+        if (req.Id is Guid id)
+        {
+            tip = await _db.TipologiasDocumentales.FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (tip is null) { return null; }
+        }
+        else
+        {
+            if (await _db.TipologiasDocumentales.AnyAsync(x => x.Sucursal == sucursal && x.Codigo == codigo, ct))
+            {
+                throw new InvalidOperationException($"Ya existe una tipologia con codigo '{codigo}' en la sede '{sucursal}'.");
+            }
+            tip = new TipologiaDocumental { TenantId = tenantId };
+            _db.TipologiasDocumentales.Add(tip);
+        }
+        tip.Sucursal = sucursal;
+        tip.Codigo = codigo;
+        tip.Nombre = nombre;
+        tip.Tipo = tipo;
+        tip.SerieId = req.SerieId;
+        tip.Activo = req.Activo;
+
+        await _db.SaveChangesAsync(ct);
+        var serieNombre = req.SerieId is Guid s2
+            ? await _db.SeriesDocumentales.Where(s => s.Id == s2).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefaultAsync(ct)
+            : null;
+        return new TipologiaDto(tip.Id, tip.Sucursal, tip.Codigo, tip.Nombre, tip.Tipo, tip.SerieId, serieNombre, tip.Activo);
+    }
+
+    public async Task<bool> DeleteTipologiaAsync(Guid id, Guid actor, CancellationToken ct = default)
+    {
+        var tip = await _db.TipologiasDocumentales.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (tip is null) { return false; }
+        _db.TipologiasDocumentales.Remove(tip);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<int> SeedDemoAsync(CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tenantId) { return 0; }
