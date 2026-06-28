@@ -15,10 +15,10 @@ public sealed record PlatformBrandingDto(
     /// <summary>Valores por defecto cuando aun no se ha configurado la marca.</summary>
     public static PlatformBrandingDto Default => new(
         "DokTrino",
-        "Salud Domiciliaria",
+        "Gestion Documental",
         null,
-        "Atencion humana, agil y oportuna",
-        "Coordina la atencion domiciliaria: pacientes, historias clinicas, profesionales y agendas en una sola plataforma.");
+        "Gestion documental, agil y trazable",
+        "Coordina tu archivo: TRD, radicacion, expedientes y retencion documental en una sola plataforma.");
 }
 
 public sealed record SaveBrandingRequest(

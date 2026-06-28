@@ -177,8 +177,8 @@ public sealed class FormHeader
 
     public static FormHeader Default() => new()
     {
-        Institucion = "IPS DOKTRINO RT",
-        Tagline = "Atencion Humana, Agil y Oportuna",
+        Institucion = "ENTIDAD PRODUCTORA",
+        Tagline = "Gestion Documental",
         Titulo = "",
         Campos = new()
         {
