@@ -22,16 +22,14 @@ public sealed class ClasificadorTrdService : IClasificadorTrdService
         if (tokens.Count == 0) { return Array.Empty<SugerenciaSerieDto>(); }
 
         // Carga las series + sus tipologias (nombres) para construir el vocabulario por serie.
-        var series = await _db.SeriesDocumentales.AsNoTracking()
+        var series = await _db.Series.AsNoTracking()
             .Where(s => s.Activo)
             .Select(s => new
             {
                 s.Id,
                 s.Codigo,
                 s.Nombre,
-                Tipologias = _db.TipologiasDocumentales.Where(t => t.SerieId == s.Id).Select(t => t.Nombre).ToList(),
-                Ag = _db.SerieDisposiciones.Where(d => d.SerieId == s.Id).Select(d => d.AgAnios).FirstOrDefault(),
-                Ac = _db.SerieDisposiciones.Where(d => d.SerieId == s.Id).Select(d => d.AcAnios).FirstOrDefault()
+                Tipologias = _db.TipologiasDocumentales.Where(t => t.SerieId == s.Id).Select(t => t.Nombre).ToList()
             })
             .ToListAsync(ct);
 
@@ -42,7 +40,7 @@ public sealed class ClasificadorTrdService : IClasificadorTrdService
             foreach (var t in s.Tipologias) { foreach (var w in Tokenize(t)) { vocab.Add(w); } }
             var hits = tokens.Where(vocab.Contains).Distinct().ToList();
             if (hits.Count == 0) { continue; }
-            result.Add(new SugerenciaSerieDto(s.Id, s.Codigo, s.Nombre, hits.Count, s.Ag, s.Ac, string.Join(", ", hits)));
+            result.Add(new SugerenciaSerieDto(s.Id, s.Codigo, s.Nombre, hits.Count, null, null, string.Join(", ", hits)));
         }
 
         return result.OrderByDescending(r => r.Score).ThenBy(r => r.Codigo).Take(max).ToList();

@@ -67,7 +67,8 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.ISedeCatalogoPublicoService, Tenancy.SedeCatalogoPublicoService>();
         services.AddScoped<Tenancy.IGeografiaService, Tenancy.GeografiaService>();
         services.AddScoped<Tenancy.IRelacionFormularioService, Tenancy.RelacionFormularioService>();
-        services.AddScoped<Tenancy.ITrdService, Tenancy.TrdService>();
+        services.AddScoped<Tenancy.ITrdAdminService, Tenancy.TrdAdminService>();
+        services.AddScoped<Tenancy.ITrdClienteService, Tenancy.TrdClienteService>();
         services.AddScoped<Tenancy.IRadicacionService, Tenancy.RadicacionService>();
         services.AddScoped<Tenancy.IArchivoFisicoService, Tenancy.ArchivoFisicoService>();
         services.AddScoped<Tenancy.IArchivoDigitalService, Tenancy.ArchivoDigitalService>();

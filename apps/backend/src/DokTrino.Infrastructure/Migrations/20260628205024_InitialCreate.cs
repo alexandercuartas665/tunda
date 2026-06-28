@@ -81,6 +81,27 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "bodegas",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    sucursal = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    codigo = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    direccion = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_bodegas", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "conversations",
                 columns: table => new
                 {
@@ -341,6 +362,47 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "power_bi_reportes",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    embed_url = table.Column<string>(type: "text", nullable: false),
+                    orden = table.Column<int>(type: "integer", nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_power_bi_reportes", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "procesos_definicion",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    sucursal = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    codigo = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    version = table.Column<int>(type: "integer", nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_procesos_definicion", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "quote_templates",
                 columns: table => new
                 {
@@ -398,6 +460,43 @@ namespace DokTrino.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_saas_plans", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "segmentos",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codigo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_segmentos", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "series",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codigo = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_series", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -798,6 +897,31 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "cajas",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codigo = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    bodega_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_cajas", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_cajas_bodegas_bodega_id",
+                        column: x => x.bodega_id,
+                        principalTable: "bodegas",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "messages",
                 columns: table => new
                 {
@@ -993,6 +1117,33 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "proceso_actividades",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    proceso_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    nombre = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    detalle = table.Column<string>(type: "text", nullable: true),
+                    orden = table.Column<int>(type: "integer", nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_proceso_actividades", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_proceso_actividades_procesos_definicion_proceso_id",
+                        column: x => x.proceso_id,
+                        principalTable: "procesos_definicion",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "rol_permisos",
                 columns: table => new
                 {
@@ -1042,6 +1193,62 @@ namespace DokTrino.Infrastructure.Migrations
                         name: "fk_saas_plan_limits_saas_plans_plan_id",
                         column: x => x.plan_id,
                         principalTable: "saas_plans",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tablas_retencion_documental",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    consecutivo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    titulo = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    estado = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    segmento_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    fecha_inicio = table.Column<DateOnly>(type: "date", nullable: true),
+                    fecha_fin = table.Column<DateOnly>(type: "date", nullable: true),
+                    fecha_novedad = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    observaciones = table.Column<string>(type: "text", nullable: true),
+                    creado_por = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tablas_retencion_documental", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tablas_retencion_documental_segmentos_segmento_id",
+                        column: x => x.segmento_id,
+                        principalTable: "segmentos",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "subseries",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    serie_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codigo = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_subseries", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_subseries_series_serie_id",
+                        column: x => x.serie_id,
+                        principalTable: "series",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1250,6 +1457,76 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "dependencias",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    trd_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    padre_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    nivel = table.Column<short>(type: "smallint", nullable: false),
+                    orden = table.Column<int>(type: "integer", nullable: false),
+                    nombre_cargo = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    codigo = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    estado = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_dependencias", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_dependencias_dependencias_padre_id",
+                        column: x => x.padre_id,
+                        principalTable: "dependencias",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_dependencias_tablas_retencion_documental_trd_id",
+                        column: x => x.trd_id,
+                        principalTable: "tablas_retencion_documental",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tipologias_documentales",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    subserie_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    serie_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    codigo = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    orden = table.Column<int>(type: "integer", nullable: false),
+                    tipo = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tipologias_documentales", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tipologias_documentales_series_serie_id",
+                        column: x => x.serie_id,
+                        principalTable: "series",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_tipologias_documentales_subseries_subserie_id",
+                        column: x => x.subserie_id,
+                        principalTable: "subseries",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "tenant_payments",
                 columns: table => new
                 {
@@ -1389,6 +1666,206 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "colaboradores_dependencia",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    dependencia_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    usuario_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    email = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
+                    rol = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_colaboradores_dependencia", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_colaboradores_dependencia_dependencias_dependencia_id",
+                        column: x => x.dependencia_id,
+                        principalTable: "dependencias",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tokens_dependencia",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    trd_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    dependencia_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    token = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
+                    email_colaborador = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: true),
+                    expira_en = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    consumido_en = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tokens_dependencia", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tokens_dependencia_dependencias_dependencia_id",
+                        column: x => x.dependencia_id,
+                        principalTable: "dependencias",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_tokens_dependencia_tablas_retencion_documental_trd_id",
+                        column: x => x.trd_id,
+                        principalTable: "tablas_retencion_documental",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "carpetas",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    codigo = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    titulo = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    caja_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    tipologia_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    fecha_apertura = table.Column<DateOnly>(type: "date", nullable: true),
+                    fecha_cierre = table.Column<DateOnly>(type: "date", nullable: true),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_carpetas", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_carpetas_cajas_caja_id",
+                        column: x => x.caja_id,
+                        principalTable: "cajas",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_carpetas_tipologias_documentales_tipologia_id",
+                        column: x => x.tipologia_id,
+                        principalTable: "tipologias_documentales",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "radicados",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    sucursal = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    numero = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    asunto = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    remitente = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    tipologia_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    estado = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    fecha_radicacion = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    legacy_reg = table.Column<int>(type: "integer", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_radicados", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_radicados_tipologias_documentales_tipologia_id",
+                        column: x => x.tipologia_id,
+                        principalTable: "tipologias_documentales",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "respuestas_tabla_documental",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    trd_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    dependencia_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    serie_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    subserie_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    tipologia_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    sin_subserie = table.Column<bool>(type: "boolean", nullable: false),
+                    tiempo_ag = table.Column<decimal>(type: "numeric(5,2)", nullable: true),
+                    tiempo_ac = table.Column<decimal>(type: "numeric(5,2)", nullable: true),
+                    tiempo_observ = table.Column<string>(type: "text", nullable: true),
+                    disp_ct = table.Column<bool>(type: "boolean", nullable: false),
+                    disp_s = table.Column<bool>(type: "boolean", nullable: false),
+                    disp_e = table.Column<bool>(type: "boolean", nullable: false),
+                    disp_d = table.Column<bool>(type: "boolean", nullable: false),
+                    disp_observ = table.Column<string>(type: "text", nullable: true),
+                    val1admin = table.Column<bool>(type: "boolean", nullable: false),
+                    val1tecnica = table.Column<bool>(type: "boolean", nullable: false),
+                    val1legal = table.Column<bool>(type: "boolean", nullable: false),
+                    val1contable = table.Column<bool>(type: "boolean", nullable: false),
+                    val1fiscal = table.Column<bool>(type: "boolean", nullable: false),
+                    val2historica = table.Column<bool>(type: "boolean", nullable: false),
+                    val2cientifica = table.Column<bool>(type: "boolean", nullable: false),
+                    val2cultural = table.Column<bool>(type: "boolean", nullable: false),
+                    representativo = table.Column<string>(type: "text", nullable: true),
+                    serie_ddhh = table.Column<bool>(type: "boolean", nullable: false),
+                    relacion_sig = table.Column<string>(type: "text", nullable: true),
+                    extension = table.Column<string>(type: "jsonb", nullable: false),
+                    fecha_reg = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    creado_por = table.Column<Guid>(type: "uuid", nullable: false),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_respuestas_tabla_documental", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_respuestas_tabla_documental_dependencias_dependencia_id",
+                        column: x => x.dependencia_id,
+                        principalTable: "dependencias",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_respuestas_tabla_documental_series_serie_id",
+                        column: x => x.serie_id,
+                        principalTable: "series",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_respuestas_tabla_documental_subseries_subserie_id",
+                        column: x => x.subserie_id,
+                        principalTable: "subseries",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_respuestas_tabla_documental_tablas_retencion_documental_trd",
+                        column: x => x.trd_id,
+                        principalTable: "tablas_retencion_documental",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "fk_respuestas_tabla_documental_tipologias_documentales_tipolog",
+                        column: x => x.tipologia_id,
+                        principalTable: "tipologias_documentales",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "tenant_user_sucursales",
                 columns: table => new
                 {
@@ -1414,6 +1891,170 @@ namespace DokTrino.Infrastructure.Migrations
                         name: "fk_tenant_user_sucursales_tenant_users_tenant_user_id",
                         column: x => x.tenant_user_id,
                         principalTable: "tenant_users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "formaciones_dependencia",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    colaborador_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    modulo = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    superado = table.Column<bool>(type: "boolean", nullable: false),
+                    intentos = table.Column<int>(type: "integer", nullable: false),
+                    fecha_superado = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_formaciones_dependencia", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_formaciones_dependencia_colaboradores_dependencia_colaborad",
+                        column: x => x.colaborador_id,
+                        principalTable: "colaboradores_dependencia",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "archivos_digitales",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    sucursal = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    nombre = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    descripcion = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    carpeta_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    tipologia_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    bucket = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    blob_key = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: false),
+                    mime = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    size_bytes = table.Column<long>(type: "bigint", nullable: false),
+                    sha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    estado = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    fecha_subida = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    activo = table.Column<bool>(type: "boolean", nullable: false),
+                    legacy_reg = table.Column<int>(type: "integer", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_archivos_digitales", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_archivos_digitales_carpetas_carpeta_id",
+                        column: x => x.carpeta_id,
+                        principalTable: "carpetas",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_archivos_digitales_tipologias_documentales_tipologia_id",
+                        column: x => x.tipologia_id,
+                        principalTable: "tipologias_documentales",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "proceso_instancias",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    proceso_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    radicado_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    estado = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    actividad_actual_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    fecha_inicio = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    fecha_fin = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_proceso_instancias", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_proceso_instancias_procesos_definicion_proceso_id",
+                        column: x => x.proceso_id,
+                        principalTable: "procesos_definicion",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_proceso_instancias_radicados_radicado_id",
+                        column: x => x.radicado_id,
+                        principalTable: "radicados",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "formatos_serie",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    respuesta_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    soporte = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    formato = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    descripcion = table.Column<string>(type: "text", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_formatos_serie", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_formatos_serie_respuestas_tabla_documental_respuesta_id",
+                        column: x => x.respuesta_id,
+                        principalTable: "respuestas_tabla_documental",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "tareas",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    instancia_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    actividad_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    actividad_nombre = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
+                    asignado_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    estado = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
+                    fecha_creacion = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    fecha_completada = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    created_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    updated_by = table.Column<Guid>(type: "uuid", nullable: true),
+                    tenant_id = table.Column<Guid>(type: "uuid", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_tareas", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_tareas_proceso_actividades_actividad_id",
+                        column: x => x.actividad_id,
+                        principalTable: "proceso_actividades",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "fk_tareas_proceso_instancias_instancia_id",
+                        column: x => x.instancia_id,
+                        principalTable: "proceso_instancias",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -1460,6 +2101,26 @@ namespace DokTrino.Infrastructure.Migrations
                 columns: new[] { "tenant_id", "created_at" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_archivos_digitales_carpeta_id",
+                table: "archivos_digitales",
+                column: "carpeta_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_archivos_digitales_tenant_id_carpeta_id",
+                table: "archivos_digitales",
+                columns: new[] { "tenant_id", "carpeta_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_archivos_digitales_tenant_id_fecha_subida",
+                table: "archivos_digitales",
+                columns: new[] { "tenant_id", "fecha_subida" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_archivos_digitales_tipologia_id",
+                table: "archivos_digitales",
+                column: "tipologia_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_automation_rules_ai_agent_id",
                 table: "automation_rules",
                 column: "ai_agent_id");
@@ -1468,6 +2129,45 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ix_automation_rules_tenant_id_sort_order",
                 table: "automation_rules",
                 columns: new[] { "tenant_id", "sort_order" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_bodegas_tenant_id_sucursal_codigo",
+                table: "bodegas",
+                columns: new[] { "tenant_id", "sucursal", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_cajas_bodega_id",
+                table: "cajas",
+                column: "bodega_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_cajas_tenant_id_codigo",
+                table: "cajas",
+                columns: new[] { "tenant_id", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_carpetas_caja_id",
+                table: "carpetas",
+                column: "caja_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_carpetas_tenant_id_codigo",
+                table: "carpetas",
+                columns: new[] { "tenant_id", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_carpetas_tipologia_id",
+                table: "carpetas",
+                column: "tipologia_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_colaboradores_dependencia_dependencia_id_email",
+                table: "colaboradores_dependencia",
+                columns: new[] { "dependencia_id", "email" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_conversations_tenant_id_contact_phone",
@@ -1484,6 +2184,17 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ix_departamentos_pais_id_nombre",
                 table: "departamentos",
                 columns: new[] { "pais_id", "nombre" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_dependencias_padre_id",
+                table: "dependencias",
+                column: "padre_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_dependencias_trd_id_padre_id_orden",
+                table: "dependencias",
+                columns: new[] { "trd_id", "padre_id", "orden" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -1517,6 +2228,22 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ix_form_definitions_tenant_id_codigo_secundario",
                 table: "form_definitions",
                 columns: new[] { "tenant_id", "codigo_secundario" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_formaciones_dependencia_colaborador_id",
+                table: "formaciones_dependencia",
+                column: "colaborador_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_formaciones_dependencia_tenant_id_colaborador_id",
+                table: "formaciones_dependencia",
+                columns: new[] { "tenant_id", "colaborador_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_formatos_serie_respuesta_id_soporte_formato",
+                table: "formatos_serie",
+                columns: new[] { "respuesta_id", "soporte", "formato" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_lead_activities_lead_id",
@@ -1662,6 +2389,42 @@ namespace DokTrino.Infrastructure.Migrations
                 filter: "username IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "ix_power_bi_reportes_tenant_id_orden",
+                table: "power_bi_reportes",
+                columns: new[] { "tenant_id", "orden" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_proceso_actividades_proceso_id",
+                table: "proceso_actividades",
+                column: "proceso_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_proceso_actividades_tenant_id_proceso_id_orden",
+                table: "proceso_actividades",
+                columns: new[] { "tenant_id", "proceso_id", "orden" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_proceso_instancias_proceso_id",
+                table: "proceso_instancias",
+                column: "proceso_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_proceso_instancias_radicado_id",
+                table: "proceso_instancias",
+                column: "radicado_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_proceso_instancias_tenant_id_estado",
+                table: "proceso_instancias",
+                columns: new[] { "tenant_id", "estado" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_procesos_definicion_tenant_id_sucursal_codigo_version",
+                table: "procesos_definicion",
+                columns: new[] { "tenant_id", "sucursal", "codigo", "version" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_profesional_agencias_profesional_id",
                 table: "profesional_agencias",
                 column: "profesional_id");
@@ -1703,6 +2466,22 @@ namespace DokTrino.Infrastructure.Migrations
                 columns: new[] { "tenant_id", "is_default" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_radicados_tenant_id_estado_fecha_radicacion",
+                table: "radicados",
+                columns: new[] { "tenant_id", "estado", "fecha_radicacion" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_radicados_tenant_id_sucursal_numero",
+                table: "radicados",
+                columns: new[] { "tenant_id", "sucursal", "numero" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_radicados_tipologia_id",
+                table: "radicados",
+                column: "tipologia_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_relaciones_formulario_formulario_destino_id",
                 table: "relaciones_formulario",
                 column: "formulario_destino_id");
@@ -1717,6 +2496,36 @@ namespace DokTrino.Infrastructure.Migrations
                 table: "relaciones_formulario",
                 columns: new[] { "tenant_id", "formulario_origen_id", "formulario_destino_id" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_dependencia_id",
+                table: "respuestas_tabla_documental",
+                column: "dependencia_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_serie_id",
+                table: "respuestas_tabla_documental",
+                column: "serie_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_subserie_id",
+                table: "respuestas_tabla_documental",
+                column: "subserie_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_tenant_id_trd_id_dependencia_id",
+                table: "respuestas_tabla_documental",
+                columns: new[] { "tenant_id", "trd_id", "dependencia_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_tipologia_id",
+                table: "respuestas_tabla_documental",
+                column: "tipologia_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_respuestas_tabla_documental_trd_id",
+                table: "respuestas_tabla_documental",
+                column: "trd_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_rol_permisos_rol_id_modulo",
@@ -1737,6 +2546,18 @@ namespace DokTrino.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_segmentos_tenant_id_codigo",
+                table: "segmentos",
+                columns: new[] { "tenant_id", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_series_tenant_id_codigo",
+                table: "series",
+                columns: new[] { "tenant_id", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_sql_console_logs_executed_at",
                 table: "sql_console_logs",
                 column: "executed_at");
@@ -1750,6 +2571,12 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ix_sub_categorias_profesional_tenant_id_nombre",
                 table: "sub_categorias_profesional",
                 columns: new[] { "tenant_id", "nombre" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_subseries_serie_id_codigo",
+                table: "subseries",
+                columns: new[] { "serie_id", "codigo" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -1767,6 +2594,37 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ix_super_admin_audit_logs_tenant_id",
                 table: "super_admin_audit_logs",
                 column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tablas_retencion_documental_segmento_id",
+                table: "tablas_retencion_documental",
+                column: "segmento_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tablas_retencion_documental_tenant_id_consecutivo",
+                table: "tablas_retencion_documental",
+                columns: new[] { "tenant_id", "consecutivo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tareas_actividad_id",
+                table: "tareas",
+                column: "actividad_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tareas_instancia_id",
+                table: "tareas",
+                column: "instancia_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tareas_tenant_id_asignado_id_estado",
+                table: "tareas",
+                columns: new[] { "tenant_id", "asignado_id", "estado" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tareas_tenant_id_instancia_id",
+                table: "tareas",
+                columns: new[] { "tenant_id", "instancia_id" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_template_assets_tenant_id_created_at",
@@ -1878,10 +2736,47 @@ namespace DokTrino.Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_tipologias_documentales_serie_id",
+                table: "tipologias_documentales",
+                column: "serie_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tipologias_documentales_subserie_id",
+                table: "tipologias_documentales",
+                column: "subserie_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tipologias_documentales_tenant_id_codigo",
+                table: "tipologias_documentales",
+                columns: new[] { "tenant_id", "codigo" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_tipos_profesional_tenant_id_nombre",
                 table: "tipos_profesional",
                 columns: new[] { "tenant_id", "nombre" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tokens_dependencia_dependencia_id",
+                table: "tokens_dependencia",
+                column: "dependencia_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tokens_dependencia_tenant_id_trd_id",
+                table: "tokens_dependencia",
+                columns: new[] { "tenant_id", "trd_id" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tokens_dependencia_token",
+                table: "tokens_dependencia",
+                column: "token",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tokens_dependencia_trd_id",
+                table: "tokens_dependencia",
+                column: "trd_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_whats_app_lines_assigned_to_tenant_user_id",
@@ -1917,6 +2812,9 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "ai_usage_logs");
 
             migrationBuilder.DropTable(
+                name: "archivos_digitales");
+
+            migrationBuilder.DropTable(
                 name: "automation_rules");
 
             migrationBuilder.DropTable(
@@ -1933,6 +2831,12 @@ namespace DokTrino.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "form_definition_snapshots");
+
+            migrationBuilder.DropTable(
+                name: "formaciones_dependencia");
+
+            migrationBuilder.DropTable(
+                name: "formatos_serie");
 
             migrationBuilder.DropTable(
                 name: "google_auth_configs");
@@ -1965,6 +2869,9 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "platform_brandings");
 
             migrationBuilder.DropTable(
+                name: "power_bi_reportes");
+
+            migrationBuilder.DropTable(
                 name: "profesional_agencias");
 
             migrationBuilder.DropTable(
@@ -1989,6 +2896,9 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "super_admin_audit_logs");
 
             migrationBuilder.DropTable(
+                name: "tareas");
+
+            migrationBuilder.DropTable(
                 name: "template_assets");
 
             migrationBuilder.DropTable(
@@ -2010,6 +2920,9 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "tipologia_archivos");
 
             migrationBuilder.DropTable(
+                name: "tokens_dependencia");
+
+            migrationBuilder.DropTable(
                 name: "whats_app_lines");
 
             migrationBuilder.DropTable(
@@ -2019,7 +2932,16 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "wompi_webhook_events");
 
             migrationBuilder.DropTable(
+                name: "carpetas");
+
+            migrationBuilder.DropTable(
                 name: "ai_agents");
+
+            migrationBuilder.DropTable(
+                name: "colaboradores_dependencia");
+
+            migrationBuilder.DropTable(
+                name: "respuestas_tabla_documental");
 
             migrationBuilder.DropTable(
                 name: "leads");
@@ -2037,16 +2959,34 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "form_definitions");
 
             migrationBuilder.DropTable(
+                name: "proceso_actividades");
+
+            migrationBuilder.DropTable(
+                name: "proceso_instancias");
+
+            migrationBuilder.DropTable(
                 name: "tenant_subscriptions");
 
             migrationBuilder.DropTable(
                 name: "tenant_users");
 
             migrationBuilder.DropTable(
+                name: "cajas");
+
+            migrationBuilder.DropTable(
+                name: "dependencias");
+
+            migrationBuilder.DropTable(
                 name: "pipeline_stages");
 
             migrationBuilder.DropTable(
                 name: "paises");
+
+            migrationBuilder.DropTable(
+                name: "procesos_definicion");
+
+            migrationBuilder.DropTable(
+                name: "radicados");
 
             migrationBuilder.DropTable(
                 name: "saas_plans");
@@ -2067,7 +3007,25 @@ namespace DokTrino.Infrastructure.Migrations
                 name: "sucursales");
 
             migrationBuilder.DropTable(
+                name: "bodegas");
+
+            migrationBuilder.DropTable(
+                name: "tablas_retencion_documental");
+
+            migrationBuilder.DropTable(
+                name: "tipologias_documentales");
+
+            migrationBuilder.DropTable(
                 name: "tipos_profesional");
+
+            migrationBuilder.DropTable(
+                name: "segmentos");
+
+            migrationBuilder.DropTable(
+                name: "subseries");
+
+            migrationBuilder.DropTable(
+                name: "series");
         }
     }
 }

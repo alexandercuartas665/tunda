@@ -48,10 +48,17 @@ public interface IApplicationDbContext
     DbSet<Pais> Paises { get; }
     DbSet<Departamento> Departamentos { get; }
     DbSet<Municipio> Municipios { get; }
-    DbSet<SerieDocumental> SeriesDocumentales { get; }
-    DbSet<SubserieDocumental> SubseriesDocumentales { get; }
+    DbSet<Segmento> Segmentos { get; }
+    DbSet<TablaRetencionDocumental> TablasRetencionDocumental { get; }
+    DbSet<Dependencia> Dependencias { get; }
+    DbSet<Serie> Series { get; }
+    DbSet<Subserie> Subseries { get; }
     DbSet<TipologiaDocumental> TipologiasDocumentales { get; }
-    DbSet<SerieDisposicion> SerieDisposiciones { get; }
+    DbSet<TokenDependencia> TokensDependencia { get; }
+    DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental { get; }
+    DbSet<FormatoSerie> FormatosSerie { get; }
+    DbSet<ColaboradorDependencia> ColaboradoresDependencia { get; }
+    DbSet<FormacionDependencia> FormacionesDependencia { get; }
     DbSet<Radicado> Radicados { get; }
     DbSet<Bodega> Bodegas { get; }
     DbSet<Caja> Cajas { get; }

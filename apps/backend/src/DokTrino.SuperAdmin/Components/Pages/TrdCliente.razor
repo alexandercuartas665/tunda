@@ -1,0 +1,132 @@
+@page "/trd-cliente"
+@attribute [AllowAnonymous]
+@layout DokTrino.SuperAdmin.Components.Layout.PublicLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@inject ITrdClienteService Cliente
+
+<PageTitle>Cliente TRD - DokTrino</PageTitle>
+
+@if (_sesion is null)
+{
+    <div class="ase-alert">Enlace invalido o token no reconocido. Solicita un nuevo enlace al administrador documental.</div>
+}
+else
+{
+    <div class="ase-eyebrow">Levantamiento TRD - Dependencia</div>
+    <h1 class="ase-title">@_sesion.DependenciaCargo</h1>
+    <p class="text-muted">TRD <span class="mono">@_sesion.TrdConsecutivo</span> - @_sesion.TrdTitulo - estado <b>@_sesion.TrdEstado</b></p>
+
+    @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
+    else if (_sesion.SoloLectura) { <div class="ase-alert">La TRD o tu dependencia estan CERRADAS: solo lectura.</div> }
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    <div class="ase-card">
+        <div class="ase-card-h">Series documentales de tu dependencia (@_resp.Count)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Serie</th><th>Tipologia</th><th class="text-center">AG</th><th class="text-center">AC</th><th>Disposicion</th><th>Valoracion</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _resp)
+                    {
+                        <tr>
+                            <td>@r.SerieNombre</td><td>@(r.TipologiaNombre ?? "-")</td>
+                            <td class="text-center">@(r.TiempoAg?.ToString("0.#") ?? "-")</td>
+                            <td class="text-center">@(r.TiempoAc?.ToString("0.#") ?? "-")</td>
+                            <td><span class="mono">@(string.IsNullOrEmpty(r.Disposicion) ? "-" : r.Disposicion)</span></td>
+                            <td>@(string.IsNullOrEmpty(r.Valoracion) ? "-" : r.Valoracion)</td>
+                            <td class="ase-row-actions">@if (!_sesion.SoloLectura) { <button class="btn btn-outline-danger btn-sm" @onclick="() => Del(r.Id)">&times;</button> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_resp.Count == 0) { <div class="ase-empty">Aun no has registrado series. Agrega la primera abajo.</div> }
+        </div>
+
+        @if (!_sesion.SoloLectura)
+        {
+            <div class="cl-form">
+                <div class="cl-f cl-grow"><label>Serie</label>
+                    <select class="form-select form-select-sm" @bind="_serie">
+                        <option value="">(elige serie)</option>
+                        @foreach (var o in _series) { <option value="@o.Id">@o.Etiqueta</option> }
+                    </select>
+                </div>
+                <div class="cl-f cl-grow"><label>Tipologia</label>
+                    <select class="form-select form-select-sm" @bind="_tipo">
+                        <option value="">(opcional)</option>
+                        @foreach (var o in _tipos) { <option value="@o.Id">@o.Etiqueta</option> }
+                    </select>
+                </div>
+                <div class="cl-f cl-sm"><label>AG</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAg" /></div>
+                <div class="cl-f cl-sm"><label>AC</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAc" /></div>
+                <div class="cl-f cl-chk"><label>CT</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispCt" /></div>
+                <div class="cl-f cl-chk"><label>S</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispS" /></div>
+                <div class="cl-f cl-chk"><label>E</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispE" /></div>
+                <div class="cl-f cl-chk"><label>D</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispD" /></div>
+                <div class="cl-f cl-chk"><label>V.Adm</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val1Admin" /></div>
+                <div class="cl-f cl-chk"><label>V.Hist</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val2Historica" /></div>
+                <div class="cl-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Guardar">Agregar</button></div>
+            </div>
+            <small class="text-muted">AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion. Valoracion administrativa / historica (Ley 594/2000, AGN).</small>
+        }
+    </div>
+}
+
+<style>
+    .cl-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
+    .cl-f { display:flex; flex-direction:column; gap:3px; }
+    .cl-f label { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
+    .cl-grow { flex:1; min-width:200px; }
+    .cl-sm input { width:64px; }
+    .cl-chk { align-items:center; }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+
+    private TokenSesionDto? _sesion;
+    private List<RespuestaTrdDto> _resp = new();
+    private List<OpcionDto> _series = new();
+    private List<OpcionDto> _tipos = new();
+    private GuardarRespuestaCommand _cmd = new();
+    private string _serie = "", _tipo = "";
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t = Token ?? "";
+        _sesion = await Cliente.ResolverTokenAsync(t);
+        if (_sesion is not null)
+        {
+            _series = (await Cliente.SeriesAsync(t)).ToList();
+            _tipos = (await Cliente.TipologiasAsync(t)).ToList();
+            _resp = (await Cliente.ListarRespuestasAsync(t)).ToList();
+        }
+    }
+
+    private async Task Guardar()
+    {
+        _error = _ok = null;
+        if (!Guid.TryParse(_serie, out var sid)) { _error = "Elige una serie."; return; }
+        _cmd.SerieId = sid;
+        _cmd.TipologiaId = Guid.TryParse(_tipo, out var tid) ? tid : null;
+        try
+        {
+            await Cliente.GuardarRespuestaAsync(Token ?? "", _cmd);
+            _ok = "Serie registrada en tu TRD.";
+            _cmd = new(); _serie = ""; _tipo = "";
+            _resp = (await Cliente.ListarRespuestasAsync(Token ?? "")).ToList();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Del(Guid id)
+    {
+        _error = _ok = null;
+        await Cliente.EliminarRespuestaAsync(Token ?? "", id);
+        _resp = (await Cliente.ListarRespuestasAsync(Token ?? "")).ToList();
+    }
+}

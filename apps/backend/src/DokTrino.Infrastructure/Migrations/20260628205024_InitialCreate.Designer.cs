@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DokTrino.Infrastructure.Migrations
 {
     [DbContext(typeof(DokTrinoDbContext))]
-    [Migration("20260628131400_InitialCreate")]
+    [Migration("20260628205024_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -371,6 +371,121 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("ai_usage_logs", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoDigital", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("BlobKey")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("blob_key");
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("bucket");
+
+                    b.Property<Guid?>("CarpetaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("carpeta_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTimeOffset>("FechaSubida")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_subida");
+
+                    b.Property<int?>("LegacyReg")
+                        .HasColumnType("integer")
+                        .HasColumnName("legacy_reg");
+
+                    b.Property<string>("Mime")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("mime");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Sucursal")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sucursal");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid?>("TipologiaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tipologia_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_archivos_digitales");
+
+                    b.HasIndex("CarpetaId")
+                        .HasDatabaseName("ix_archivos_digitales_carpeta_id");
+
+                    b.HasIndex("TipologiaId")
+                        .HasDatabaseName("ix_archivos_digitales_tipologia_id");
+
+                    b.HasIndex("TenantId", "CarpetaId")
+                        .HasDatabaseName("ix_archivos_digitales_tenant_id_carpeta_id");
+
+                    b.HasIndex("TenantId", "FechaSubida")
+                        .HasDatabaseName("ix_archivos_digitales_tenant_id_fecha_subida");
+
+                    b.ToTable("archivos_digitales", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.AutomationRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -489,6 +604,255 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("automation_rules", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.Bodega", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Direccion")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("direccion");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("Sucursal")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sucursal");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bodegas");
+
+                    b.HasIndex("TenantId", "Sucursal", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_bodegas_tenant_id_sucursal_codigo");
+
+                    b.ToTable("bodegas", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Caja", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<Guid?>("BodegaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("bodega_id");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cajas");
+
+                    b.HasIndex("BodegaId")
+                        .HasDatabaseName("ix_cajas_bodega_id");
+
+                    b.HasIndex("TenantId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cajas_tenant_id_codigo");
+
+                    b.ToTable("cajas", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Carpeta", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<Guid?>("CajaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caja_id");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateOnly?>("FechaApertura")
+                        .HasColumnType("date")
+                        .HasColumnName("fecha_apertura");
+
+                    b.Property<DateOnly?>("FechaCierre")
+                        .HasColumnType("date")
+                        .HasColumnName("fecha_cierre");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid?>("TipologiaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tipologia_id");
+
+                    b.Property<string>("Titulo")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("titulo");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_carpetas");
+
+                    b.HasIndex("CajaId")
+                        .HasDatabaseName("ix_carpetas_caja_id");
+
+                    b.HasIndex("TipologiaId")
+                        .HasDatabaseName("ix_carpetas_tipologia_id");
+
+                    b.HasIndex("TenantId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_carpetas_tenant_id_codigo");
+
+                    b.ToTable("carpetas", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ColaboradorDependencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("DependenciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dependencia_id");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Rol")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("rol");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid?>("UsuarioId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("usuario_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_colaboradores_dependencia");
+
+                    b.HasIndex("DependenciaId", "Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_colaboradores_dependencia_dependencia_id_email");
+
+                    b.ToTable("colaboradores_dependencia", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -601,6 +965,80 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_departamentos_pais_id_nombre");
 
                     b.ToTable("departamentos", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Dependencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<short>("Nivel")
+                        .HasColumnType("smallint")
+                        .HasColumnName("nivel");
+
+                    b.Property<string>("NombreCargo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre_cargo");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<Guid?>("PadreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("padre_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("TrdId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trd_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_dependencias");
+
+                    b.HasIndex("PadreId")
+                        .HasDatabaseName("ix_dependencias_padre_id");
+
+                    b.HasIndex("TrdId", "PadreId", "Orden")
+                        .IsUnique()
+                        .HasDatabaseName("ix_dependencias_trd_id_padre_id_orden");
+
+                    b.ToTable("dependencias", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.EmailConfig", b =>
@@ -985,6 +1423,124 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_form_definition_snapshots_form_definition_id_snapshot_at");
 
                     b.ToTable("form_definition_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.FormacionDependencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ColaboradorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("colaborador_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("FechaSuperado")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_superado");
+
+                    b.Property<int>("Intentos")
+                        .HasColumnType("integer")
+                        .HasColumnName("intentos");
+
+                    b.Property<string>("Modulo")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("modulo");
+
+                    b.Property<bool>("Superado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("superado");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_formaciones_dependencia");
+
+                    b.HasIndex("ColaboradorId")
+                        .HasDatabaseName("ix_formaciones_dependencia_colaborador_id");
+
+                    b.HasIndex("TenantId", "ColaboradorId")
+                        .HasDatabaseName("ix_formaciones_dependencia_tenant_id_colaborador_id");
+
+                    b.ToTable("formaciones_dependencia", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.FormatoSerie", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("text")
+                        .HasColumnName("descripcion");
+
+                    b.Property<string>("Formato")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("formato");
+
+                    b.Property<Guid>("RespuestaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("respuesta_id");
+
+                    b.Property<string>("Soporte")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("soporte");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_formatos_serie");
+
+                    b.HasIndex("RespuestaId", "Soporte", "Formato")
+                        .IsUnique()
+                        .HasDatabaseName("ix_formatos_serie_respuesta_id_soporte_formato");
+
+                    b.ToTable("formatos_serie", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.GoogleAuthConfig", b =>
@@ -2006,6 +2562,253 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("platform_users", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.PowerBiReporte", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("EmbedUrl")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("embed_url");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_power_bi_reportes");
+
+                    b.HasIndex("TenantId", "Orden")
+                        .HasDatabaseName("ix_power_bi_reportes_tenant_id_orden");
+
+                    b.ToTable("power_bi_reportes", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoActividad", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Detalle")
+                        .HasColumnType("text")
+                        .HasColumnName("detalle");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("nombre");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<Guid>("ProcesoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proceso_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proceso_actividades");
+
+                    b.HasIndex("ProcesoId")
+                        .HasDatabaseName("ix_proceso_actividades_proceso_id");
+
+                    b.HasIndex("TenantId", "ProcesoId", "Orden")
+                        .HasDatabaseName("ix_proceso_actividades_tenant_id_proceso_id_orden");
+
+                    b.ToTable("proceso_actividades", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoDefinicion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("Sucursal")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sucursal");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_procesos_definicion");
+
+                    b.HasIndex("TenantId", "Sucursal", "Codigo", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_procesos_definicion_tenant_id_sucursal_codigo_version");
+
+                    b.ToTable("procesos_definicion", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoInstancia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActividadActualId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actividad_actual_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTimeOffset?>("FechaFin")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_fin");
+
+                    b.Property<DateTimeOffset>("FechaInicio")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_inicio");
+
+                    b.Property<Guid>("ProcesoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proceso_id");
+
+                    b.Property<Guid?>("RadicadoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("radicado_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proceso_instancias");
+
+                    b.HasIndex("ProcesoId")
+                        .HasDatabaseName("ix_proceso_instancias_proceso_id");
+
+                    b.HasIndex("RadicadoId")
+                        .HasDatabaseName("ix_proceso_instancias_radicado_id");
+
+                    b.HasIndex("TenantId", "Estado")
+                        .HasDatabaseName("ix_proceso_instancias_tenant_id_estado");
+
+                    b.ToTable("proceso_instancias", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.Profesional", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2262,6 +3065,94 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("quote_templates", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.Radicado", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Asunto")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("asunto");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTimeOffset>("FechaRadicacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_radicacion");
+
+                    b.Property<int?>("LegacyReg")
+                        .HasColumnType("integer")
+                        .HasColumnName("legacy_reg");
+
+                    b.Property<string>("Numero")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("numero");
+
+                    b.Property<string>("Remitente")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("remitente");
+
+                    b.Property<string>("Sucursal")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sucursal");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid?>("TipologiaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tipologia_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_radicados");
+
+                    b.HasIndex("TipologiaId")
+                        .HasDatabaseName("ix_radicados_tipologia_id");
+
+                    b.HasIndex("TenantId", "Estado", "FechaRadicacion")
+                        .HasDatabaseName("ix_radicados_tenant_id_estado_fecha_radicacion");
+
+                    b.HasIndex("TenantId", "Sucursal", "Numero")
+                        .IsUnique()
+                        .HasDatabaseName("ix_radicados_tenant_id_sucursal_numero");
+
+                    b.ToTable("radicados", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.RelacionFormulario", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2325,6 +3216,170 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_relaciones_formulario_tenant_id_formulario_origen_id_formul");
 
                     b.ToTable("relaciones_formulario", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.RespuestaTablaDocumental", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CreadoPor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("creado_por");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("DependenciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dependencia_id");
+
+                    b.Property<bool>("DispCt")
+                        .HasColumnType("boolean")
+                        .HasColumnName("disp_ct");
+
+                    b.Property<bool>("DispD")
+                        .HasColumnType("boolean")
+                        .HasColumnName("disp_d");
+
+                    b.Property<bool>("DispE")
+                        .HasColumnType("boolean")
+                        .HasColumnName("disp_e");
+
+                    b.Property<string>("DispObserv")
+                        .HasColumnType("text")
+                        .HasColumnName("disp_observ");
+
+                    b.Property<bool>("DispS")
+                        .HasColumnType("boolean")
+                        .HasColumnName("disp_s");
+
+                    b.Property<string>("Extension")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("extension");
+
+                    b.Property<DateTimeOffset>("FechaReg")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_reg");
+
+                    b.Property<string>("RelacionSig")
+                        .HasColumnType("text")
+                        .HasColumnName("relacion_sig");
+
+                    b.Property<string>("Representativo")
+                        .HasColumnType("text")
+                        .HasColumnName("representativo");
+
+                    b.Property<bool>("SerieDdhh")
+                        .HasColumnType("boolean")
+                        .HasColumnName("serie_ddhh");
+
+                    b.Property<Guid>("SerieId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("serie_id");
+
+                    b.Property<bool>("SinSubserie")
+                        .HasColumnType("boolean")
+                        .HasColumnName("sin_subserie");
+
+                    b.Property<Guid?>("SubserieId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subserie_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<decimal?>("TiempoAc")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tiempo_ac");
+
+                    b.Property<decimal?>("TiempoAg")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tiempo_ag");
+
+                    b.Property<string>("TiempoObserv")
+                        .HasColumnType("text")
+                        .HasColumnName("tiempo_observ");
+
+                    b.Property<Guid?>("TipologiaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tipologia_id");
+
+                    b.Property<Guid>("TrdId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trd_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<bool>("Val1Admin")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val1admin");
+
+                    b.Property<bool>("Val1Contable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val1contable");
+
+                    b.Property<bool>("Val1Fiscal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val1fiscal");
+
+                    b.Property<bool>("Val1Legal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val1legal");
+
+                    b.Property<bool>("Val1Tecnica")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val1tecnica");
+
+                    b.Property<bool>("Val2Cientifica")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val2cientifica");
+
+                    b.Property<bool>("Val2Cultural")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val2cultural");
+
+                    b.Property<bool>("Val2Historica")
+                        .HasColumnType("boolean")
+                        .HasColumnName("val2historica");
+
+                    b.HasKey("Id")
+                        .HasName("pk_respuestas_tabla_documental");
+
+                    b.HasIndex("DependenciaId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_dependencia_id");
+
+                    b.HasIndex("SerieId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_serie_id");
+
+                    b.HasIndex("SubserieId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_subserie_id");
+
+                    b.HasIndex("TipologiaId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_tipologia_id");
+
+                    b.HasIndex("TrdId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_trd_id");
+
+                    b.HasIndex("TenantId", "TrdId", "DependenciaId")
+                        .HasDatabaseName("ix_respuestas_tabla_documental_tenant_id_trd_id_dependencia_id");
+
+                    b.ToTable("respuestas_tabla_documental", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Rol", b =>
@@ -2558,6 +3613,108 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("saas_plan_limits", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.Segmento", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_segmentos");
+
+                    b.HasIndex("TenantId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_segmentos_tenant_id_codigo");
+
+                    b.ToTable("segmentos", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Serie", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_series");
+
+                    b.HasIndex("TenantId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_series_tenant_id_codigo");
+
+                    b.ToTable("series", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.SqlConsoleLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2673,6 +3830,59 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_sub_categorias_profesional_tenant_id_nombre");
 
                     b.ToTable("sub_categorias_profesional", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Subserie", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<Guid>("SerieId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("serie_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_subseries");
+
+                    b.HasIndex("SerieId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_subseries_serie_id_codigo");
+
+                    b.ToTable("subseries", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Sucursal", b =>
@@ -2823,6 +4033,165 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_super_admin_audit_logs_tenant_id");
 
                     b.ToTable("super_admin_audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.TablaRetencionDocumental", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Consecutivo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("consecutivo");
+
+                    b.Property<Guid>("CreadoPor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("creado_por");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateOnly?>("FechaFin")
+                        .HasColumnType("date")
+                        .HasColumnName("fecha_fin");
+
+                    b.Property<DateOnly?>("FechaInicio")
+                        .HasColumnType("date")
+                        .HasColumnName("fecha_inicio");
+
+                    b.Property<DateTimeOffset?>("FechaNovedad")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_novedad");
+
+                    b.Property<string>("Observaciones")
+                        .HasColumnType("text")
+                        .HasColumnName("observaciones");
+
+                    b.Property<Guid?>("SegmentoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("segmento_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titulo");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tablas_retencion_documental");
+
+                    b.HasIndex("SegmentoId")
+                        .HasDatabaseName("ix_tablas_retencion_documental_segmento_id");
+
+                    b.HasIndex("TenantId", "Consecutivo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tablas_retencion_documental_tenant_id_consecutivo");
+
+                    b.ToTable("tablas_retencion_documental", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Tarea", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActividadId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actividad_id");
+
+                    b.Property<string>("ActividadNombre")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("actividad_nombre");
+
+                    b.Property<Guid?>("AsignadoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asignado_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTimeOffset?>("FechaCompletada")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_completada");
+
+                    b.Property<DateTimeOffset>("FechaCreacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<Guid>("InstanciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instancia_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tareas");
+
+                    b.HasIndex("ActividadId")
+                        .HasDatabaseName("ix_tareas_actividad_id");
+
+                    b.HasIndex("InstanciaId")
+                        .HasDatabaseName("ix_tareas_instancia_id");
+
+                    b.HasIndex("TenantId", "InstanciaId")
+                        .HasDatabaseName("ix_tareas_tenant_id_instancia_id");
+
+                    b.HasIndex("TenantId", "AsignadoId", "Estado")
+                        .HasDatabaseName("ix_tareas_tenant_id_asignado_id_estado");
+
+                    b.ToTable("tareas", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.TemplateAsset", b =>
@@ -3575,6 +4944,156 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("tipologia_archivos", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.TipologiaDocumental", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("nombre");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<Guid?>("SerieId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("serie_id");
+
+                    b.Property<Guid?>("SubserieId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("subserie_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tipologias_documentales");
+
+                    b.HasIndex("SerieId")
+                        .HasDatabaseName("ix_tipologias_documentales_serie_id");
+
+                    b.HasIndex("SubserieId")
+                        .HasDatabaseName("ix_tipologias_documentales_subserie_id");
+
+                    b.HasIndex("TenantId", "Codigo")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tipologias_documentales_tenant_id_codigo");
+
+                    b.ToTable("tipologias_documentales", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.TokenDependencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ConsumidoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumido_en");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("DependenciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dependencia_id");
+
+                    b.Property<string>("EmailColaborador")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("email_colaborador");
+
+                    b.Property<DateTimeOffset?>("ExpiraEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_en");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("token");
+
+                    b.Property<Guid>("TrdId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trd_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tokens_dependencia");
+
+                    b.HasIndex("DependenciaId")
+                        .HasDatabaseName("ix_tokens_dependencia_dependencia_id");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tokens_dependencia_token");
+
+                    b.HasIndex("TrdId")
+                        .HasDatabaseName("ix_tokens_dependencia_trd_id");
+
+                    b.HasIndex("TenantId", "TrdId")
+                        .HasDatabaseName("ix_tokens_dependencia_tenant_id_trd_id");
+
+                    b.ToTable("tokens_dependencia", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.WhatsAppLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3845,6 +5364,25 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("Agent");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoDigital", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Carpeta", "Carpeta")
+                        .WithMany()
+                        .HasForeignKey("CarpetaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_archivos_digitales_carpetas_carpeta_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.TipologiaDocumental", "Tipologia")
+                        .WithMany()
+                        .HasForeignKey("TipologiaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_archivos_digitales_tipologias_documentales_tipologia_id");
+
+                    b.Navigation("Carpeta");
+
+                    b.Navigation("Tipologia");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.AutomationRule", b =>
                 {
                     b.HasOne("DokTrino.Domain.Entities.AiAgent", "AiAgent")
@@ -3854,6 +5392,48 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_automation_rules_ai_agents_ai_agent_id");
 
                     b.Navigation("AiAgent");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Caja", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Bodega", "Bodega")
+                        .WithMany("Cajas")
+                        .HasForeignKey("BodegaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_cajas_bodegas_bodega_id");
+
+                    b.Navigation("Bodega");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Carpeta", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Caja", "Caja")
+                        .WithMany("Carpetas")
+                        .HasForeignKey("CajaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_carpetas_cajas_caja_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.TipologiaDocumental", "Tipologia")
+                        .WithMany()
+                        .HasForeignKey("TipologiaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_carpetas_tipologias_documentales_tipologia_id");
+
+                    b.Navigation("Caja");
+
+                    b.Navigation("Tipologia");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ColaboradorDependencia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Dependencia", "Dependencia")
+                        .WithMany()
+                        .HasForeignKey("DependenciaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_colaboradores_dependencia_dependencias_dependencia_id");
+
+                    b.Navigation("Dependencia");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Departamento", b =>
@@ -3866,6 +5446,26 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_departamentos_paises_pais_id");
 
                     b.Navigation("Pais");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Dependencia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Dependencia", "Padre")
+                        .WithMany("Hijos")
+                        .HasForeignKey("PadreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_dependencias_dependencias_padre_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.TablaRetencionDocumental", "Trd")
+                        .WithMany("Dependencias")
+                        .HasForeignKey("TrdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_dependencias_tablas_retencion_documental_trd_id");
+
+                    b.Navigation("Padre");
+
+                    b.Navigation("Trd");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.FollowUpTask", b =>
@@ -3890,6 +5490,30 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_form_definition_snapshots_form_definitions_form_definition_");
 
                     b.Navigation("FormDefinition");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.FormacionDependencia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.ColaboradorDependencia", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_formaciones_dependencia_colaboradores_dependencia_colaborad");
+
+                    b.Navigation("Colaborador");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.FormatoSerie", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.RespuestaTablaDocumental", "Respuesta")
+                        .WithMany("Formatos")
+                        .HasForeignKey("RespuestaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_formatos_serie_respuestas_tabla_documental_respuesta_id");
+
+                    b.Navigation("Respuesta");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Lead", b =>
@@ -3976,6 +5600,38 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("Stage");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoActividad", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.ProcesoDefinicion", "Proceso")
+                        .WithMany("Actividades")
+                        .HasForeignKey("ProcesoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_proceso_actividades_procesos_definicion_proceso_id");
+
+                    b.Navigation("Proceso");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoInstancia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.ProcesoDefinicion", "Proceso")
+                        .WithMany()
+                        .HasForeignKey("ProcesoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proceso_instancias_procesos_definicion_proceso_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.Radicado", "Radicado")
+                        .WithMany()
+                        .HasForeignKey("RadicadoId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_proceso_instancias_radicados_radicado_id");
+
+                    b.Navigation("Proceso");
+
+                    b.Navigation("Radicado");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.Profesional", b =>
                 {
                     b.HasOne("DokTrino.Domain.Entities.TipoProfesional", "TipoProfesional")
@@ -4020,6 +5676,17 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("SubCategoria");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.Radicado", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.TipologiaDocumental", "Tipologia")
+                        .WithMany()
+                        .HasForeignKey("TipologiaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_radicados_tipologias_documentales_tipologia_id");
+
+                    b.Navigation("Tipologia");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.RelacionFormulario", b =>
                 {
                     b.HasOne("DokTrino.Domain.Entities.FormDefinition", "FormularioDestino")
@@ -4039,6 +5706,52 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("FormularioDestino");
 
                     b.Navigation("FormularioOrigen");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.RespuestaTablaDocumental", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Dependencia", "Dependencia")
+                        .WithMany()
+                        .HasForeignKey("DependenciaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_respuestas_tabla_documental_dependencias_dependencia_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.Serie", "Serie")
+                        .WithMany()
+                        .HasForeignKey("SerieId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_respuestas_tabla_documental_series_serie_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.Subserie", "Subserie")
+                        .WithMany()
+                        .HasForeignKey("SubserieId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_respuestas_tabla_documental_subseries_subserie_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.TipologiaDocumental", "Tipologia")
+                        .WithMany()
+                        .HasForeignKey("TipologiaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_respuestas_tabla_documental_tipologias_documentales_tipolog");
+
+                    b.HasOne("DokTrino.Domain.Entities.TablaRetencionDocumental", "Trd")
+                        .WithMany()
+                        .HasForeignKey("TrdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_respuestas_tabla_documental_tablas_retencion_documental_trd");
+
+                    b.Navigation("Dependencia");
+
+                    b.Navigation("Serie");
+
+                    b.Navigation("Subserie");
+
+                    b.Navigation("Tipologia");
+
+                    b.Navigation("Trd");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.RolPermiso", b =>
@@ -4063,6 +5776,49 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_saas_plan_limits_saas_plans_plan_id");
 
                     b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Subserie", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Serie", "Serie")
+                        .WithMany("Subseries")
+                        .HasForeignKey("SerieId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_subseries_series_serie_id");
+
+                    b.Navigation("Serie");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.TablaRetencionDocumental", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Segmento", "Segmento")
+                        .WithMany()
+                        .HasForeignKey("SegmentoId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tablas_retencion_documental_segmentos_segmento_id");
+
+                    b.Navigation("Segmento");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Tarea", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.ProcesoActividad", "Actividad")
+                        .WithMany()
+                        .HasForeignKey("ActividadId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tareas_proceso_actividades_actividad_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.ProcesoInstancia", "Instancia")
+                        .WithMany("Tareas")
+                        .HasForeignKey("InstanciaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tareas_proceso_instancias_instancia_id");
+
+                    b.Navigation("Actividad");
+
+                    b.Navigation("Instancia");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.TenantPayment", b =>
@@ -4155,9 +5911,89 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("TenantUser");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.TipologiaDocumental", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Serie", "Serie")
+                        .WithMany()
+                        .HasForeignKey("SerieId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tipologias_documentales_series_serie_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.Subserie", "Subserie")
+                        .WithMany()
+                        .HasForeignKey("SubserieId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_tipologias_documentales_subseries_subserie_id");
+
+                    b.Navigation("Serie");
+
+                    b.Navigation("Subserie");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.TokenDependencia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Dependencia", "Dependencia")
+                        .WithMany()
+                        .HasForeignKey("DependenciaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tokens_dependencia_dependencias_dependencia_id");
+
+                    b.HasOne("DokTrino.Domain.Entities.TablaRetencionDocumental", "Trd")
+                        .WithMany()
+                        .HasForeignKey("TrdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tokens_dependencia_tablas_retencion_documental_trd_id");
+
+                    b.Navigation("Dependencia");
+
+                    b.Navigation("Trd");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Bodega", b =>
+                {
+                    b.Navigation("Cajas");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Caja", b =>
+                {
+                    b.Navigation("Carpetas");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Dependencia", b =>
+                {
+                    b.Navigation("Hijos");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoDefinicion", b =>
+                {
+                    b.Navigation("Actividades");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ProcesoInstancia", b =>
+                {
+                    b.Navigation("Tareas");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.RespuestaTablaDocumental", b =>
+                {
+                    b.Navigation("Formatos");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.SaasPlan", b =>
                 {
                     b.Navigation("Limits");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Serie", b =>
+                {
+                    b.Navigation("Subseries");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.TablaRetencionDocumental", b =>
+                {
+                    b.Navigation("Dependencias");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.TenantUser", b =>

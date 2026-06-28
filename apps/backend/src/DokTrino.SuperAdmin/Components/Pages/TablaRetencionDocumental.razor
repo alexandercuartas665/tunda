@@ -1,0 +1,246 @@
+@page "/trd"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject ITrdAdminService Trd
+@inject NavigationManager Nav
+
+<PageTitle>Encuesta Documental - Admin TRD - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Gestion Documental - 2.D1</div>
+        <h1 class="ase-title">Encuesta Documental (Admin TRD)</h1>
+    </div>
+    <div>@if (_trds.Count == 0) { <button class="btn btn-outline-primary btn-sm" @onclick="SeedDemo">Sembrar TRD demo</button> }</div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Tablas de Retencion Documental (@_trds.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Consecutivo</th><th>Titulo</th><th>Segmento</th><th>Estado</th><th class="text-center">Dependencias</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _trds)
+                {
+                    <tr class="@(t.Id == _sel?.Id ? "trd-sel" : "")">
+                        <td><span class="mono">@t.Consecutivo</span></td><td>@t.Titulo</td><td>@(t.Segmento ?? "-")</td>
+                        <td><span class="trd-badge trd-@t.Estado">@t.Estado</span></td>
+                        <td class="text-center">@t.Dependencias</td>
+                        <td class="ase-row-actions">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => Seleccionar(t)">Organigrama</button>
+                            @if (t.Estado == "DESARROLLO") { <button class="btn btn-outline-success btn-sm" @onclick='() => Estado(t.Id, "ACTIVO")'>Activar</button> }
+                            else if (t.Estado == "ACTIVO") { <button class="btn btn-outline-secondary btn-sm" @onclick='() => Estado(t.Id, "CERRADO")'>Cerrar</button> }
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Eliminar(t.Id)">&times;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_trds.Count == 0) { <div class="ase-empty">Sin TRD. Crea una o siembra el demo.</div> }
+    </div>
+    <div class="trd-form">
+        <div class="trd-f trd-grow"><label>Titulo de la TRD</label><input class="form-control form-control-sm" @bind="_nt.Titulo" placeholder="TRD Institucional 2026" /></div>
+        <div class="trd-f"><label>Segmento</label>
+            <select class="form-select form-select-sm" @bind="_ntSeg">
+                <option value="">(sin segmento)</option>
+                @foreach (var s in _segmentos) { <option value="@s.Id">@s.Codigo - @s.Nombre</option> }
+            </select>
+        </div>
+        <div class="trd-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="CrearTrd">Crear TRD</button></div>
+    </div>
+</div>
+
+@if (_sel is not null)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Organigrama de dependencias - @_sel.Consecutivo (@_deps.Count)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Codigo</th><th>Dependencia (cargo/area)</th><th class="text-center">Nivel</th><th>Estado</th><th>Token colaborador</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var d in _deps)
+                    {
+                        <tr>
+                            <td><span class="mono">@d.Codigo</span></td>
+                            <td><span style="padding-left:@(d.Nivel * 18)px">@(d.Nivel > 0 ? "└ " : "")@d.NombreCargo</span></td>
+                            <td class="text-center">@d.Nivel</td>
+                            <td>@d.Estado</td>
+                            <td>@if (_tokenUrls.TryGetValue(d.Id, out var u)) { <a class="mono small" href="@u" target="_blank">@Trunc(u)</a> }</td>
+                            <td class="ase-row-actions">
+                                <button class="btn btn-outline-primary btn-sm" @onclick="() => Token(d.Id)">Generar token</button>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => DelDep(d.Id)">&times;</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_deps.Count == 0) { <div class="ase-empty">Sin dependencias. Agrega la raiz del organigrama.</div> }
+        </div>
+        <div class="trd-form">
+            <div class="trd-f"><label>Padre</label>
+                <select class="form-select form-select-sm" @bind="_ndPadre">
+                    <option value="">(raiz)</option>
+                    @foreach (var d in _deps) { <option value="@d.Id">@d.Codigo - @d.NombreCargo</option> }
+                </select>
+            </div>
+            <div class="trd-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nd.Codigo" placeholder="110" /></div>
+            <div class="trd-f trd-grow"><label>Nombre cargo/area</label><input class="form-control form-control-sm" @bind="_nd.NombreCargo" placeholder="Secretaria General" /></div>
+            <div class="trd-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddDep">Agregar dependencia</button></div>
+        </div>
+    </div>
+}
+
+<div class="ase-card">
+    <div class="ase-card-h">Catalogo: series, subseries y tipologias</div>
+    <div class="trd-cat">
+        <div>
+            <div class="trd-sub">Series (@_series.Count)</div>
+            @foreach (var s in _series) { <div class="trd-row"><span class="mono">@s.Codigo</span> @s.Nombre <span class="trd-muted">(@s.Subseries subseries)</span></div> }
+            <div class="trd-form">
+                <input class="form-control form-control-sm mono" style="max-width:90px" @bind="_nsCod" placeholder="100" />
+                <input class="form-control form-control-sm" @bind="_nsNom" placeholder="Actas" />
+                <button class="btn btn-primary btn-sm" @onclick="AddSerie">+ Serie</button>
+            </div>
+        </div>
+        <div>
+            <div class="trd-sub">Tipologias (@_tipos.Count)</div>
+            @foreach (var t in _tipos) { <div class="trd-row"><span class="mono">@t.Codigo</span> @t.Nombre <span class="trd-muted">@t.Tipo</span></div> }
+            <div class="trd-form">
+                <select class="form-select form-select-sm" @bind="_ntSerie" style="max-width:160px">
+                    <option value="">(serie)</option>
+                    @foreach (var s in _series) { <option value="@s.Id">@s.Codigo</option> }
+                </select>
+                <input class="form-control form-control-sm mono" style="max-width:110px" @bind="_ntiCod" placeholder="100-01" />
+                <input class="form-control form-control-sm" @bind="_ntiNom" placeholder="Acta de comite" />
+                <button class="btn btn-primary btn-sm" @onclick="AddTipo">+ Tipologia</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .trd-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
+    .trd-f { display:flex; flex-direction:column; gap:3px; }
+    .trd-f label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
+    .trd-grow { flex:1; min-width:220px; }
+    .trd-sel { background:var(--primary-soft); }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
+    .trd-badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; }
+    .trd-DESARROLLO { background:#fef9c3; color:#854d0e; }
+    .trd-ACTIVO { background:#dcfce7; color:#166534; }
+    .trd-CERRADO { background:#e2e8f0; color:#334155; }
+    .trd-cat { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .trd-sub { font-weight:700; margin-bottom:6px; }
+    .trd-row { padding:3px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .trd-muted { color:var(--muted-foreground); font-size:11px; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<TrdDto> _trds = new();
+    private List<SegmentoDto> _segmentos = new();
+    private List<DependenciaDto> _deps = new();
+    private List<SerieDto> _series = new();
+    private List<TipologiaDocDto> _tipos = new();
+    private Dictionary<Guid, string> _tokenUrls = new();
+    private TrdDto? _sel;
+
+    private CrearTrdRequest _nt = new();
+    private string _ntSeg = "";
+    private CrearDependenciaRequest _nd = new();
+    private string _ndPadre = "";
+    private string _nsCod = "", _nsNom = "", _ntiCod = "", _ntiNom = "", _ntSerie = "";
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll()
+    {
+        _trds = (await Trd.ListarTrdAsync()).ToList();
+        _segmentos = (await Trd.ListSegmentosAsync()).ToList();
+        _series = (await Trd.ListSeriesAsync()).ToList();
+        _tipos = (await Trd.ListTipologiasAsync()).ToList();
+        if (_sel is not null) { _deps = (await Trd.ArbolDependenciasAsync(_sel.Id)).ToList(); }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task CrearTrd()
+    {
+        _error = _ok = null;
+        _nt.SegmentoId = Guid.TryParse(_ntSeg, out var g) ? g : null;
+        try { var s = await Trd.CrearTrdAsync(_nt, await Actor()); if (s is null) { _error = "Sin tenant."; return; } _ok = $"TRD {s.Consecutivo} creada."; _nt = new(); _ntSeg = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Estado(Guid id, string e)
+    {
+        _error = _ok = null;
+        try { await Trd.CambiarEstadoAsync(id, e, await Actor()); _ok = $"Estado -> {e}."; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Eliminar(Guid id) { _error = _ok = null; if (_sel?.Id == id) { _sel = null; } await Trd.EliminarTrdAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task Seleccionar(TrdDto t) { _sel = t; _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList(); }
+
+    private async Task AddDep()
+    {
+        _error = _ok = null;
+        if (_sel is null) { return; }
+        _nd.TrdId = _sel.Id;
+        _nd.PadreId = Guid.TryParse(_ndPadre, out var g) ? g : null;
+        try { await Trd.AgregarDependenciaAsync(_nd, await Actor()); _nd = new(); _ndPadre = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task DelDep(Guid id) { _error = _ok = null; await Trd.EliminarDependenciaAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task Token(Guid depId)
+    {
+        _error = _ok = null;
+        try
+        {
+            var baseUrl = Nav.BaseUri.TrimEnd('/');
+            var t = await Trd.GenerarTokenAsync(depId, null, baseUrl, await Actor());
+            if (t is not null) { _tokenUrls[depId] = t.Url; _ok = "Token generado; copia el enlace para el colaborador."; }
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task AddSerie()
+    {
+        _error = _ok = null;
+        try { await Trd.CrearSerieAsync(_nsCod, _nsNom, await Actor()); _nsCod = ""; _nsNom = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task AddTipo()
+    {
+        _error = _ok = null;
+        Guid? serie = Guid.TryParse(_ntSerie, out var g) ? g : null;
+        try { await Trd.CrearTipologiaAsync(serie, null, _ntiCod, _ntiNom, "GENERAL", await Actor()); _ntiCod = ""; _ntiNom = ""; _ntSerie = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task SeedDemo()
+    {
+        _error = _ok = null;
+        var baseUrl = Nav.BaseUri.TrimEnd('/');
+        var n = await Trd.SeedDemoAsync(baseUrl, await Actor());
+        _ok = n > 0 ? "TRD demo sembrada (segmento, serie/subserie/tipologia, TRD con organigrama)." : "Ya existian TRD.";
+        await LoadAll();
+    }
+
+    private static string Trunc(string s) => s.Length > 48 ? "..." + s[^45..] : s;
+}

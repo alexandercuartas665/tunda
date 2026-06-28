@@ -80,11 +80,18 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Departamento> Departamentos => Set<Departamento>();
     public DbSet<Municipio> Municipios => Set<Municipio>();
 
-    // ----- Documental: Tabla de Retencion Documental (TRD) -----
-    public DbSet<SerieDocumental> SeriesDocumentales => Set<SerieDocumental>();
-    public DbSet<SubserieDocumental> SubseriesDocumentales => Set<SubserieDocumental>();
+    // ----- Documental: TRD (2.D1 admin + 2.D2 cliente, segun spec) -----
+    public DbSet<Segmento> Segmentos => Set<Segmento>();
+    public DbSet<TablaRetencionDocumental> TablasRetencionDocumental => Set<TablaRetencionDocumental>();
+    public DbSet<Dependencia> Dependencias => Set<Dependencia>();
+    public DbSet<Serie> Series => Set<Serie>();
+    public DbSet<Subserie> Subseries => Set<Subserie>();
     public DbSet<TipologiaDocumental> TipologiasDocumentales => Set<TipologiaDocumental>();
-    public DbSet<SerieDisposicion> SerieDisposiciones => Set<SerieDisposicion>();
+    public DbSet<TokenDependencia> TokensDependencia => Set<TokenDependencia>();
+    public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
+    public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
+    public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
+    public DbSet<FormacionDependencia> FormacionesDependencia => Set<FormacionDependencia>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -685,39 +692,108 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.DepartamentoId, x.Nombre }).IsUnique();
         });
 
-        // ----- Documental: TRD (serie -> subserie -> tipologia + disposicion) -----
-        modelBuilder.Entity<SerieDocumental>(b =>
+        // ----- Documental: TRD segun spec 2.D1 / 2.D2 -----
+        modelBuilder.Entity<Segmento>(b =>
         {
-            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
-            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
-            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
-            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo }).IsUnique();
+            b.Property(x => x.Codigo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
-        modelBuilder.Entity<SubserieDocumental>(b =>
+        modelBuilder.Entity<TablaRetencionDocumental>(b =>
         {
-            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
-            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Consecutivo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Observaciones).HasColumnType("text");
+            b.HasOne(x => x.Segmento).WithMany().HasForeignKey(x => x.SegmentoId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Consecutivo }).IsUnique();
+        });
+
+        modelBuilder.Entity<Dependencia>(b =>
+        {
+            b.Property(x => x.NombreCargo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired();
+            b.HasOne(x => x.Trd).WithMany(t => t.Dependencias).HasForeignKey(x => x.TrdId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Padre).WithMany(p => p.Hijos).HasForeignKey(x => x.PadreId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.TrdId, x.PadreId, x.Orden }).IsUnique();
+        });
+
+        modelBuilder.Entity<Serie>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<Subserie>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
             b.HasOne(x => x.Serie).WithMany(s => s.Subseries).HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.SerieId, x.Codigo }).IsUnique();
+            b.HasIndex(x => new { x.SerieId, x.Codigo }).IsUnique();
         });
 
         modelBuilder.Entity<TipologiaDocumental>(b =>
         {
-            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
-            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
-            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
-            b.Property(x => x.Tipo).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
             b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.SetNull);
-            b.HasOne(x => x.Subserie).WithMany().HasForeignKey(x => x.SubserieId).OnDelete(DeleteBehavior.SetNull);
-            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo }).IsUnique();
+            b.HasOne(x => x.Subserie).WithMany().HasForeignKey(x => x.SubserieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
-        modelBuilder.Entity<SerieDisposicion>(b =>
+        modelBuilder.Entity<TokenDependencia>(b =>
         {
-            b.Property(x => x.Procedimiento).HasColumnType("text");
-            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.SerieId });
+            b.Property(x => x.Token).HasMaxLength(80).IsRequired();
+            b.Property(x => x.EmailColaborador).HasMaxLength(160);
+            b.HasOne(x => x.Trd).WithMany().HasForeignKey(x => x.TrdId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => x.Token).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.TrdId });
+        });
+
+        modelBuilder.Entity<RespuestaTablaDocumental>(b =>
+        {
+            b.Property(x => x.TiempoAg).HasColumnType("numeric(5,2)");
+            b.Property(x => x.TiempoAc).HasColumnType("numeric(5,2)");
+            b.Property(x => x.TiempoObserv).HasColumnType("text");
+            b.Property(x => x.DispObserv).HasColumnType("text");
+            b.Property(x => x.Representativo).HasColumnType("text");
+            b.Property(x => x.RelacionSig).HasColumnType("text");
+            b.Property(x => x.Extension).HasColumnType("jsonb");
+            b.HasOne(x => x.Trd).WithMany().HasForeignKey(x => x.TrdId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Subserie).WithMany().HasForeignKey(x => x.SubserieId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.TrdId, x.DependenciaId });
+        });
+
+        modelBuilder.Entity<FormatoSerie>(b =>
+        {
+            b.Property(x => x.Soporte).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Formato).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Descripcion).HasColumnType("text");
+            b.HasOne(x => x.Respuesta).WithMany(r => r.Formatos).HasForeignKey(x => x.RespuestaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.RespuestaId, x.Soporte, x.Formato }).IsUnique();
+        });
+
+        modelBuilder.Entity<ColaboradorDependencia>(b =>
+        {
+            b.Property(x => x.Email).HasMaxLength(160).IsRequired();
+            b.Property(x => x.Rol).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.DependenciaId, x.Email }).IsUnique();
+        });
+
+        modelBuilder.Entity<FormacionDependencia>(b =>
+        {
+            b.Property(x => x.Modulo).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Colaborador).WithMany().HasForeignKey(x => x.ColaboradorId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.ColaboradorId });
         });
 
         modelBuilder.Entity<Radicado>(b =>
