@@ -624,4 +624,16 @@ app.MapPost("/webhooks/evolution", async (
         : Results.Accepted();
 }).AllowAnonymous().DisableAntiforgery();
 
+// Descarga del binario de un documento del archivo digital (stream desde MinIO).
+// Tenant-scoped: el query filter del DbContext (cookie) acota al tenant del usuario.
+app.MapGet("/archivo-digital/{id:guid}/contenido", async (
+    Guid id,
+    DokTrino.Application.Tenancy.IArchivoDigitalService svc,
+    CancellationToken ct) =>
+{
+    var d = await svc.DescargarAsync(id, ct);
+    if (d is null) { return Results.NotFound(); }
+    return Results.File(d.Content, d.Mime, d.FileName);
+}).RequireAuthorization();
+
 app.Run();

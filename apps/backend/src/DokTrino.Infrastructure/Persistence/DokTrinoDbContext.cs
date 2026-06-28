@@ -89,6 +89,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
     public DbSet<Carpeta> Carpetas => Set<Carpeta>();
+    public DbSet<ArchivoDigital> ArchivosDigitales => Set<ArchivoDigital>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -746,6 +747,22 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Caja).WithMany(x => x.Carpetas).HasForeignKey(x => x.CajaId).OnDelete(DeleteBehavior.SetNull);
             b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<ArchivoDigital>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(1000);
+            b.Property(x => x.Bucket).HasMaxLength(100).IsRequired();
+            b.Property(x => x.BlobKey).HasMaxLength(400).IsRequired();
+            b.Property(x => x.Mime).HasMaxLength(150).IsRequired();
+            b.Property(x => x.Sha256).HasMaxLength(64);
+            b.Property(x => x.Estado).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Carpeta).WithMany().HasForeignKey(x => x.CarpetaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.FechaSubida });
+            b.HasIndex(x => new { x.TenantId, x.CarpetaId });
         });
     }
 

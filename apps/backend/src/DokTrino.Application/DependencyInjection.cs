@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.ITrdService, Tenancy.TrdService>();
         services.AddScoped<Tenancy.IRadicacionService, Tenancy.RadicacionService>();
         services.AddScoped<Tenancy.IArchivoFisicoService, Tenancy.ArchivoFisicoService>();
+        services.AddScoped<Tenancy.IArchivoDigitalService, Tenancy.ArchivoDigitalService>();
         services.AddScoped<Tenancy.ITenantBrandingPublicoService, Tenancy.TenantBrandingPublicoService>();
         return services;
     }

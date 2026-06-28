@@ -56,6 +56,7 @@ public interface IApplicationDbContext
     DbSet<Bodega> Bodegas { get; }
     DbSet<Caja> Cajas { get; }
     DbSet<Carpeta> Carpetas { get; }
+    DbSet<ArchivoDigital> ArchivosDigitales { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }

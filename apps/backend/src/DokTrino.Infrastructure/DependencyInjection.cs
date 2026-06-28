@@ -47,6 +47,8 @@ public static class DependencyInjection
             .SetApplicationName("DokTrino")
             .PersistKeysToDbContext<DokTrinoDbContext>();
         services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+        // Object storage de documentos (MinIO / S3-compatible) para blobs del archivo digital.
+        services.AddSingleton<Application.Common.IDocumentBlobStorage, Storage.MinioDocumentBlobStorage>();
         // Correo saliente via SMTP configurable por el Super Admin (clave cifrada).
         services.AddScoped<Application.Common.IEmailSender, Email.SmtpEmailSender>();
         services.AddHttpClient<DokTrino.Application.Admin.IWompiApiClient, Wompi.WompiApiClient>();

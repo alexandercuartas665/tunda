@@ -1,0 +1,174 @@
+@page "/archivo-digital"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IArchivoDigitalService Arch
+
+<PageTitle>Archivo digital - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Gestion Documental</div>
+        <h1 class="ase-title">Archivo digital (documentos en MinIO)</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Subir documento</div>
+    <div class="ad-form">
+        <div class="ad-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_n.Sucursal" /></div>
+        <div class="ad-f ad-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_n.Nombre" placeholder="Acta firmada.pdf" /></div>
+        <div class="ad-f ad-grow"><label>Descripcion</label><input class="form-control form-control-sm" @bind="_n.Descripcion" /></div>
+        <div class="ad-f ad-grow"><label>Carpeta</label>
+            <select class="form-select form-select-sm" @bind="_nCarpeta">
+                <option value="">(sin carpeta)</option>
+                @foreach (var o in _carpOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="ad-f ad-grow"><label>Tipologia</label>
+            <select class="form-select form-select-sm" @bind="_nTip">
+                <option value="">(sin tipologia)</option>
+                @foreach (var o in _tipOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+    </div>
+    <div class="ad-form" style="margin-top:8px;">
+        <div class="ad-f ad-grow"><label>Archivo</label><InputFile class="form-control form-control-sm" OnChange="OnFile" /></div>
+        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Subir" disabled="@(_file is null || _busy)">@(_busy ? "Subiendo..." : "Subir")</button></div>
+        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-outline-primary btn-sm" @onclick="SubirDemo" disabled="@_busy">Subir documento demo</button></div>
+    </div>
+    @if (_file is not null) { <small class="text-muted">Seleccionado: @_file.Name (@FormatSize(_file.Size)) - @_file.ContentType</small> }
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Documentos (@_items.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Nombre</th><th>Tamano</th><th>Tipo</th><th>Carpeta</th><th>Tipologia</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _items)
+                {
+                    <tr>
+                        <td>@a.Nombre</td>
+                        <td>@FormatSize(a.SizeBytes)</td>
+                        <td><span class="mono">@a.Mime</span></td>
+                        <td><span class="mono">@(a.CarpetaCodigo ?? "-")</span></td>
+                        <td>@(a.TipologiaNombre ?? "-")</td>
+                        <td>@a.FechaSubida.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@a.Estado</td>
+                        <td class="ase-row-actions">
+                            <a class="btn btn-outline-primary btn-sm" href="/archivo-digital/@a.Id/contenido" target="_blank">Descargar</a>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Eliminar(a.Id)">&times;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_items.Count == 0) { <div class="ase-empty">Aun no hay documentos. Sube el primero.</div> }
+    </div>
+</div>
+
+<style>
+    .ad-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .ad-f { display: flex; flex-direction: column; gap: 3px; }
+    .ad-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
+    .ad-grow { flex: 1; min-width: 180px; }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 11px; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<ArchivoDigitalDto> _items = new();
+    private List<OpcionDto> _carpOpc = new(), _tipOpc = new();
+    private SubirArchivoRequest _n = new() { Sucursal = "PRINCIPAL" };
+    private string _nCarpeta = "", _nTip = "";
+    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _file;
+    private bool _busy;
+    private string? _error, _ok;
+
+    private const long MaxBytes = 16L * 1024 * 1024;
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll()
+    {
+        _items = (await Arch.ListAsync()).ToList();
+        _carpOpc = (await Arch.CarpetasParaSelectAsync()).ToList();
+        _tipOpc = (await Arch.TipologiasParaSelectAsync()).ToList();
+    }
+
+    private void OnFile(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        _error = _ok = null;
+        if (string.IsNullOrWhiteSpace(_n.Nombre)) { _n.Nombre = _file.Name; }
+    }
+
+    private async Task Subir()
+    {
+        _error = _ok = null;
+        if (_file is null) { _error = "Selecciona un archivo."; return; }
+        if (_file.Size > MaxBytes) { _error = "El archivo supera el limite de 16 MB."; return; }
+        _busy = true;
+        try
+        {
+            _n.CarpetaId = Guid.TryParse(_nCarpeta, out var c) ? c : null;
+            _n.TipologiaId = Guid.TryParse(_nTip, out var t) ? t : null;
+            _n.Mime = string.IsNullOrWhiteSpace(_file.ContentType) ? "application/octet-stream" : _file.ContentType;
+            await using var stream = _file.OpenReadStream(MaxBytes);
+            var saved = await Arch.SubirAsync(_n, stream, await Actor());
+            if (saved is null) { _error = "No se pudo subir (sin tenant activo)."; return; }
+            _ok = $"Documento '{saved.Nombre}' subido a MinIO ({FormatSize(saved.SizeBytes)}).";
+            _n = new() { Sucursal = "PRINCIPAL" };
+            _nCarpeta = ""; _nTip = ""; _file = null;
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = "Error al subir: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task SubirDemo()
+    {
+        _error = _ok = null;
+        _busy = true;
+        try
+        {
+            var texto = "ACTA DE COMITE DIRECTIVO\nDokTrino - documento demo del archivo digital.\nAlmacenado en object storage (MinIO).\nFecha: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\n";
+            var bytes = System.Text.Encoding.UTF8.GetBytes(texto);
+            using var ms = new MemoryStream(bytes);
+            var req = new SubirArchivoRequest { Sucursal = "PRINCIPAL", Nombre = "Acta demo.txt", Descripcion = "Documento de prueba subido a MinIO", Mime = "text/plain" };
+            var saved = await Arch.SubirAsync(req, ms, await Actor());
+            if (saved is null) { _error = "Sin tenant activo."; return; }
+            _ok = $"Documento demo '{saved.Nombre}' subido a MinIO ({FormatSize(saved.SizeBytes)}).";
+            await LoadAll();
+        }
+        catch (Exception ex) { _error = "Error al subir demo: " + ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task Eliminar(Guid id)
+    {
+        _error = _ok = null;
+        await Arch.EliminarAsync(id, await Actor());
+        await LoadAll();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) { return bytes + " B"; }
+        if (bytes < 1024 * 1024) { return (bytes / 1024.0).ToString("0.#") + " KB"; }
+        return (bytes / (1024.0 * 1024)).ToString("0.##") + " MB";
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}
