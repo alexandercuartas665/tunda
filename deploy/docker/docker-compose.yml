@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "${POSTGRES_PORT:-5435}:5432"
+      - "${POSTGRES_PORT:-5436}:5432"
     volumes:
       - doktrino-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -27,13 +27,14 @@ services:
     image: redis:7-alpine
     container_name: doktrino-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    # Dev: sin contrasena (la app se conecta a localhost:6383 sin auth). Anadir --requirepass en prod.
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-6382}:6379"
+      - "${REDIS_PORT:-6383}:6379"
     volumes:
       - doktrino-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -46,11 +47,11 @@ services:
     container_name: doktrino-rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "${RABBITMQ_PORT:-5674}:5672"
-      - "${RABBITMQ_MGMT_PORT:-15674}:15672"
+      - "${RABBITMQ_PORT:-5675}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15675}:15672"
     volumes:
       - doktrino-rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -67,8 +68,8 @@ services:
     container_name: doktrino-pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_EMAIL_USER:-admin}@${PGADMIN_EMAIL_DOMAIN:-doktrino.local}"
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
       PGADMIN_CONFIG_SERVER_MODE: "False"
       PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     ports:
@@ -78,6 +79,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - doktrino-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: doktrino-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_API_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_PORT:-9003}:9001"
+    volumes:
+      - doktrino-minio-data:/data
     networks:
       - doktrino-net
 
@@ -100,6 +117,7 @@ volumes:
   doktrino-redis-data:
   doktrino-rabbitmq-data:
   doktrino-pgadmin-data:
+  doktrino-minio-data:
 
 networks:
   doktrino-net:
