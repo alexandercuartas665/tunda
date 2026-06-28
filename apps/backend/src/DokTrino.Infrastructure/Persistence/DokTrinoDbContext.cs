@@ -80,6 +80,12 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Departamento> Departamentos => Set<Departamento>();
     public DbSet<Municipio> Municipios => Set<Municipio>();
 
+    // ----- Documental: Tabla de Retencion Documental (TRD) -----
+    public DbSet<SerieDocumental> SeriesDocumentales => Set<SerieDocumental>();
+    public DbSet<SubserieDocumental> SubseriesDocumentales => Set<SubserieDocumental>();
+    public DbSet<TipologiaDocumental> TipologiasDocumentales => Set<TipologiaDocumental>();
+    public DbSet<SerieDisposicion> SerieDisposiciones => Set<SerieDisposicion>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Todos los enums se persisten como texto (legibles y estables ante reordenamientos).
@@ -666,8 +672,40 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.DepartamentoId, x.Nombre }).IsUnique();
         });
 
+        // ----- Documental: TRD (serie -> subserie -> tipologia + disposicion) -----
+        modelBuilder.Entity<SerieDocumental>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo }).IsUnique();
+        });
 
+        modelBuilder.Entity<SubserieDocumental>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.HasOne(x => x.Serie).WithMany(s => s.Subseries).HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.SerieId, x.Codigo }).IsUnique();
+        });
 
+        modelBuilder.Entity<TipologiaDocumental>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Tipo).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Subserie).WithMany().HasForeignKey(x => x.SubserieId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<SerieDisposicion>(b =>
+        {
+            b.Property(x => x.Procedimiento).HasColumnType("text");
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.SerieId });
+        });
     }
 
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)

@@ -48,6 +48,10 @@ public interface IApplicationDbContext
     DbSet<Pais> Paises { get; }
     DbSet<Departamento> Departamentos { get; }
     DbSet<Municipio> Municipios { get; }
+    DbSet<SerieDocumental> SeriesDocumentales { get; }
+    DbSet<SubserieDocumental> SubseriesDocumentales { get; }
+    DbSet<TipologiaDocumental> TipologiasDocumentales { get; }
+    DbSet<SerieDisposicion> SerieDisposiciones { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }
