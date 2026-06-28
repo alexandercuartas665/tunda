@@ -64,27 +64,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<AutomationRule> AutomationRules => Set<AutomationRule>();
     public DbSet<FormDefinition> FormDefinitions => Set<FormDefinition>();
     public DbSet<FormDefinitionSnapshot> FormDefinitionSnapshots => Set<FormDefinitionSnapshot>();
-    public DbSet<HistoriaClinica> HistoriasClinicas => Set<HistoriaClinica>();
-    public DbSet<HistoriaClinicaMedicamento> HistoriaClinicaMedicamentos => Set<HistoriaClinicaMedicamento>();
-    public DbSet<HistoriaClinicaOrdenServicio> HistoriaClinicaOrdenesServicio => Set<HistoriaClinicaOrdenServicio>();
-    public DbSet<HistoriaClinicaInsumo> HistoriaClinicaInsumos => Set<HistoriaClinicaInsumo>();
     public DbSet<SqlConsoleLog> SqlConsoleLogs => Set<SqlConsoleLog>();
-    public DbSet<HistoriaClinicaIncapacidad> HistoriaClinicaIncapacidades => Set<HistoriaClinicaIncapacidad>();
-    public DbSet<HistoriaClinicaCertificacion> HistoriaClinicaCertificaciones => Set<HistoriaClinicaCertificacion>();
-    public DbSet<HistoriaClinicaRemision> HistoriaClinicaRemisiones => Set<HistoriaClinicaRemision>();
-    public DbSet<AsistenteChatMensaje> AsistenteChatMensajes => Set<AsistenteChatMensaje>();
     public DbSet<RelacionFormulario> RelacionesFormulario => Set<RelacionFormulario>();
-    public DbSet<HistoriaClinicaEscala> HistoriaClinicaEscalas => Set<HistoriaClinicaEscala>();
-    public DbSet<HistoriaClinicaDocumento> HistoriaClinicaDocumentos => Set<HistoriaClinicaDocumento>();
-    public DbSet<Medicamento> Medicamentos => Set<Medicamento>();
-    public DbSet<Cup> Cups => Set<Cup>();
-    public DbSet<NotaMedica> NotasMedicas => Set<NotaMedica>();
-    public DbSet<NotaMedicaDocumento> NotaMedicaDocumentos => Set<NotaMedicaDocumento>();
-    public DbSet<FirmaPacienteRequest> FirmaPacienteRequests => Set<FirmaPacienteRequest>();
     public DbSet<TipologiaArchivo> TipologiaArchivos => Set<TipologiaArchivo>();
-    public DbSet<Aseguradora> Aseguradoras => Set<Aseguradora>();
-    public DbSet<ContratoAseguradora> ContratosAseguradora => Set<ContratoAseguradora>();
-    public DbSet<ServicioContrato> ServiciosContrato => Set<ServicioContrato>();
     public DbSet<TipoProfesional> TiposProfesional => Set<TipoProfesional>();
     public DbSet<SubCategoriaProfesional> SubCategoriasProfesional => Set<SubCategoriaProfesional>();
     public DbSet<Profesional> Profesionales => Set<Profesional>();
@@ -94,20 +76,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<RolPermiso> RolPermisos => Set<RolPermiso>();
     public DbSet<Sucursal> Sucursales => Set<Sucursal>();
     public DbSet<TenantUserSucursal> TenantUserSucursales => Set<TenantUserSucursal>();
-    public DbSet<Paciente> Pacientes => Set<Paciente>();
-    public DbSet<PacienteContactoEmergencia> PacienteContactosEmergencia => Set<PacienteContactoEmergencia>();
-    public DbSet<CatalogoPaciente> CatalogosPaciente => Set<CatalogoPaciente>();
-    public DbSet<AsignacionLote> AsignacionLotes => Set<AsignacionLote>();
-    public DbSet<Asignacion> Asignaciones => Set<Asignacion>();
-    public DbSet<AsignacionTurno> AsignacionTurnos => Set<AsignacionTurno>();
-    public DbSet<AsignacionTurnoSesion> AsignacionTurnoSesiones => Set<AsignacionTurnoSesion>();
-    public DbSet<Cie11Config> Cie11Configs => Set<Cie11Config>();
     public DbSet<Pais> Paises => Set<Pais>();
     public DbSet<Departamento> Departamentos => Set<Departamento>();
     public DbSet<Municipio> Municipios => Set<Municipio>();
-    public DbSet<InteroperabilidadConfig> InteroperabilidadConfigs => Set<InteroperabilidadConfig>();
-    public DbSet<InteroperabilidadCredencialSede> InteroperabilidadCredencialesSede => Set<InteroperabilidadCredencialSede>();
-    public DbSet<RdaEvento> RdaEventos => Set<RdaEvento>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -137,10 +108,6 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         configurationBuilder.Properties<EvolutionIntegrationStatus>().HaveConversion<string>().HaveMaxLength(40);
         configurationBuilder.Properties<WebhookProcessingStatus>().HaveConversion<string>().HaveMaxLength(40);
         configurationBuilder.Properties<PipelineFieldType>().HaveConversion<string>().HaveMaxLength(40);
-        configurationBuilder.Properties<AmbienteIhce>().HaveConversion<string>().HaveMaxLength(20);
-        configurationBuilder.Properties<ModalidadRdaIhce>().HaveConversion<string>().HaveMaxLength(30);
-        configurationBuilder.Properties<EstadoRdaEvento>().HaveConversion<string>().HaveMaxLength(20);
-        configurationBuilder.Properties<TipoRdaIhce>().HaveConversion<string>().HaveMaxLength(20);
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -541,124 +508,11 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
                 .IsDescending(false, true);
         });
 
-        modelBuilder.Entity<Medicamento>(b =>
-        {
-            // Catalogo CUM (INVIMA). Sin uniques: la unicidad funcional viene del
-            // Excel oficial. NO usamos HasMaxLength: el INVIMA cambia los anchos
-            // sin avisar (vimos campos de 40 chars desbordando el ancho oficial
-            // documentado). En Postgres `text` y `varchar(n)` tienen el mismo
-            // rendimiento, asi que dejamos text para tolerar cualquier ancho.
-            // Indices solo en las columnas que se usan en busquedas frecuentes.
-            b.Property(x => x.Expediente).HasColumnType("text");
-            b.Property(x => x.Producto).HasColumnType("text");
-            b.Property(x => x.Titular).HasColumnType("text");
-            b.Property(x => x.RegistroSanitario).HasColumnType("text");
-            b.Property(x => x.EstadoRegistro).HasColumnType("text");
-            b.Property(x => x.ExpedienteCum).HasColumnType("text");
-            b.Property(x => x.ConsecutivoCum).HasColumnType("text");
-            b.Property(x => x.CantidadCum).HasColumnType("text");
-            b.Property(x => x.DescripcionComercial).HasColumnType("text");
-            b.Property(x => x.EstadoCum).HasColumnType("text");
-            b.Property(x => x.MuestraMedica).HasColumnType("text");
-            b.Property(x => x.Unidad).HasColumnType("text");
-            b.Property(x => x.Atc).HasColumnType("text");
-            b.Property(x => x.DescripcionAtc).HasColumnType("text");
-            b.Property(x => x.ViaAdministracion).HasColumnType("text");
-            b.Property(x => x.Concentracion).HasColumnType("text");
-            b.Property(x => x.PrincipioActivo).HasColumnType("text");
-            b.Property(x => x.UnidadMedida).HasColumnType("text");
-            b.Property(x => x.Cantidad).HasColumnType("text");
-            b.Property(x => x.UnidadReferencia).HasColumnType("text");
-            b.Property(x => x.FormaFarmaceutica).HasColumnType("text");
-            b.Property(x => x.NombreRol).HasColumnType("text");
-            b.Property(x => x.TipoRol).HasColumnType("text");
-            b.Property(x => x.Modalidad).HasColumnType("text");
-            b.Property(x => x.Ium).HasColumnType("text");
-            b.HasIndex(x => new { x.TenantId, x.Producto });
-            b.HasIndex(x => new { x.TenantId, x.RegistroSanitario });
-            b.HasIndex(x => new { x.TenantId, x.Ium });
-            b.HasIndex(x => new { x.TenantId, x.Atc });
-        });
 
-        modelBuilder.Entity<Cup>(b =>
-        {
-            // Catalogo CUPS (MSPS Colombia). Misma logica que Medicamentos:
-            // todos los strings como `text` para tolerar cualquier ancho del Excel
-            // oficial sin romper la carga. Indices en codigo/nombre/extras usados
-            // en la busqueda libre.
-            b.Property(x => x.Tabla).HasColumnType("text");
-            b.Property(x => x.Codigo).HasColumnType("text");
-            b.Property(x => x.Nombre).HasColumnType("text");
-            b.Property(x => x.Descripcion).HasColumnType("text");
-            b.Property(x => x.Habilitado).HasColumnType("text");
-            b.Property(x => x.Aplicacion).HasColumnType("text");
-            b.Property(x => x.IsStandardGEL).HasColumnType("text");
-            b.Property(x => x.IsStandardMSPS).HasColumnType("text");
-            b.Property(x => x.ExtraI).HasColumnType("text");
-            b.Property(x => x.ExtraII).HasColumnType("text");
-            b.Property(x => x.ExtraIII).HasColumnType("text");
-            b.Property(x => x.ExtraIV).HasColumnType("text");
-            b.Property(x => x.ExtraV).HasColumnType("text");
-            b.Property(x => x.ExtraVI).HasColumnType("text");
-            b.Property(x => x.ExtraVII).HasColumnType("text");
-            b.Property(x => x.ExtraVIII).HasColumnType("text");
-            b.Property(x => x.ExtraIX).HasColumnType("text");
-            b.Property(x => x.ExtraX).HasColumnType("text");
-            b.Property(x => x.ValorRegistro).HasColumnType("text");
-            b.Property(x => x.UsuarioResponsable).HasColumnType("text");
-            b.Property(x => x.IsPublicPrivate).HasColumnType("text");
-            b.HasIndex(x => new { x.TenantId, x.Codigo });
-            b.HasIndex(x => new { x.TenantId, x.Nombre });
-            b.HasIndex(x => new { x.TenantId, x.ExtraIV });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaMedicamento>(b =>
-        {
-            b.Property(x => x.NombreMedicamento).HasColumnType("text").IsRequired();
-            b.Property(x => x.Cantidad).HasColumnType("text");
-            b.Property(x => x.Frecuencia).HasColumnType("text");
-            b.Property(x => x.Dias).HasColumnType("text");
-            b.Property(x => x.Posologia).HasColumnType("text");
-            b.Property(x => x.Observacion).HasColumnType("text");
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasOne(x => x.Medicamento).WithMany().HasForeignKey(x => x.MedicamentoId)
-                .OnDelete(DeleteBehavior.SetNull);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaOrdenServicio>(b =>
-        {
-            b.Property(x => x.CodigoServicio).HasColumnType("text");
-            b.Property(x => x.Descripcion).HasColumnType("text").IsRequired();
-            b.Property(x => x.Cantidad).HasColumnType("text");
-            b.Property(x => x.Observaciones).HasColumnType("text");
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasOne(x => x.ServicioContrato).WithMany().HasForeignKey(x => x.ServicioContratoId)
-                .OnDelete(DeleteBehavior.SetNull);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaIncapacidad>(b =>
-        {
-            b.Property(x => x.Motivo).HasColumnType("text").IsRequired();
-            b.Property(x => x.Tipo).HasMaxLength(60);
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaInsumo>(b =>
-        {
-            b.Property(x => x.Codigo).HasColumnType("text");
-            b.Property(x => x.Descripcion).HasColumnType("text").IsRequired();
-            b.Property(x => x.Cantidad).HasColumnType("text");
-            b.Property(x => x.Observaciones).HasColumnType("text");
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
         modelBuilder.Entity<SqlConsoleLog>(b =>
         {
@@ -670,36 +524,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => x.ExecutedAt);
         });
 
-        modelBuilder.Entity<HistoriaClinicaCertificacion>(b =>
-        {
-            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
-            b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaRemision>(b =>
-        {
-            // Texto libre (sin HasMaxLength) para tolerar capitulos / nombres largos del CUPS oficial.
-            b.Property(x => x.Capitulo).HasColumnType("text").IsRequired();
-            b.Property(x => x.EspecialidadCodigo).HasColumnType("text");
-            b.Property(x => x.EspecialidadNombre).HasColumnType("text").IsRequired();
-            b.Property(x => x.Motivo).HasColumnType("text");
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Orden });
-        });
 
-        modelBuilder.Entity<AsistenteChatMensaje>(b =>
-        {
-            b.Property(x => x.Rol).HasMaxLength(20).IsRequired();
-            b.Property(x => x.Texto).HasColumnType("text").IsRequired();
-            b.Property(x => x.AgenteNombreSnapshot).HasMaxLength(200);
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.PacienteId, x.Cuando });
-        });
 
         modelBuilder.Entity<RelacionFormulario>(b =>
         {
@@ -713,74 +539,10 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.FormularioOrigenId, x.FormularioDestinoId }).IsUnique();
         });
 
-        modelBuilder.Entity<HistoriaClinicaEscala>(b =>
-        {
-            b.Property(x => x.ValoresJson).HasColumnType("jsonb").IsRequired();
-            b.Property(x => x.EspecialistaNombre).HasMaxLength(200);
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasOne(x => x.FormDefinition).WithMany().HasForeignKey(x => x.FormDefinitionId)
-                .OnDelete(DeleteBehavior.Restrict);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.FechaApertura });
-        });
 
-        modelBuilder.Entity<HistoriaClinicaDocumento>(b =>
-        {
-            b.Property(x => x.Tipo).HasMaxLength(40).IsRequired();
-            b.Property(x => x.ValoresJson).HasColumnType("jsonb").IsRequired();
-            b.Property(x => x.EspecialistaNombre).HasMaxLength(200);
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasOne(x => x.FormDefinition).WithMany().HasForeignKey(x => x.FormDefinitionId)
-                .OnDelete(DeleteBehavior.Restrict);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Tipo, x.FechaApertura });
-        });
 
-        modelBuilder.Entity<NotaMedica>(b =>
-        {
-            b.Property(x => x.CodigoUnico).HasMaxLength(20);
-            b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
-            b.Property(x => x.EspecialistaNombre).HasMaxLength(200);
-            b.Property(x => x.FirmaDataUrl).HasColumnType("text");
-            b.Property(x => x.FirmaPacienteDataUrl).HasColumnType("text");
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId)
-                .OnDelete(DeleteBehavior.Restrict);
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.FechaNota });
-            b.HasIndex(x => new { x.TenantId, x.PacienteId, x.FechaNota });
-            b.HasIndex(x => new { x.TenantId, x.Estado });
-            b.HasIndex(x => new { x.TenantId, x.Criticidad });
-        });
 
-        modelBuilder.Entity<NotaMedicaDocumento>(b =>
-        {
-            b.Property(x => x.NombreOriginal).HasMaxLength(255).IsRequired();
-            b.Property(x => x.RutaArchivo).HasMaxLength(500).IsRequired();
-            b.Property(x => x.TipoMime).HasMaxLength(120);
-            b.Property(x => x.Categoria).HasMaxLength(80);
-            b.Property(x => x.TipoTerapia).HasMaxLength(80);
-            b.Property(x => x.Mes).HasMaxLength(20);
-            b.Property(x => x.Anotaciones).HasColumnType("text");
-            b.HasOne(x => x.NotaMedica).WithMany().HasForeignKey(x => x.NotaMedicaId)
-                .OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.NotaMedicaId });
-            // Indice por paciente para que el tab "Documentos" de Admision liste rapido.
-            b.HasIndex(x => new { x.TenantId, x.PacienteId });
-        });
 
-        modelBuilder.Entity<FirmaPacienteRequest>(b =>
-        {
-            b.Property(x => x.Token).HasMaxLength(64).IsRequired();
-            b.Property(x => x.Telefono).HasMaxLength(20).IsRequired();
-            b.Property(x => x.NombreContacto).HasMaxLength(200);
-            b.Property(x => x.ImageDataUrl).HasColumnType("text");
-            // Token globalmente unico (no por tenant): es la clave de la URL publica
-            // y por eso lo buscamos via IgnoreQueryFilters en la pagina anonima.
-            b.HasIndex(x => x.Token).IsUnique();
-            b.HasIndex(x => new { x.TenantId, x.NotaMedicaId, x.Status });
-            b.HasIndex(x => new { x.TenantId, x.PacienteId });
-        });
 
         modelBuilder.Entity<TipologiaArchivo>(b =>
         {
@@ -790,38 +552,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.Activo });
         });
 
-        modelBuilder.Entity<HistoriaClinica>(b =>
-        {
-            b.Property(x => x.ValoresJson).HasColumnType("jsonb").IsRequired();
-            b.Property(x => x.EspecialistaNombre).HasMaxLength(200);
-            b.Property(x => x.MotivoInactivacion).HasMaxLength(500);
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId).OnDelete(DeleteBehavior.Restrict);
-            b.HasOne(x => x.FormDefinition).WithMany().HasForeignKey(x => x.FormDefinitionId).OnDelete(DeleteBehavior.Restrict);
-            b.HasOne(x => x.Profesional).WithMany().HasForeignKey(x => x.ProfesionalId).OnDelete(DeleteBehavior.SetNull);
-            b.HasIndex(x => new { x.TenantId, x.PacienteId, x.FechaApertura });
-        });
 
-        modelBuilder.Entity<Aseguradora>(b =>
-        {
-            b.Property(x => x.Codigo).HasMaxLength(40).IsRequired();
-            b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
-            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
-            b.Property(x => x.CodigoMovilidad).HasMaxLength(40);
-            b.Property(x => x.Nit).HasMaxLength(30);
-            b.Property(x => x.Regimen).HasMaxLength(40);
-            b.Property(x => x.CodInt).HasMaxLength(20);
-            b.Property(x => x.Descripcion).HasMaxLength(1000);
-            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
-        });
 
-        modelBuilder.Entity<ContratoAseguradora>(b =>
-        {
-            b.Property(x => x.CodigoContrato).HasMaxLength(60).IsRequired();
-            b.Property(x => x.Estado).HasMaxLength(20).IsRequired();
-            b.HasOne(x => x.Aseguradora).WithMany().HasForeignKey(x => x.AseguradoraId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.AseguradoraId });
-            b.HasIndex(x => new { x.TenantId, x.CodigoContrato });
-        });
 
         modelBuilder.Entity<TipoProfesional>(b =>
         {
@@ -866,22 +598,6 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.ProfesionalId });
         });
 
-        modelBuilder.Entity<ServicioContrato>(b =>
-        {
-            b.Property(x => x.Sede).HasMaxLength(200);
-            b.Property(x => x.Historia).HasMaxLength(40);
-            b.Property(x => x.CodigoServicio).HasMaxLength(40);
-            b.Property(x => x.CodigoInterno).HasMaxLength(40);
-            b.Property(x => x.Descripcion).HasMaxLength(300);
-            b.Property(x => x.Tarifa).HasPrecision(14, 2);
-            b.Property(x => x.Modulo).HasMaxLength(80);
-            b.Property(x => x.Especialidad).HasMaxLength(80);
-            b.Property(x => x.Modalidad).HasMaxLength(80);
-            b.Property(x => x.Clasificacion).HasMaxLength(80);
-            b.Property(x => x.Observaciones).HasMaxLength(1000);
-            b.HasOne(x => x.Contrato).WithMany().HasForeignKey(x => x.ContratoId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.ContratoId });
-        });
 
         modelBuilder.Entity<Rol>(b =>
         {
@@ -907,60 +623,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
-        modelBuilder.Entity<Paciente>(b =>
-        {
-            // Identificacion
-            b.Property(x => x.NumeroDocumento).HasMaxLength(30).IsRequired();
-            b.Property(x => x.TipoDocumento).HasMaxLength(10).IsRequired();
-            b.Property(x => x.PrimerNombre).HasMaxLength(80);
-            b.Property(x => x.SegundoNombre).HasMaxLength(80);
-            b.Property(x => x.PrimerApellido).HasMaxLength(80);
-            b.Property(x => x.SegundoApellido).HasMaxLength(80);
-            b.Property(x => x.NombreCompleto).HasMaxLength(250).IsRequired();
-            // Admin PAD
-            b.Property(x => x.CodigoAceptacion).HasMaxLength(40);
-            // Clasificaciones (texto libre por ahora)
-            b.Property(x => x.Incapacidad).HasMaxLength(60);
-            b.Property(x => x.GrupoRh).HasMaxLength(10);
-            b.Property(x => x.Estado).HasMaxLength(40);
-            b.Property(x => x.EstratoSocial).HasMaxLength(20);
-            b.Property(x => x.Sexo).HasMaxLength(20);
-            b.Property(x => x.EstadoCivil).HasMaxLength(40);
-            b.Property(x => x.Zona).HasMaxLength(40);
-            b.Property(x => x.Ocupacion).HasMaxLength(120);
-            b.Property(x => x.Regimen).HasMaxLength(40);
-            b.Property(x => x.Tutela).HasMaxLength(40);
-            // Diagnostico
-            b.Property(x => x.DiagnosticoPrincipal).HasMaxLength(500);
-            b.Property(x => x.Cie10Codigo).HasMaxLength(30);
-            // Geografia
-            b.Property(x => x.Direccion).HasMaxLength(300);
-            b.Property(x => x.Barrio).HasMaxLength(120);
-            b.Property(x => x.Ciudad).HasMaxLength(120);
-            // Contacto
-            b.Property(x => x.CodigoPaisTelefono).HasMaxLength(5);
-            b.Property(x => x.Telefono).HasMaxLength(40);
-            b.Property(x => x.Email).HasMaxLength(160);
-            // Emergencia (legacy: primer contacto duplicado en columnas planas)
-            b.Property(x => x.ContactoEmergencia).HasMaxLength(200);
-            b.Property(x => x.Parentesco).HasMaxLength(80);
-            b.Property(x => x.TelefonoEmergencia).HasMaxLength(40);
-            // FKs concretas (las catalogo se haran luego)
-            b.HasOne(x => x.Aseguradora).WithMany().HasForeignKey(x => x.AseguradoraId).OnDelete(DeleteBehavior.SetNull);
-            b.HasOne(x => x.SedeAtencion).WithMany().HasForeignKey(x => x.SedeAtencionId).OnDelete(DeleteBehavior.SetNull);
-            b.HasMany(x => x.ContactosEmergencia).WithOne(x => x.Paciente!)
-                .HasForeignKey(x => x.PacienteId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.NumeroDocumento }).IsUnique();
-        });
 
-        modelBuilder.Entity<PacienteContactoEmergencia>(b =>
-        {
-            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
-            b.Property(x => x.Parentesco).HasMaxLength(80);
-            b.Property(x => x.CodigoPais).HasMaxLength(5).IsRequired();
-            b.Property(x => x.Telefono).HasMaxLength(40);
-            b.HasIndex(x => x.PacienteId);
-        });
 
         modelBuilder.Entity<TenantUser>(b =>
         {
@@ -977,53 +640,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantUserId, x.SucursalId }).IsUnique();
         });
 
-        modelBuilder.Entity<CatalogoPaciente>(b =>
-        {
-            b.Property(x => x.Tipo).HasMaxLength(60).IsRequired();
-            b.Property(x => x.Codigo).HasMaxLength(40).IsRequired();
-            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
-            b.Property(x => x.Descripcion).HasMaxLength(500);
-            // Unico por tenant + tipo + codigo: cada catalogo tiene su propio espacio de codigos.
-            b.HasIndex(x => new { x.TenantId, x.Tipo, x.Codigo }).IsUnique();
-        });
 
-        modelBuilder.Entity<AsignacionLote>(b =>
-        {
-            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
-            b.Property(x => x.ContratoCodigo).HasMaxLength(60).IsRequired();
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId).OnDelete(DeleteBehavior.Restrict);
-            b.HasMany(x => x.Items).WithOne(x => x.Lote!).HasForeignKey(x => x.LoteId).OnDelete(DeleteBehavior.Cascade);
-            b.HasIndex(x => new { x.TenantId, x.PacienteId });
-        });
 
-        modelBuilder.Entity<Asignacion>(b =>
-        {
-            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
-            b.Property(x => x.ServicioId).HasMaxLength(60).IsRequired();
-            b.Property(x => x.NombreServicio).HasMaxLength(200).IsRequired();
-            b.Property(x => x.TipoServicio).HasMaxLength(40).IsRequired();
-            b.Property(x => x.Modulo).HasMaxLength(40);
-            b.Property(x => x.ContratoCodigo).HasMaxLength(60).IsRequired();
-            b.Property(x => x.CodigoAutorizacion).HasMaxLength(60);
-            b.Property(x => x.FormatoHistoria).HasMaxLength(60);
-            b.Property(x => x.Estado).HasMaxLength(30).IsRequired();
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId).OnDelete(DeleteBehavior.Restrict);
-            b.HasCheckConstraint("ck_asignaciones_cantidad", "cantidad > 0");
-            b.HasIndex(x => new { x.TenantId, x.PacienteId });
-            b.HasIndex(x => new { x.TenantId, x.Estado, x.MesVigencia, x.AnioServicio });
-            b.HasIndex(x => x.LoteId);
-        });
 
-        modelBuilder.Entity<Cie11Config>(b =>
-        {
-            b.Property(x => x.TokenUrl).HasMaxLength(300);
-            b.Property(x => x.ClientId).HasMaxLength(200);
-            b.Property(x => x.ClientSecret).HasMaxLength(400);
-            b.Property(x => x.SearchUrl).HasMaxLength(300);
-            b.Property(x => x.MmsUrlBase).HasMaxLength(300);
-            // Una sola fila de config por tenant.
-            b.HasIndex(x => x.TenantId).IsUnique();
-        });
 
         modelBuilder.Entity<Pais>(b =>
         {
@@ -1047,63 +666,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.DepartamentoId, x.Nombre }).IsUnique();
         });
 
-        modelBuilder.Entity<InteroperabilidadConfig>(b =>
-        {
-            b.Property(x => x.EndpointSandbox).HasMaxLength(500);
-            b.Property(x => x.EndpointProduccion).HasMaxLength(500);
-            b.Property(x => x.AzureTenantId).HasMaxLength(80);
-            b.Property(x => x.Scope).HasMaxLength(400);
-            // Secretos cifrados con Data Protection: el ciphertext crece ~3-4x, dejamos margen.
-            b.Property(x => x.ApimSubskeySandboxCifrada).HasColumnType("text");
-            b.Property(x => x.ApimSubskeyProduccionCifrada).HasColumnType("text");
-            // Paths de operaciones FHIR custom del API IHCE.
-            b.Property(x => x.PathEnvioRda).HasMaxLength(200).IsRequired();
-            b.Property(x => x.PathEnvioRdaConsulta).HasMaxLength(200).IsRequired();
-            b.Property(x => x.PathConsultarPaciente).HasMaxLength(200).IsRequired();
-            b.Property(x => x.PathConsultarProfesional).HasMaxLength(200).IsRequired();
-            // Una sola fila de configuracion por tenant.
-            b.HasIndex(x => x.TenantId).IsUnique();
-        });
 
-        modelBuilder.Entity<InteroperabilidadCredencialSede>(b =>
-        {
-            b.Property(x => x.CodigoHabilitacion).HasMaxLength(20);
-            b.Property(x => x.NombreLlave).HasMaxLength(200);
-            b.Property(x => x.ClientId).HasMaxLength(80);
-            b.Property(x => x.ClientSecretCifrado).HasColumnType("text");
-            b.HasOne(x => x.Sucursal).WithMany().HasForeignKey(x => x.SucursalId)
-                .OnDelete(DeleteBehavior.Cascade);
-            // Una credencial por sucursal x ambiente.
-            b.HasIndex(x => new { x.TenantId, x.SucursalId, x.Ambiente }).IsUnique();
-        });
 
-        modelBuilder.Entity<RdaEvento>(b =>
-        {
-            // El Bundle FHIR completo como texto. Postgres jsonb seria mas rico pero
-            // FHIR exige orden estable de propiedades y jsonb no lo respeta — text mantiene
-            // el JSON canonico identico al hash calculado.
-            b.Property(x => x.BundleJson).HasColumnType("text").IsRequired();
-            // SHA-256 hex (64 chars). Limitamos para que el indice unico sea barato.
-            b.Property(x => x.BundleHash).HasMaxLength(64).IsRequired();
-            b.Property(x => x.ReferenciaMinsalud).HasMaxLength(120);
-            b.Property(x => x.ErroresJson).HasColumnType("jsonb");
-
-            b.HasOne(x => x.HistoriaClinica).WithMany().HasForeignKey(x => x.HistoriaClinicaId)
-                .OnDelete(DeleteBehavior.Restrict);
-            b.HasOne(x => x.Paciente).WithMany().HasForeignKey(x => x.PacienteId)
-                .OnDelete(DeleteBehavior.Restrict);
-            b.HasOne(x => x.Profesional).WithMany().HasForeignKey(x => x.ProfesionalId)
-                .OnDelete(DeleteBehavior.SetNull);
-            b.HasOne(x => x.Sucursal).WithMany().HasForeignKey(x => x.SucursalId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Encontrar rapido el RDA activo de una HC.
-            b.HasIndex(x => new { x.TenantId, x.HistoriaClinicaId, x.Estado });
-            // Idempotencia: el mismo contenido no se procesa dos veces.
-            b.HasIndex(x => new { x.TenantId, x.BundleHash }).IsUnique();
-            // Feed de la lista en /interoperabilidad/rda (Ola 4): ultimos eventos por estado.
-            b.HasIndex(x => new { x.TenantId, x.Estado, x.FechaGeneracion });
-        });
     }
 
     private void ApplyTenantQueryFilters(ModelBuilder modelBuilder)

@@ -235,7 +235,7 @@ window.doktrinoVoice = (function () {
   font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 8px;
 }
 .fv-voice-mic { font-size: 22px; }
-#fv-voice-status.fv-voice-status-ok { color: #1565c0; }
+#fv-voice-status.fv-voice-status-ok { color: #0288d1; }
 #fv-voice-status.fv-voice-status-err { color: #b91c1c; }
 #fv-voice-status.fv-voice-status-paused { color: #64748b; }
 .fv-voice-interim {

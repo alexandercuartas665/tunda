@@ -119,9 +119,6 @@ else
     </div>@* /fv-shell *@
 }
 
-@* Picker CIE-11 unico, compartido por todas las celdas autocomplete con catalog=cie11
-   de esta instancia del viewer. El AbrirCie11Picker(cellKey) setea el target y abre. *@
-<Cie11Picker @bind-Visible="_cie11PickerOpen" OnSelected="OnCie11Selected" />
 
 <style>
     /* Celdas deshabilitadas por condicional EnabledByColumn. Se ven grises claras
@@ -179,9 +176,9 @@ else
         box-shadow: 0 2px 8px rgba(15,23,42,.08);
         transition: background-color .12s, color .12s, border-color .12s;
     }
-    .fv-toc-btn:hover { background: #eff6ff; color: #1565c0; border-color: #93c5fd; }
+    .fv-toc-btn:hover { background: #eff6ff; color: #0288d1; border-color: #93c5fd; }
     .fv-toc-btn-i { font-size: 14px; line-height: 1; }
-    .fv-toc-btn.open { background: #1565c0; color: #fff; border-color: #1565c0; }
+    .fv-toc-btn.open { background: #0288d1; color: #fff; border-color: #0288d1; }
 
     .fv-toc-pop {
         position: absolute;
@@ -219,11 +216,11 @@ else
         transition: background-color .12s, color .12s, border-color .12s;
         cursor: pointer;
     }
-    .fv-toc-link:hover { background: #eff6ff; color: #1565c0; text-decoration: none; }
+    .fv-toc-link:hover { background: #eff6ff; color: #0288d1; text-decoration: none; }
     .fv-toc-link.active {
         background: #eff6ff;
-        color: #1565c0;
-        border-left-color: #1565c0;
+        color: #0288d1;
+        border-left-color: #0288d1;
         font-weight: 700;
     }
 
@@ -254,7 +251,7 @@ else
         transition: background-color .12s, color .12s, border-color .12s;
         z-index: 5;
     }
-    .fv-voice-btn:hover { background: #eff6ff; color: #1565c0; border-color: #93c5fd; }
+    .fv-voice-btn:hover { background: #eff6ff; color: #0288d1; border-color: #93c5fd; }
     .fv-voice-btn.recording { background: #dc2626; color: #fff; border-color: #b91c1c; animation: fv-voice-pulse 1.2s infinite; }
     @@keyframes fv-voice-pulse {
         0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
@@ -938,28 +935,11 @@ else
                 }
                 break;
             case "autocomplete":
-                // Por ahora solo CIE-11 esta cableado para celdas de tabla. Otros
-                // catalogos (medicamentos, cups...) caerian al else con un input
-                // de texto plano hasta que se les agregue su picker propio.
-                @if (string.Equals(c.Catalog, "cie11", StringComparison.OrdinalIgnoreCase))
-                {
-                    <div class="fv-tbl-autocomp">
-                        <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
-                               placeholder="@ph"
-                               @onchange="e => setCell(e.Value?.ToString())" />
-                        <button type="button" class="btn btn-sm btn-outline-primary fv-tbl-lupa"
-                                disabled="@ro" title="Buscar diagnostico CIE-11"
-                                @onclick="() => AbrirCie11Picker(key)">
-                            &#128269;
-                        </button>
-                    </div>
-                }
-                else
-                {
-                    <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
-                           placeholder="@ph"
-                           @onchange="e => setCell(e.Value?.ToString())" />
-                }
+                // Catalogos de autocomplete (cie11, medicamentos, cups...) se renderizan
+                // como input de texto plano hasta cablear el picker documental que aplique.
+                <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
+                       placeholder="@ph"
+                       @onchange="e => setCell(e.Value?.ToString())" />
                 break;
             default:
                 <input type="text" class="form-control form-control-sm" disabled="@ro" value="@val"
@@ -968,29 +948,6 @@ else
                 break;
         }
     };
-
-    /// <summary>Estado para el picker CIE-11 compartido por todas las celdas
-    /// autocomplete de tipo cie11 dentro de esta instancia del viewer.
-    /// _cie11TargetKey nos dice a que celda escribir el resultado.</summary>
-    private bool _cie11PickerOpen;
-    private string? _cie11TargetKey;
-
-    private void AbrirCie11Picker(string cellKey)
-    {
-        _cie11TargetKey = cellKey;
-        _cie11PickerOpen = true;
-    }
-
-    private async Task OnCie11Selected((string Code, string Title) item)
-    {
-        if (string.IsNullOrEmpty(_cie11TargetKey)) { return; }
-        // Formato "CODIGO - Titulo". Asi la impresion y el RDA leen un campo
-        // unico legible; parsear el codigo aparte despues es trivial (split en
-        // el primer guion). Si el titulo viene vacio, guardamos solo el codigo.
-        var texto = string.IsNullOrWhiteSpace(item.Title) ? item.Code : $"{item.Code} - {item.Title}";
-        await SetValue(_cie11TargetKey, texto);
-        _cie11TargetKey = null;
-    }
 
     /// <summary>True si la celda esta habilitada segun su condicional. Si la columna
     /// no tiene EnabledByColumn configurado, siempre devuelve true (comportamiento

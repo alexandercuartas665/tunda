@@ -34,9 +34,6 @@ public interface IApplicationDbContext
     DbSet<AutomationRule> AutomationRules { get; }
     DbSet<FormDefinition> FormDefinitions { get; }
     DbSet<FormDefinitionSnapshot> FormDefinitionSnapshots { get; }
-    DbSet<Aseguradora> Aseguradoras { get; }
-    DbSet<ContratoAseguradora> ContratosAseguradora { get; }
-    DbSet<ServicioContrato> ServiciosContrato { get; }
     DbSet<TipoProfesional> TiposProfesional { get; }
     DbSet<SubCategoriaProfesional> SubCategoriasProfesional { get; }
     DbSet<Profesional> Profesionales { get; }
@@ -46,37 +43,11 @@ public interface IApplicationDbContext
     DbSet<RolPermiso> RolPermisos { get; }
     DbSet<Sucursal> Sucursales { get; }
     DbSet<TenantUserSucursal> TenantUserSucursales { get; }
-    DbSet<Paciente> Pacientes { get; }
-    DbSet<PacienteContactoEmergencia> PacienteContactosEmergencia { get; }
-    DbSet<CatalogoPaciente> CatalogosPaciente { get; }
-    DbSet<AsignacionLote> AsignacionLotes { get; }
-    DbSet<Asignacion> Asignaciones { get; }
-    DbSet<AsignacionTurno> AsignacionTurnos { get; }
-    DbSet<AsignacionTurnoSesion> AsignacionTurnoSesiones { get; }
-    DbSet<HistoriaClinica> HistoriasClinicas { get; }
-    DbSet<HistoriaClinicaMedicamento> HistoriaClinicaMedicamentos { get; }
-    DbSet<HistoriaClinicaOrdenServicio> HistoriaClinicaOrdenesServicio { get; }
-    DbSet<HistoriaClinicaIncapacidad> HistoriaClinicaIncapacidades { get; }
-    DbSet<HistoriaClinicaCertificacion> HistoriaClinicaCertificaciones { get; }
-    DbSet<HistoriaClinicaRemision> HistoriaClinicaRemisiones { get; }
-    DbSet<HistoriaClinicaInsumo> HistoriaClinicaInsumos { get; }
-    DbSet<AsistenteChatMensaje> AsistenteChatMensajes { get; }
     DbSet<RelacionFormulario> RelacionesFormulario { get; }
-    DbSet<HistoriaClinicaEscala> HistoriaClinicaEscalas { get; }
-    DbSet<HistoriaClinicaDocumento> HistoriaClinicaDocumentos { get; }
-    DbSet<Medicamento> Medicamentos { get; }
-    DbSet<Cup> Cups { get; }
-    DbSet<NotaMedica> NotasMedicas { get; }
-    DbSet<NotaMedicaDocumento> NotaMedicaDocumentos { get; }
-    DbSet<FirmaPacienteRequest> FirmaPacienteRequests { get; }
     DbSet<TipologiaArchivo> TipologiaArchivos { get; }
-    DbSet<Cie11Config> Cie11Configs { get; }
     DbSet<Pais> Paises { get; }
     DbSet<Departamento> Departamentos { get; }
     DbSet<Municipio> Municipios { get; }
-    DbSet<InteroperabilidadConfig> InteroperabilidadConfigs { get; }
-    DbSet<InteroperabilidadCredencialSede> InteroperabilidadCredencialesSede { get; }
-    DbSet<RdaEvento> RdaEventos { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }

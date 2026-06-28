@@ -99,8 +99,6 @@ else
     await seeder.EnsureAdministradorRolAsync();
     await seeder.EnsureSedesDokTrinoAsync();
     await seeder.EnsureDokTrinoRealUsersAsync();
-    await seeder.EnsureCatalogosPacienteDefaultAsync();
-    await seeder.EnsureCie11ConfigAsync();
 
     // Geografia (Pais/Departamento/Municipio) via api-colombia.com. Idempotente.
     // Si la API esta caida, solo registra warning y sigue.
@@ -205,7 +203,7 @@ app.MapPost("/auth/login", async (
         // a partir del NameIdentifier (platform_user_id) + tenant_id.
         var idGlobal = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(idGlobal));
-        return Results.Redirect("/admision");
+        return Results.Redirect("/");
     }
 
     // Sede especifica: el usuario eligio en que sucursal trabajar.
@@ -243,7 +241,7 @@ app.MapPost("/auth/login", async (
         await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(idSede));
         // Profesionales van directo a Atencion; el resto (admin/coordinador), a Admision
         // que es el punto de partida natural del flujo clinico.
-        return Results.Redirect(membership?.ProfesionalId is not null ? "/atencion" : "/admision");
+        return Results.Redirect(membership?.ProfesionalId is not null ? "/" : "/");
     }
 
     // Sin sede valida: fallback al flujo anterior (compatibilidad).
@@ -261,7 +259,7 @@ app.MapPost("/auth/login", async (
     }
     var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
     await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-    return Results.Redirect(memberships.Count == 1 && !user.EsGlobal ? "/admision" : "/seleccionar-empresa");
+    return Results.Redirect(memberships.Count == 1 && !user.EsGlobal ? "/" : "/seleccionar-empresa");
 }).DisableAntiforgery();
 
 // Selector de empresa: el usuario eligio un tenant tras el login. Validamos que pueda entrar
@@ -302,7 +300,7 @@ app.MapPost("/auth/select-empresa", async (
     // Si el usuario tiene exactamente una sede a su alcance, entrar directo con sucursal_id.
     // Si tiene varias o ninguna, dejarlo en el selector de sede (o seguir sin sede si no hay).
     var disponibles = await sedes.GetSedesAsync(userId, resultado.TenantId);
-    string destino = "/admision";
+    string destino = "/";
     if (disponibles.Count == 1)
     {
         keep.Add(new Claim("sucursal_id", disponibles[0].Id.ToString()));
@@ -353,7 +351,7 @@ app.MapPost("/auth/select-sede", async (
     var identity = new ClaimsIdentity(keep, CookieAuthenticationDefaults.AuthenticationScheme);
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-    return Results.Redirect("/admision");
+    return Results.Redirect("/");
 }).DisableAntiforgery();
 
 // Auto-registro (autogestion): un visitante crea su propia agencia + usuario Owner y queda
@@ -509,7 +507,7 @@ app.MapGet("/signin-google", async (
     {
         claims.Add(new Claim("tenant_id", result.TenantId!.Value.ToString()));
         claims.Add(new Claim("tenant_role", result.TenantRole ?? string.Empty));
-        redirect = "/admision";
+        redirect = "/";
     }
 
     var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -626,21 +624,4 @@ app.MapPost("/webhooks/evolution", async (
         : Results.Accepted();
 }).AllowAnonymous().DisableAntiforgery();
 
-// Endpoint publico que recibe la firma capturada en el celular del paciente.
-// La pagina /firma/{token} la sirve la propia app Blazor (componente FirmaPacienteRemota).
-// La submission usa este POST API porque persistir desde el Blazor anonimo sin tenant
-// scope era enredado: con un POST plano es trivial.
-app.MapPost("/api/firma/{token}/submit", async (
-    string token,
-    SubmitFirmaPayload payload,
-    DokTrino.Application.Tenancy.IFirmaRemotaService svc,
-    CancellationToken ct) =>
-{
-    var ok = await svc.GuardarFirmaPorTokenAsync(token, payload?.DataUrl ?? string.Empty, ct);
-    return ok ? Results.Ok(new { ok = true }) : Results.BadRequest(new { ok = false, error = "Solicitud invalida, ya cerrada o expirada." });
-}).AllowAnonymous().DisableAntiforgery();
-
 app.Run();
-
-// Payload del POST publico de firma (queda al fondo del file porque Program.cs es top-level).
-record SubmitFirmaPayload(string DataUrl);

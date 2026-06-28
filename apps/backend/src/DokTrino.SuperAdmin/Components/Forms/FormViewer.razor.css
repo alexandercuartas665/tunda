@@ -43,7 +43,7 @@
 .fv-logo-fallback {
     font-size: 18px;
     font-weight: 800;
-    color: #1565c0;
+    color: #0288d1;
     letter-spacing: 1px;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .fv-section-h {
-    background: #1565c0;
+    background: #0288d1;
     color: #fff;
     padding: 6px 12px;
     font-weight: 700;
@@ -198,15 +198,15 @@
 .fv-col select:focus,
 .fv-col textarea:focus {
     outline: none;
-    border-color: #1565c0;
-    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.1);
+    border-color: #0288d1;
+    box-shadow: 0 0 0 2px rgba(2,136,209, 0.1);
 }
 
 .fv-calc {
     background: #eff6ff !important;
     color: #0f172a;
     font-weight: 700;
-    border-color: #1565c0 !important;
+    border-color: #0288d1 !important;
 }
 
 /* Filas semilla (pre-rellenadas) en tablas: visualmente distintas */

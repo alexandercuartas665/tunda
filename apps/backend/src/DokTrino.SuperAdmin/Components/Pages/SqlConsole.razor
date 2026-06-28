@@ -223,12 +223,12 @@
     .sql-editor-actions { display:flex; align-items:center; gap:8px; }
     .sql-hint { font-size:11px; color:#94a3b8; }
     .sql-editor { width:100%; min-height:220px; font-family:'JetBrains Mono','Consolas',monospace; font-size:13px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#0f172a; color:#e2e8f0; line-height:1.5; }
-    .sql-editor:focus { outline:0; border-color:#1565c0; box-shadow:0 0 0 2px rgba(21,101,192,.2); }
+    .sql-editor:focus { outline:0; border-color:#0288d1; box-shadow:0 0 0 2px rgba(2,136,209,.2); }
 
     .sql-results-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
     .sql-result-meta { display:flex; gap:8px; font-size:11.5px; color:#475569; align-items:center; }
     .sql-pill { padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; }
-    .sql-pill-ok { background:#1565c0; color:#fff; }
+    .sql-pill-ok { background:#0288d1; color:#fff; }
     .sql-pill-err { background:#dc2626; color:#fff; }
     .sql-results-empty { padding:30px; text-align:center; font-style:italic; color:#94a3b8; }
     .sql-results-error { padding:14px; background:#fef2f2; border-radius:6px; color:#7f1d1d; font-size:12.5px; }
@@ -239,7 +239,7 @@
        lo cual genera scroll horizontal en el wrap cuando hay muchas columnas.
        Sin esto el browser comprime las columnas a 100% del contenedor. */
     .sql-table { width:max-content; min-width:100%; border-collapse:collapse; font-size:12px; }
-    .sql-table thead th { position:sticky; top:0; background:#1565c0; color:#fff; padding:6px 10px; text-align:left; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; }
+    .sql-table thead th { position:sticky; top:0; background:#0288d1; color:#fff; padding:6px 10px; text-align:left; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; }
     /* white-space:nowrap mantiene cada celda en una linea y deja que el ancho
        fluya horizontal en el scroll; max-width + ellipsis evita que un campo
        gigantesco (jsonb/text largo) destruya el layout. */
@@ -250,7 +250,7 @@
     .sql-hist-h { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
     .sql-hist-empty { padding:20px; text-align:center; font-style:italic; color:#94a3b8; font-size:12px; }
     .sql-hist-list { display:flex; flex-direction:column; gap:8px; max-height:70vh; overflow-y:auto; }
-    .sql-hist-item { border-left:3px solid #1565c0; background:#f8fafc; border-radius:6px; padding:8px 10px; cursor:pointer; transition:background .12s; }
+    .sql-hist-item { border-left:3px solid #0288d1; background:#f8fafc; border-radius:6px; padding:8px 10px; cursor:pointer; transition:background .12s; }
     .sql-hist-item.err { border-left-color:#dc2626; background:#fef2f2; }
     .sql-hist-item:hover { background:#e0e7ff; }
     .sql-hist-item.err:hover { background:#fee2e2; }
@@ -263,7 +263,7 @@
     .sql-explorer-aside { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:10px; position:sticky; top:10px; max-height:calc(100vh - 30px); display:flex; flex-direction:column; }
     .sql-explorer-h { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid #e2e8f0; }
     .sql-explorer-h strong { font-size:12px; color:#0f172a; text-transform:uppercase; letter-spacing:0.3px; flex:1; }
-    .sql-explorer-meta { font-size:11px; color:#fff; background:#1565c0; padding:1px 8px; border-radius:999px; font-weight:700; }
+    .sql-explorer-meta { font-size:11px; color:#fff; background:#0288d1; padding:1px 8px; border-radius:999px; font-weight:700; }
     .sql-explorer-filter { font-size:12px; margin-bottom:8px; }
     .sql-explorer-list { flex:1; overflow-y:auto; }
     .sql-explorer-loading { padding:14px; text-align:center; color:#94a3b8; font-style:italic; font-size:12px; }
@@ -271,7 +271,7 @@
     .sql-explorer-group-h { width:100%; display:flex; align-items:center; gap:6px; padding:5px 4px; background:none; border:0; cursor:pointer; text-align:left; border-radius:4px; transition:background .12s; }
     .sql-explorer-group-h:hover { background:#f1f5f9; }
     .sql-explorer-caret { color:#64748b; font-size:10px; width:10px; flex-shrink:0; }
-    .sql-explorer-group-name { flex:1; font-size:10.5px; font-weight:700; color:#1565c0; text-transform:uppercase; letter-spacing:0.4px; }
+    .sql-explorer-group-name { flex:1; font-size:10.5px; font-weight:700; color:#0288d1; text-transform:uppercase; letter-spacing:0.4px; }
     .sql-explorer-group-count { font-size:10px; color:#94a3b8; background:#f1f5f9; padding:1px 6px; border-radius:999px; font-weight:700; }
     .sql-explorer-items { display:flex; flex-direction:column; margin-left:10px; border-left:1px solid #e2e8f0; padding-left:6px; }
     .sql-explorer-item { width:100%; display:flex; align-items:center; gap:6px; padding:4px 6px; background:none; border:0; cursor:pointer; text-align:left; border-radius:4px; transition:background .12s; }

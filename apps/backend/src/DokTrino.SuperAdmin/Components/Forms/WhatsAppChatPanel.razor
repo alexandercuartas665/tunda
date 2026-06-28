@@ -5,7 +5,6 @@
 @inject IChatService Chat
 @inject IWhatsAppLineService LineasSvc
 @inject IMessageTemplateService TplSvc
-@inject IPacienteService PacientesSvc
 @inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment Env
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -1081,7 +1080,10 @@
         try
         {
             var completo = _telCodigoPais + numero;
-            var guardado = await PacientesSvc.UpdateTelefonoAsync(pid, completo, Guid.Empty);
+            // Edicion de telefono del contacto pendiente de re-cableado al modelo
+            // documental (se removio el acoplamiento clinico a Paciente).
+            _ = pid; await Task.CompletedTask;
+            string? guardado = null;
             if (string.IsNullOrEmpty(guardado))
             {
                 _telError = "No se pudo guardar el telefono.";
