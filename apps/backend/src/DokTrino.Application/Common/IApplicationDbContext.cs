@@ -52,6 +52,7 @@ public interface IApplicationDbContext
     DbSet<SubserieDocumental> SubseriesDocumentales { get; }
     DbSet<TipologiaDocumental> TipologiasDocumentales { get; }
     DbSet<SerieDisposicion> SerieDisposiciones { get; }
+    DbSet<Radicado> Radicados { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }

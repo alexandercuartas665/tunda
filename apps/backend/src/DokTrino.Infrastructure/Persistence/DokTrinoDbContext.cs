@@ -85,6 +85,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<SubserieDocumental> SubseriesDocumentales => Set<SubserieDocumental>();
     public DbSet<TipologiaDocumental> TipologiasDocumentales => Set<TipologiaDocumental>();
     public DbSet<SerieDisposicion> SerieDisposiciones => Set<SerieDisposicion>();
+    public DbSet<Radicado> Radicados => Set<Radicado>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -705,6 +706,18 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Procedimiento).HasColumnType("text");
             b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.SerieId });
+        });
+
+        modelBuilder.Entity<Radicado>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Numero).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Asunto).HasMaxLength(500).IsRequired();
+            b.Property(x => x.Remitente).HasMaxLength(300);
+            b.Property(x => x.Estado).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Numero }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Estado, x.FechaRadicacion });
         });
     }
 

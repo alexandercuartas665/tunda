@@ -1,0 +1,133 @@
+@page "/radicacion"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IRadicacionService Rad
+
+<PageTitle>Radicacion documental - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Gestion Documental</div>
+        <h1 class="ase-title">Radicacion documental</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Nuevo radicado</div>
+    <div class="rad-form">
+        <div class="rad-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_n.Sucursal" placeholder="PRINCIPAL" /></div>
+        <div class="rad-f rad-grow"><label>Asunto</label><input class="form-control form-control-sm" @bind="_n.Asunto" placeholder="Oficio de solicitud..." /></div>
+        <div class="rad-f rad-grow"><label>Remitente</label><input class="form-control form-control-sm" @bind="_n.Remitente" placeholder="Nombre / entidad" /></div>
+        <div class="rad-f rad-grow"><label>Tipologia (TRD)</label>
+            <select class="form-select form-select-sm" @bind="_nTip">
+                <option value="">(sin tipologia)</option>
+                @foreach (var t in _tips)
+                {
+                    <option value="@t.Id">@t.Etiqueta</option>
+                }
+            </select>
+        </div>
+        <div class="rad-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Crear">Radicar</button></div>
+    </div>
+    <small class="text-muted">El numero de radicado se asigna automaticamente por sede y anio. La tipologia hereda la serie/TRD y su disposicion.</small>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Radicados (@_items.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Numero</th><th>Fecha</th><th>Asunto</th><th>Remitente</th><th>Tipologia</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _items)
+                {
+                    <tr>
+                        <td><span class="mono">@r.Numero</span></td>
+                        <td>@r.FechaRadicacion.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@r.Asunto</td>
+                        <td>@(r.Remitente ?? "-")</td>
+                        <td>@(r.TipologiaNombre ?? "-")</td>
+                        <td><span class="rad-badge rad-@r.Estado">@r.Estado</span></td>
+                        <td class="ase-row-actions">
+                            @if (r.Estado != "cerrado" && r.Estado != "anulado")
+                            {
+                                <button class="btn btn-outline-primary btn-sm" title="Cerrar" @onclick='() => Estado(r.Id, "cerrado")'>Cerrar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_items.Count == 0) { <div class="ase-empty">Aun no hay radicados. Crea el primero arriba.</div> }
+    </div>
+</div>
+
+<style>
+    .rad-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .rad-f { display: flex; flex-direction: column; gap: 3px; }
+    .rad-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
+    .rad-grow { flex: 1; min-width: 180px; }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+    .rad-badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+    .rad-abierto { background: var(--primary-soft); color: var(--primary); }
+    .rad-en_curso { background: #fef9c3; color: #854d0e; }
+    .rad-cerrado { background: #dcfce7; color: #166534; }
+    .rad-anulado { background: #fee2e2; color: #991b1b; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<RadicadoDto> _items = new();
+    private List<TipologiaOpcionDto> _tips = new();
+    private SaveRadicadoRequest _n = Empty();
+    private string _nTip = "";
+    private string? _error, _ok;
+
+    private static SaveRadicadoRequest Empty() => new() { Sucursal = "PRINCIPAL" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _tips = (await Rad.TipologiasParaSelectAsync()).ToList();
+    }
+
+    private async Task Load() => _items = (await Rad.ListAsync()).ToList();
+
+    private async Task Crear()
+    {
+        _error = _ok = null;
+        _n.TipologiaId = Guid.TryParse(_nTip, out var g) ? g : null;
+        try
+        {
+            var saved = await Rad.CrearAsync(_n, await Actor());
+            if (saved is null) { _error = "No se pudo radicar (sin tenant activo)."; return; }
+            _ok = $"Radicado {saved.Numero} creado.";
+            _n = Empty();
+            _nTip = "";
+            await Load();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Estado(Guid id, string estado)
+    {
+        _error = _ok = null;
+        try
+        {
+            await Rad.CambiarEstadoAsync(id, estado, await Actor());
+            await Load();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}
