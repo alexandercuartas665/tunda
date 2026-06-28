@@ -1,0 +1,179 @@
+@page "/archivo-fisico"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IArchivoFisicoService Arch
+
+<PageTitle>Archivo fisico - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Gestion Documental</div>
+        <h1 class="ase-title">Archivo fisico (bodega / caja / carpeta)</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Bodegas (@_bodegas.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Sede</th><th>Codigo</th><th>Nombre</th><th>Direccion</th><th class="text-center">Cajas</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var b in _bodegas)
+                {
+                    <tr>
+                        <td><span class="mono">@b.Sucursal</span></td><td><span class="mono">@b.Codigo</span></td>
+                        <td>@b.Nombre</td><td>@(b.Direccion ?? "-")</td><td class="text-center">@b.Cajas</td>
+                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelBodega(b.Id)">&times;</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_bodegas.Count == 0) { <div class="ase-empty">Sin bodegas.</div> }
+    </div>
+    <div class="af-form">
+        <div class="af-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_nb.Sucursal" /></div>
+        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nb.Codigo" placeholder="BOD-01" /></div>
+        <div class="af-f af-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_nb.Nombre" placeholder="Deposito central" /></div>
+        <div class="af-f af-grow"><label>Direccion</label><input class="form-control form-control-sm" @bind="_nb.Direccion" /></div>
+        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddBodega">Agregar</button></div>
+    </div>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Cajas (@_cajas.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Codigo</th><th>Bodega</th><th class="text-center">Carpetas</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _cajas)
+                {
+                    <tr>
+                        <td><span class="mono">@c.Codigo</span></td><td>@(c.BodegaNombre ?? "-")</td>
+                        <td class="text-center">@c.Carpetas</td>
+                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelCaja(c.Id)">&times;</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_cajas.Count == 0) { <div class="ase-empty">Sin cajas.</div> }
+    </div>
+    <div class="af-form">
+        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nc.Codigo" placeholder="CAJA-0001" /></div>
+        <div class="af-f af-grow"><label>Bodega</label>
+            <select class="form-select form-select-sm" @bind="_ncBodega">
+                <option value="">(sin bodega)</option>
+                @foreach (var o in _bodOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddCaja">Agregar</button></div>
+    </div>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Carpetas (@_carpetas.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Codigo</th><th>Titulo</th><th>Caja</th><th>Tipologia (TRD)</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _carpetas)
+                {
+                    <tr>
+                        <td><span class="mono">@c.Codigo</span></td><td>@(c.Titulo ?? "-")</td>
+                        <td><span class="mono">@(c.CajaCodigo ?? "-")</span></td><td>@(c.TipologiaNombre ?? "-")</td>
+                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelCarpeta(c.Id)">&times;</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_carpetas.Count == 0) { <div class="ase-empty">Sin carpetas.</div> }
+    </div>
+    <div class="af-form">
+        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_ncar.Codigo" placeholder="CARP-0001" /></div>
+        <div class="af-f af-grow"><label>Titulo</label><input class="form-control form-control-sm" @bind="_ncar.Titulo" /></div>
+        <div class="af-f af-grow"><label>Caja</label>
+            <select class="form-select form-select-sm" @bind="_ncarCaja">
+                <option value="">(sin caja)</option>
+                @foreach (var o in _cajaOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="af-f af-grow"><label>Tipologia</label>
+            <select class="form-select form-select-sm" @bind="_ncarTip">
+                <option value="">(sin tipologia)</option>
+                @foreach (var o in _tipOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddCarpeta">Agregar</button></div>
+    </div>
+</div>
+
+<style>
+    .af-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 8px; }
+    .af-f { display: flex; flex-direction: column; gap: 3px; }
+    .af-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
+    .af-grow { flex: 1; min-width: 160px; }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<BodegaDto> _bodegas = new();
+    private List<CajaDto> _cajas = new();
+    private List<CarpetaDto> _carpetas = new();
+    private List<OpcionDto> _bodOpc = new(), _cajaOpc = new(), _tipOpc = new();
+    private SaveBodegaRequest _nb = new() { Sucursal = "PRINCIPAL", Activo = true };
+    private SaveCajaRequest _nc = new() { Activo = true };
+    private SaveCarpetaRequest _ncar = new() { Activo = true };
+    private string _ncBodega = "", _ncarCaja = "", _ncarTip = "";
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll()
+    {
+        _bodegas = (await Arch.ListBodegasAsync()).ToList();
+        _cajas = (await Arch.ListCajasAsync()).ToList();
+        _carpetas = (await Arch.ListCarpetasAsync()).ToList();
+        _bodOpc = (await Arch.BodegasParaSelectAsync()).ToList();
+        _cajaOpc = (await Arch.CajasParaSelectAsync()).ToList();
+        _tipOpc = (await Arch.TipologiasParaSelectAsync()).ToList();
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task AddBodega()
+    {
+        _error = _ok = null;
+        try { var s = await Arch.SaveBodegaAsync(_nb, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Bodega '{s.Codigo}' creada."; _nb = new() { Sucursal = "PRINCIPAL", Activo = true }; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+    private async Task DelBodega(Guid id) { _error = _ok = null; await Arch.DeleteBodegaAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task AddCaja()
+    {
+        _error = _ok = null;
+        _nc.BodegaId = Guid.TryParse(_ncBodega, out var g) ? g : null;
+        try { var s = await Arch.SaveCajaAsync(_nc, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Caja '{s.Codigo}' creada."; _nc = new() { Activo = true }; _ncBodega = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+    private async Task DelCaja(Guid id) { _error = _ok = null; await Arch.DeleteCajaAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task AddCarpeta()
+    {
+        _error = _ok = null;
+        _ncar.CajaId = Guid.TryParse(_ncarCaja, out var g) ? g : null;
+        _ncar.TipologiaId = Guid.TryParse(_ncarTip, out var t) ? t : null;
+        try { var s = await Arch.SaveCarpetaAsync(_ncar, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Carpeta '{s.Codigo}' creada."; _ncar = new() { Activo = true }; _ncarCaja = ""; _ncarTip = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+    private async Task DelCarpeta(Guid id) { _error = _ok = null; await Arch.DeleteCarpetaAsync(id, await Actor()); await LoadAll(); }
+}

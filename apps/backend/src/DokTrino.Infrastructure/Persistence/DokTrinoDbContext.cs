@@ -86,6 +86,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TipologiaDocumental> TipologiasDocumentales => Set<TipologiaDocumental>();
     public DbSet<SerieDisposicion> SerieDisposiciones => Set<SerieDisposicion>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
+    public DbSet<Bodega> Bodegas => Set<Bodega>();
+    public DbSet<Caja> Cajas => Set<Caja>();
+    public DbSet<Carpeta> Carpetas => Set<Carpeta>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -718,6 +721,31 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Numero }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.Estado, x.FechaRadicacion });
+        });
+
+        modelBuilder.Entity<Bodega>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Direccion).HasMaxLength(300);
+            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<Caja>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.HasOne(x => x.Bodega).WithMany(x => x.Cajas).HasForeignKey(x => x.BodegaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<Carpeta>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Titulo).HasMaxLength(300);
+            b.HasOne(x => x.Caja).WithMany(x => x.Carpetas).HasForeignKey(x => x.CajaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
     }
 
