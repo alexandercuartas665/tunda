@@ -1,0 +1,225 @@
+@page "/procesos"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IBpmnService Bpmn
+
+<PageTitle>Procesos (BPMN) - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Gestion Documental</div>
+        <h1 class="ase-title">Procesos documentales (BPMN)</h1>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Definiciones de proceso (@_procesos.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Sede</th><th>Codigo</th><th>Nombre</th><th class="text-center">Actividades</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _procesos)
+                {
+                    <tr class="@(p.Id == _selProc ? "bp-sel" : "")">
+                        <td><span class="mono">@p.Sucursal</span></td><td><span class="mono">@p.Codigo</span></td>
+                        <td>@p.Nombre</td><td class="text-center">@p.Actividades</td>
+                        <td class="ase-row-actions">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => SelProc(p.Id)">Actividades</button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => DelProc(p.Id)">&times;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_procesos.Count == 0) { <div class="ase-empty">Sin procesos. Crea el primero.</div> }
+    </div>
+    <div class="bp-form">
+        <div class="bp-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_np.Sucursal" /></div>
+        <div class="bp-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_np.Codigo" placeholder="PROC-01" /></div>
+        <div class="bp-f bp-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_np.Nombre" placeholder="Tramite de PQRS" /></div>
+        <div class="bp-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddProc">Crear proceso</button></div>
+    </div>
+</div>
+
+@if (_selProc is Guid sp)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Actividades de @_selProcNombre (en orden)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th class="text-center">#</th><th>Actividad</th><th>Detalle</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in _acts)
+                    {
+                        <tr><td class="text-center">@a.Orden</td><td>@a.Nombre</td><td>@(a.Detalle ?? "-")</td>
+                            <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelAct(a.Id)">&times;</button></td></tr>
+                    }
+                </tbody>
+            </table>
+            @if (_acts.Count == 0) { <div class="ase-empty">Sin actividades. Agrega la primera (sera el inicio del flujo).</div> }
+        </div>
+        <div class="bp-form">
+            <div class="bp-f bp-grow"><label>Nueva actividad</label><input class="form-control form-control-sm" @bind="_naNombre" placeholder="Recepcion" /></div>
+            <div class="bp-f bp-grow"><label>Detalle</label><input class="form-control form-control-sm" @bind="_naDetalle" /></div>
+            <div class="bp-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddAct">Agregar actividad</button></div>
+        </div>
+    </div>
+}
+
+<div class="ase-card">
+    <div class="ase-card-h">Iniciar instancia</div>
+    <div class="bp-form">
+        <div class="bp-f bp-grow"><label>Proceso</label>
+            <select class="form-select form-select-sm" @bind="_iProc">
+                <option value="">(elige proceso)</option>
+                @foreach (var o in _procOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="bp-f bp-grow"><label>Radicado (opcional)</label>
+            <select class="form-select form-select-sm" @bind="_iRad">
+                <option value="">(sin radicado)</option>
+                @foreach (var o in _radOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="bp-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Iniciar">Iniciar</button></div>
+    </div>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Instancias (@_insts.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Proceso</th><th>Radicado</th><th>Estado</th><th>Actividad actual</th><th>Inicio</th><th class="text-center">Tareas pend.</th></tr></thead>
+            <tbody>
+                @foreach (var i in _insts)
+                {
+                    <tr>
+                        <td>@i.ProcesoNombre</td><td><span class="mono">@(i.RadicadoNumero ?? "-")</span></td>
+                        <td><span class="bp-badge bp-@i.Estado">@i.Estado</span></td>
+                        <td>@(i.ActividadActual ?? "-")</td>
+                        <td>@i.FechaInicio.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="text-center">@i.TareasPendientes</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_insts.Count == 0) { <div class="ase-empty">Sin instancias.</div> }
+    </div>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Tareas pendientes (@_tareas.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Proceso</th><th>Actividad</th><th>Creada</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var t in _tareas)
+                {
+                    <tr>
+                        <td>@t.ProcesoNombre</td><td>@t.ActividadNombre</td>
+                        <td>@t.FechaCreacion.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                        <td class="ase-row-actions"><button class="btn btn-primary btn-sm" @onclick="() => Completar(t.Id)">Completar</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_tareas.Count == 0) { <div class="ase-empty">No hay tareas pendientes.</div> }
+    </div>
+</div>
+
+<style>
+    .bp-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 8px; }
+    .bp-f { display: flex; flex-direction: column; gap: 3px; }
+    .bp-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
+    .bp-grow { flex: 1; min-width: 200px; }
+    .bp-sel { background: var(--primary-soft); }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+    .bp-badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+    .bp-en_curso { background: #fef9c3; color: #854d0e; }
+    .bp-finalizado { background: #dcfce7; color: #166534; }
+    .bp-cancelado { background: #fee2e2; color: #991b1b; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<ProcesoDto> _procesos = new();
+    private List<ActividadDto> _acts = new();
+    private List<InstanciaDto> _insts = new();
+    private List<TareaDto> _tareas = new();
+    private List<OpcionDto> _procOpc = new(), _radOpc = new();
+    private SaveProcesoRequest _np = new() { Sucursal = "PRINCIPAL", Activo = true };
+    private string _naNombre = "", _naDetalle = "";
+    private string _iProc = "", _iRad = "";
+    private Guid? _selProc;
+    private string _selProcNombre = "";
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll()
+    {
+        _procesos = (await Bpmn.ListProcesosAsync()).ToList();
+        _insts = (await Bpmn.ListInstanciasAsync()).ToList();
+        _tareas = (await Bpmn.ListTareasAsync("pendiente")).ToList();
+        _procOpc = (await Bpmn.ProcesosParaSelectAsync()).ToList();
+        _radOpc = (await Bpmn.RadicadosParaSelectAsync()).ToList();
+        if (_selProc is Guid sp) { _acts = (await Bpmn.ListActividadesAsync(sp)).ToList(); }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task AddProc()
+    {
+        _error = _ok = null;
+        try { var s = await Bpmn.SaveProcesoAsync(_np, await Actor()); if (s is null) { _error = "Sin tenant."; return; } _ok = $"Proceso '{s.Codigo}' creado."; _np = new() { Sucursal = "PRINCIPAL", Activo = true }; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+    private async Task DelProc(Guid id)
+    {
+        _error = _ok = null;
+        try { await Bpmn.DeleteProcesoAsync(id, await Actor()); if (_selProc == id) { _selProc = null; } await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task SelProc(Guid id)
+    {
+        _selProc = id;
+        _selProcNombre = _procesos.FirstOrDefault(p => p.Id == id)?.Nombre ?? "";
+        _acts = (await Bpmn.ListActividadesAsync(id)).ToList();
+    }
+
+    private async Task AddAct()
+    {
+        _error = _ok = null;
+        if (_selProc is not Guid sp) { return; }
+        try { await Bpmn.AddActividadAsync(new AddActividadRequest { ProcesoId = sp, Nombre = _naNombre, Detalle = _naDetalle }, await Actor()); _naNombre = ""; _naDetalle = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+    private async Task DelAct(Guid id) { _error = _ok = null; await Bpmn.DeleteActividadAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task Iniciar()
+    {
+        _error = _ok = null;
+        if (!Guid.TryParse(_iProc, out var pid)) { _error = "Elige un proceso."; return; }
+        Guid? rid = Guid.TryParse(_iRad, out var r) ? r : null;
+        try { var inst = await Bpmn.IniciarInstanciaAsync(pid, rid, await Actor()); if (inst is null) { _error = "Sin tenant."; return; } _ok = $"Instancia iniciada en '{inst.ActividadActual}'."; _iProc = ""; _iRad = ""; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Completar(Guid tareaId)
+    {
+        _error = _ok = null;
+        try { await Bpmn.CompletarTareaAsync(tareaId, await Actor()); _ok = "Tarea completada; la instancia avanzo."; await LoadAll(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+}

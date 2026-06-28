@@ -91,6 +91,12 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Carpeta> Carpetas => Set<Carpeta>();
     public DbSet<ArchivoDigital> ArchivosDigitales => Set<ArchivoDigital>();
 
+    // ----- BPMN / Procesos -----
+    public DbSet<ProcesoDefinicion> ProcesosDefinicion => Set<ProcesoDefinicion>();
+    public DbSet<ProcesoActividad> ProcesoActividades => Set<ProcesoActividad>();
+    public DbSet<ProcesoInstancia> ProcesoInstancias => Set<ProcesoInstancia>();
+    public DbSet<Tarea> Tareas => Set<Tarea>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // Todos los enums se persisten como texto (legibles y estables ante reordenamientos).
@@ -763,6 +769,40 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.FechaSubida });
             b.HasIndex(x => new { x.TenantId, x.CarpetaId });
+        });
+
+        modelBuilder.Entity<ProcesoDefinicion>(b =>
+        {
+            b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Sucursal, x.Codigo, x.Version }).IsUnique();
+        });
+
+        modelBuilder.Entity<ProcesoActividad>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Detalle).HasColumnType("text");
+            b.HasOne(x => x.Proceso).WithMany(p => p.Actividades).HasForeignKey(x => x.ProcesoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.ProcesoId, x.Orden });
+        });
+
+        modelBuilder.Entity<ProcesoInstancia>(b =>
+        {
+            b.Property(x => x.Estado).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Proceso).WithMany().HasForeignKey(x => x.ProcesoId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Radicado).WithMany().HasForeignKey(x => x.RadicadoId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Estado });
+        });
+
+        modelBuilder.Entity<Tarea>(b =>
+        {
+            b.Property(x => x.ActividadNombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Estado).HasMaxLength(40).IsRequired();
+            b.HasOne(x => x.Instancia).WithMany(i => i.Tareas).HasForeignKey(x => x.InstanciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Actividad).WithMany().HasForeignKey(x => x.ActividadId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.AsignadoId, x.Estado });
+            b.HasIndex(x => new { x.TenantId, x.InstanciaId });
         });
     }
 

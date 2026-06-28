@@ -57,6 +57,10 @@ public interface IApplicationDbContext
     DbSet<Caja> Cajas { get; }
     DbSet<Carpeta> Carpetas { get; }
     DbSet<ArchivoDigital> ArchivosDigitales { get; }
+    DbSet<ProcesoDefinicion> ProcesosDefinicion { get; }
+    DbSet<ProcesoActividad> ProcesoActividades { get; }
+    DbSet<ProcesoInstancia> ProcesoInstancias { get; }
+    DbSet<Tarea> Tareas { get; }
     DbSet<SaasPlan> SaasPlans { get; }
     DbSet<SaasPlanLimit> SaasPlanLimits { get; }
     DbSet<TenantSubscription> TenantSubscriptions { get; }
