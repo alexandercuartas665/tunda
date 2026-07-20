@@ -53,6 +53,17 @@ public class ArchivoDigital : TenantEntity
     /// </summary>
     public string FaseArchivistica { get; set; } = "GESTION";
 
+    /// <summary>Expediente al que pertenece el documento, si ya fue agrupado.</summary>
+    public Guid? ExpedienteId { get; set; }
+    public Expediente? Expediente { get; set; }
+
+    /// <summary>
+    /// Dependencia productora. Sin esto el dashboard no puede repartir los
+    /// documentos por dependencia y tenia que caer en la sucursal.
+    /// </summary>
+    public Guid? DependenciaId { get; set; }
+    public Dependencia? Dependencia { get; set; }
+
     public DateTimeOffset FechaSubida { get; set; }
     public bool Activo { get; set; } = true;
     public int? LegacyReg { get; set; }

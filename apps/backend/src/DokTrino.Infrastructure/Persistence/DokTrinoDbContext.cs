@@ -90,6 +90,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TokenDependencia> TokensDependencia => Set<TokenDependencia>();
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
+    public DbSet<Expediente> Expedientes => Set<Expediente>();
     public DbSet<Complemento> Complementos => Set<Complemento>();
     public DbSet<CatalogoCaracteristica> CatalogoCaracteristicas => Set<CatalogoCaracteristica>();
     public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
@@ -760,6 +761,18 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
+        modelBuilder.Entity<Expediente>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(1000);
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("ABIERTO");
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.Estado });
+        });
+
         modelBuilder.Entity<Complemento>(b =>
         {
             b.Property(x => x.Codigo).HasMaxLength(40).IsRequired();
@@ -887,7 +900,11 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.FlagIdentificado });
             b.HasIndex(x => new { x.TenantId, x.IdentificadorPrincipal });
             b.HasIndex(x => new { x.TenantId, x.CarpetaId });
+            b.HasOne(x => x.Expediente).WithMany().HasForeignKey(x => x.ExpedienteId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.FaseArchivistica });
+            b.HasIndex(x => new { x.TenantId, x.ExpedienteId });
+            b.HasIndex(x => new { x.TenantId, x.DependenciaId });
         });
 
         // ----- 2.D3 Archivo Central: carpetas de clasificacion, tags y aprobacion -----

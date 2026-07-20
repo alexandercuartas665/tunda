@@ -151,28 +151,52 @@ public sealed class DashboardDocumentalService : IDashboardDocumentalService
                 x.IdentificadorPrincipal ?? x.Tipologia!.Codigo ?? "-",
                 x.Nombre,
                 x.FechaSubida,
-                x.Sucursal,
+                // Dependencia productora real; la sucursal solo es el respaldo
+                // para los documentos cargados antes de que existiera el vinculo.
+                x.Dependencia != null ? x.Dependencia.NombreCargo : x.Sucursal,
                 x.EstadoAprobacion))
             .ToListAsync(cancellationToken);
 
-        // --- Avance por dependencia: % de sus respuestas que ya declararon formato ---
-        var porDependencia = await _db.RespuestasTablaDocumental
-            .GroupBy(r => r.Dependencia.NombreCargo)
-            .Select(g => new
-            {
-                Nombre = g.Key,
-                Total = g.Count(),
-                Completas = g.Count(r => idsConFormato.Contains(r.Id))
-            })
+        // --- Documentos por dependencia productora ---
+        var docsPorDep = await _db.ArchivosDigitales
+            .Where(a => a.Activo && a.DependenciaId != null)
+            .GroupBy(a => a.Dependencia!.NombreCargo)
+            .Select(g => new { Nombre = g.Key, Total = g.Count() })
             .ToListAsync(cancellationToken);
 
-        var dependencias = porDependencia
-            .Select(d => new DocsPorDependenciaDto(
-                d.Nombre,
-                d.Total == 0 ? 0 : (int)Math.Round(d.Completas * 100d / d.Total)))
-            .OrderByDescending(d => d.Porcentaje)
-            .Take(4)
-            .ToList();
+        List<DocsPorDependenciaDto> dependencias;
+        if (docsPorDep.Count > 0)
+        {
+            // Se muestra como porcentaje sobre la dependencia que mas produce.
+            var mayor = docsPorDep.Max(d => d.Total);
+            dependencias = docsPorDep
+                .OrderByDescending(d => d.Total)
+                .Take(4)
+                .Select(d => new DocsPorDependenciaDto(d.Nombre, (int)Math.Round(d.Total * 100d / mayor)))
+                .ToList();
+        }
+        else
+        {
+            // Sin documentos ligados todavia: se cae al avance de diligenciamiento
+            // de la TRD, que es el unico dato por dependencia disponible.
+            var avanceDep = await _db.RespuestasTablaDocumental
+                .GroupBy(r => r.Dependencia.NombreCargo)
+                .Select(g => new
+                {
+                    Nombre = g.Key,
+                    Total = g.Count(),
+                    Completas = g.Count(r => idsConFormato.Contains(r.Id))
+                })
+                .ToListAsync(cancellationToken);
+
+            dependencias = avanceDep
+                .Select(d => new DocsPorDependenciaDto(
+                    d.Nombre,
+                    d.Total == 0 ? 0 : (int)Math.Round(d.Completas * 100d / d.Total)))
+                .OrderByDescending(d => d.Porcentaje)
+                .Take(4)
+                .ToList();
+        }
 
         // --- TRD creadas por mes (ultimos 7 meses) para el sparkline ---
         var desde = inicioMes.AddMonths(-6);
