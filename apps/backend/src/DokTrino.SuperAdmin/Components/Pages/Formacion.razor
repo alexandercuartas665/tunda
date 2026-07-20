@@ -1,0 +1,187 @@
+@page "/formacion"
+@attribute [AllowAnonymous]
+@layout DokTrino.SuperAdmin.Components.Layout.PublicLayout
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@inject ICuestionarioService Cuestionarios
+@inject ITrdClienteService Cliente
+
+<PageTitle>Formacion documental - DokTrino</PageTitle>
+
+@if (_sesion is null)
+{
+    <div class="ase-alert">Enlace invalido o token no reconocido. Solicita un nuevo enlace al administrador documental.</div>
+}
+else
+{
+    <div class="tcl">
+        <div class="tcl-breadcrumb">Inicio &middot; Documental &middot; Formacion</div>
+
+        @* Banner de la guia de formacion *@
+        <div class="form-banner">
+            <div class="form-banner-mark">
+                <span class="ico">&#129504;</span>
+                <span class="nm">Formacion</span>
+            </div>
+            <div>
+                <div class="t">Tu guia para la clasificacion documental</div>
+                <div class="s">Completa la formacion para habilitar el diligenciamiento de tu TRD.</div>
+            </div>
+        </div>
+
+        @if (_error is not null) { <div class="ase-alert">@_error</div> }
+
+        @* Estado de la capacitacion *@
+        <div class="ase-card">
+            <div class="ase-card-h">Estado de tu capacitacion</div>
+            @if (!_estado.HayCuestionario)
+            {
+                <div class="dkd-empty">
+                    Tu entidad aun no publico un cuestionario de formacion. Puedes diligenciar tu TRD sin restriccion.
+                </div>
+            }
+            else if (_estado.Superado)
+            {
+                <div class="tcl-ok">&#10003; Capacitacion superada. Ya puedes diligenciar tu TRD.</div>
+                <a class="tcl-add" style="width: auto; display: inline-flex;" href="@($"trd-cliente?token={Token}")">Ir a mi encuesta</a>
+            }
+            else
+            {
+                <div class="tcl-pend">
+                    <div class="tcl-pend-h">&#9888; Capacitacion pendiente</div>
+                    <div class="tcl-pend-s">
+                        Debes superar el cuestionario con al menos @(_cuestionario?.PuntajeMinimo ?? 60) puntos
+                        antes de diligenciar la TRD de tu dependencia.
+                        @if (_estado.Intentos > 0)
+                        {
+                            <text> Llevas @_estado.Intentos intento(s); tu mejor puntaje es @_estado.MejorPuntaje.</text>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @* Resultado del ultimo intento *@
+        @if (_resultado is not null)
+        {
+            <div class="ase-card">
+                <div class="ase-card-h">Resultado</div>
+                <div class="form-score @(_resultado.Aprobado ? "ok" : "no")">
+                    @_resultado.Puntaje <span>/ 100</span>
+                </div>
+                <div style="font-size: 13px; color: #37415c; margin-top: 6px;">
+                    @_resultado.Correctas de @_resultado.Total correctas &mdash;
+                    @(_resultado.Aprobado ? "aprobado" : "no alcanza el minimo")
+                </div>
+                @if (_resultado.Retroalimentacion.Count > 0)
+                {
+                    <div style="margin-top: 12px;">
+                        <div class="dkd-empty" style="padding: 0 0 6px;">Repasa esto antes de volver a intentarlo:</div>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 12.5px; color: #6b7488;">
+                            @foreach (var r in _resultado.Retroalimentacion) { <li>@r</li> }
+                        </ul>
+                    </div>
+                }
+            </div>
+        }
+
+        @* Cuestionario *@
+        @if (_cuestionario is not null && !_estado.Superado)
+        {
+            <div class="ase-card">
+                <div class="ase-card-h">@_cuestionario.Titulo</div>
+                @if (!string.IsNullOrWhiteSpace(_cuestionario.Descripcion))
+                {
+                    <div class="dkd-empty" style="padding: 0 0 12px;">@_cuestionario.Descripcion</div>
+                }
+
+                @foreach (var (p, idx) in _cuestionario.Preguntas.Select((p, i) => (p, i)))
+                {
+                    <div class="form-preg">
+                        <div class="form-preg-t">@(idx + 1). @p.Enunciado</div>
+                        @foreach (var (op, oi) in p.Opciones.Select((o, i) => (o, i)))
+                        {
+                            <label class="form-op">
+                                <input type="radio" name="@($"p{idx}")" checked="@(_respuestas[idx] == oi)"
+                                       @onchange="() => _respuestas[idx] = oi" />
+                                <span>@op</span>
+                            </label>
+                        }
+                    </div>
+                }
+
+                <button class="tcl-add" style="width: auto; margin-top: 8px;" @onclick="Enviar">
+                    @(_estado.Intentos > 0 ? "Volver a intentarlo" : "Enviar respuestas")
+                </button>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .form-banner { background:linear-gradient(135deg,#2c3e9e,var(--primary)); border-radius:18px; padding:26px 30px; display:flex; align-items:center; gap:22px; box-shadow:0 14px 36px rgba(44,62,158,.26); margin-bottom:18px; flex-wrap:wrap; }
+    .form-banner-mark { background:#fff; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px; }
+    .form-banner-mark .ico { font-size:28px; }
+    .form-banner-mark .nm { font-size:24px; font-weight:800; letter-spacing:-.6px; color:#2c3e9e; }
+    .form-banner .t { font-size:19px; font-weight:800; color:#fff; letter-spacing:-.3px; }
+    .form-banner .s { font-size:13px; color:#cdd5f6; margin-top:4px; }
+    .form-preg { padding:14px 0; border-bottom:1px solid #f4f6fb; }
+    .form-preg-t { font-size:13px; font-weight:700; color:#1f2433; margin-bottom:9px; }
+    .form-op { display:flex; align-items:center; gap:9px; padding:6px 0; font-size:12.5px; color:#37415c; cursor:pointer; }
+    .form-score { font-size:38px; font-weight:800; letter-spacing:-1px; }
+    .form-score span { font-size:16px; font-weight:600; color:#9aa3bd; }
+    .form-score.ok { color:#15803d; }
+    .form-score.no { color:#b8770b; }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+
+    private TokenSesionDto? _sesion;
+    private CuestionarioDto? _cuestionario;
+    private EstadoCapacitacionDto _estado = new(false, 0, 0, false);
+    private ResultadoIntentoDto? _resultado;
+    private int[] _respuestas = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t = Token ?? "";
+        _sesion = await Cliente.ResolverTokenAsync(t);
+        if (_sesion is null) { return; }
+
+        await Recargar();
+    }
+
+    private async Task Recargar()
+    {
+        var t = Token ?? "";
+        _cuestionario = await Cuestionarios.ObtenerPorTokenAsync(t);
+        _estado = await Cuestionarios.EstadoAsync(t);
+
+        // -1 = sin responder, para distinguirlo de haber marcado la primera opcion.
+        var n = _cuestionario?.Preguntas.Count ?? 0;
+        if (_respuestas.Length != n)
+        {
+            _respuestas = Enumerable.Repeat(-1, n).ToArray();
+        }
+    }
+
+    private async Task Enviar()
+    {
+        _error = null;
+        if (_respuestas.Any(r => r < 0))
+        {
+            _error = "Responde todas las preguntas antes de enviar.";
+            return;
+        }
+
+        try
+        {
+            _resultado = await Cuestionarios.ResponderAsync(Token ?? "", _respuestas);
+            _respuestas = Enumerable.Repeat(-1, _cuestionario?.Preguntas.Count ?? 0).ToArray();
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+}

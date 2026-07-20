@@ -91,6 +91,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
     public DbSet<Expediente> Expedientes => Set<Expediente>();
+    public DbSet<CuestionarioCapacitacion> Cuestionarios => Set<CuestionarioCapacitacion>();
+    public DbSet<CuestionarioPregunta> CuestionarioPreguntas => Set<CuestionarioPregunta>();
+    public DbSet<CuestionarioIntento> CuestionarioIntentos => Set<CuestionarioIntento>();
     public DbSet<ProcesoNodo> ProcesoNodos => Set<ProcesoNodo>();
     public DbSet<ProcesoTransicion> ProcesoTransiciones => Set<ProcesoTransicion>();
     public DbSet<NivelTopografico> NivelesTopograficos => Set<NivelTopografico>();
@@ -763,6 +766,31 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
             b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<CuestionarioCapacitacion>(b =>
+        {
+            b.Property(x => x.Modulo).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(600);
+            b.HasIndex(x => new { x.TenantId, x.Modulo });
+        });
+
+        modelBuilder.Entity<CuestionarioPregunta>(b =>
+        {
+            b.Property(x => x.Enunciado).HasColumnType("text").IsRequired();
+            b.Property(x => x.OpcionesJson).HasColumnType("jsonb").IsRequired();
+            b.Property(x => x.Retroalimentacion).HasColumnType("text");
+            b.HasOne(x => x.Cuestionario).WithMany(c => c.Preguntas).HasForeignKey(x => x.CuestionarioId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.CuestionarioId, x.Orden });
+        });
+
+        modelBuilder.Entity<CuestionarioIntento>(b =>
+        {
+            b.Property(x => x.RespuestasJson).HasColumnType("jsonb").IsRequired();
+            b.HasOne(x => x.Cuestionario).WithMany().HasForeignKey(x => x.CuestionarioId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.DependenciaId });
         });
 
         modelBuilder.Entity<ProcesoNodo>(b =>

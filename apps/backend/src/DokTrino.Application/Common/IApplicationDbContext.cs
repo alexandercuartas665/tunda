@@ -58,6 +58,9 @@ public interface IApplicationDbContext
     DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental { get; }
     DbSet<FormatoSerie> FormatosSerie { get; }
     DbSet<Expediente> Expedientes { get; }
+    DbSet<CuestionarioCapacitacion> Cuestionarios { get; }
+    DbSet<CuestionarioPregunta> CuestionarioPreguntas { get; }
+    DbSet<CuestionarioIntento> CuestionarioIntentos { get; }
     DbSet<ProcesoNodo> ProcesoNodos { get; }
     DbSet<ProcesoTransicion> ProcesoTransiciones { get; }
     DbSet<NivelTopografico> NivelesTopograficos { get; }

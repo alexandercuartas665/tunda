@@ -4,6 +4,8 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using DokTrino.Application.Tenancy
 @inject ITrdClienteService Cliente
+@inject ICuestionarioService Cuestionarios
+@inject NavigationManager Nav
 
 <PageTitle>Encuesta documental - DokTrino</PageTitle>
 
@@ -66,12 +68,28 @@ else
             </div>
         </div>
 
+        @if (_capacitacionPendiente)
+        {
+            <div class="tcl-pend">
+                <div class="tcl-pend-h">&#9888; Formacion pendiente</div>
+                <div class="tcl-pend-s">
+                    Antes de diligenciar tu TRD debes superar el cuestionario de formacion documental.
+                </div>
+                <a class="tcl-add" style="width: auto; display: inline-flex; margin-top: 10px;"
+                   href="@($"formacion?token={Token}")">Ir a la formacion</a>
+            </div>
+        }
+
         @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
         else if (_sesion.SoloLectura) { <div class="ase-alert">La TRD o tu dependencia estan CERRADAS: solo lectura.</div> }
         @if (_error is not null) { <div class="ase-alert">@_error</div> }
         @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-        @if (_tab == "encuesta")
+        @if (_capacitacionPendiente)
+        {
+            <!-- el contenido queda bloqueado hasta superar la formacion -->
+        }
+        else if (_tab == "encuesta")
         {
             <div class="tcl-cols">
                 @* ----- Columna izquierda: series ----- *@
@@ -308,6 +326,7 @@ else
 
     private EstadoEncuestaDto _estado = new(false, false, false, 0, Array.Empty<PendienteDto>());
     private bool _mostrarHint;
+    private bool _capacitacionPendiente;
     private string _tab = "encuesta";
 
     private GuardarRespuestaCommand _cmd = new();
@@ -332,6 +351,11 @@ else
         if (_sesion is null) { return; }
 
         _mostrarHint = await Cliente.MostrarHintAsync(t);
+
+        // Gate de capacitacion: solo bloquea si la entidad publico cuestionario.
+        var cap = await Cuestionarios.EstadoAsync(t);
+        _capacitacionPendiente = cap.HayCuestionario && !cap.Superado;
+
         await Recargar();
     }
 

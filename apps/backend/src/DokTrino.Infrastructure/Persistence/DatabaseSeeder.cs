@@ -511,4 +511,68 @@ public sealed class DatabaseSeeder
 
         await _db.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Siembra el cuestionario FORMACION_TRD del tenant indicado. Idempotente:
+    /// si ya existe uno activo para el modulo, no hace nada.
+    /// </summary>
+    public async Task EnsureCuestionarioTrdAsync(Guid tenantId, CancellationToken cancellationToken = default)
+    {
+        if (await _db.Cuestionarios.IgnoreQueryFilters()
+                .AnyAsync(c => c.TenantId == tenantId && c.Modulo == "FORMACION_TRD", cancellationToken))
+        {
+            return;
+        }
+
+        var cuestionario = new CuestionarioCapacitacion
+        {
+            TenantId = tenantId,
+            Modulo = "FORMACION_TRD",
+            Titulo = "Formacion basica en clasificacion documental",
+            Descripcion = "Cinco preguntas sobre TRD, retencion y disposicion final segun la Ley 594 de 2000.",
+            PuntajeMinimo = 60,
+            Activo = true
+        };
+        _db.Cuestionarios.Add(cuestionario);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var preguntas = new (int Orden, string Enunciado, string[] Opciones, int Correcta, string Retro)[]
+        {
+            (1, "Que significa TRD?",
+             new[] { "Tabla de Registro Digital", "Tabla de Retencion Documental", "Tipologia de Registro Documental" }, 1,
+             "TRD es la Tabla de Retencion Documental: el listado de series con sus tiempos de retencion y disposicion final."),
+
+            (2, "En la matriz de retencion, que representa AG?",
+             new[] { "Archivo General", "Archivo de Gestion", "Aprobacion General" }, 1,
+             "AG es el Archivo de Gestion: los anios que el documento permanece en la oficina productora."),
+
+            (3, "Que es una serie documental?",
+             new[] { "Un documento individual", "Un conjunto de unidades documentales de estructura y contenido homogeneos", "Una carpeta fisica" }, 1,
+             "La serie agrupa unidades documentales del mismo tipo generadas por una misma funcion."),
+
+            (4, "Que significa CT en la disposicion final?",
+             new[] { "Conservacion Total", "Copia Temporal", "Control Tecnico" }, 0,
+             "CT es Conservacion Total: el documento se conserva permanentemente por su valor historico."),
+
+            (5, "Quien produce los documentos que se registran en la TRD de una dependencia?",
+             new[] { "El area de sistemas", "La dependencia productora en ejercicio de sus funciones", "El proveedor externo" }, 1,
+             "Cada dependencia registra los documentos que produce en ejercicio de sus propias funciones.")
+        };
+
+        foreach (var p in preguntas)
+        {
+            _db.CuestionarioPreguntas.Add(new CuestionarioPregunta
+            {
+                TenantId = tenantId,
+                CuestionarioId = cuestionario.Id,
+                Orden = p.Orden,
+                Enunciado = p.Enunciado,
+                OpcionesJson = System.Text.Json.JsonSerializer.Serialize(p.Opciones),
+                IndiceCorrecto = p.Correcta,
+                Retroalimentacion = p.Retro
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }
