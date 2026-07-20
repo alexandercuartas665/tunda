@@ -1,0 +1,309 @@
+@page "/configuracion-documental"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IConfiguracionDocumentalService Cfg
+
+<PageTitle>Configuracion documental - DokTrino</PageTitle>
+
+<div class="trx">
+    <div class="trx-breadcrumb">Inicio &middot; Configuracion documental</div>
+
+    <div class="trx-head">
+        <div>
+            <div class="trx-title">Configuracion documental</div>
+            <div class="trx-sub">Define el catalogo de series y administra el banco documental del que se nutren las TRD.</div>
+        </div>
+    </div>
+
+    @* --- Tabs --- *@
+    <div class="tcl-tabs">
+        <button class="tcl-tab @(_tab == "series" ? "on" : "")" @onclick='() => Cambiar("series")'>
+            Configuracion de series <span class="badge2">@_series.Count</span>
+        </button>
+        <button class="tcl-tab @(_tab == "banco" ? "on" : "")" @onclick='() => Cambiar("banco")'>
+            Banco documental <span class="badge2">@_banco.Count</span>
+        </button>
+        <button class="tcl-tab @(_tab == "sugerencias" ? "on" : "")" @onclick='() => Cambiar("sugerencias")'>
+            Sugerencias <span class="badge2">@_sugerencias.Count</span>
+        </button>
+    </div>
+
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    @* --- Toolbar --- *@
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
+        <input class="tcl-input" style="max-width: 360px; background: #fff;"
+               @bind="_filtro" @bind:event="oninput" placeholder="Buscar por codigo o nombre..." />
+
+        @if (_tab == "series")
+        {
+            <div style="margin-left: auto; display: flex; gap: 9px;">
+                <button class="cfg-comp-btn" @onclick="() => _compOpen = true">&#129513; Complementos</button>
+            </div>
+        }
+        else if (_tab == "banco")
+        {
+            <button class="cfg-import-btn" style="margin-left: auto;" @onclick="() => _importOpen = true">
+                &#11015; Importar del bunker (AGN)
+            </button>
+        }
+    </div>
+
+    @if (_tab == "series")
+    {
+        <div class="trx-list">
+            <div class="cfg-grid cfg-head">
+                <div>Codigo</div><div>Serie documental</div><div>Subseries</div>
+                <div>Tipologias</div><div>Retencion (AG/AC)</div><div>Estado</div>
+            </div>
+            @if (Filtradas(_series).Count == 0)
+            {
+                <div class="trx-empty">Sin series en el catalogo. Aplica un complemento o importa el cuadro del AGN.</div>
+            }
+            @foreach (var s in Filtradas(_series))
+            {
+                <div class="cfg-grid cfg-row">
+                    <div class="num">@s.Codigo</div>
+                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@s.Nombre</div>
+                    <div class="txt">@s.Subseries</div>
+                    <div class="txt">@s.Tipologias</div>
+                    <div class="mono">@s.Retencion</div>
+                    <div><span class="trx-est @(s.Estado == "MAESTRA" ? "activo" : "desarrollo")">@s.Estado</span></div>
+                </div>
+            }
+        </div>
+        <div class="cfg-nota">
+            AG = Archivo de Gestion &middot; AC = Archivo Central (anios de retencion, tomados de lo que declararon las dependencias).
+            Las series maestras quedan disponibles para el Cliente Encuesta.
+        </div>
+    }
+    else if (_tab == "banco")
+    {
+        <div class="trx-list">
+            <div class="cfg-grid-banco cfg-head">
+                <div>Codigo</div><div>Registro documental</div><div>Serie</div><div>Fuente</div>
+            </div>
+            @if (FiltradasBanco().Count == 0)
+            {
+                <div class="trx-empty">El banco documental esta vacio.</div>
+            }
+            @foreach (var b in FiltradasBanco())
+            {
+                <div class="cfg-grid-banco cfg-row">
+                    <div class="num">@b.Codigo</div>
+                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@b.Nombre</div>
+                    <div class="txt">@b.Serie</div>
+                    <div><span class="trx-est @(b.Estado == "MAESTRA" ? "activo" : "desarrollo")">@b.Fuente</span></div>
+                </div>
+            }
+        </div>
+        <div class="cfg-nota">
+            El banco documental es el catalogo maestro (bunker del AGN mas los registros propios) del que las dependencias
+            seleccionan sus subseries y tipologias.
+        </div>
+    }
+    else
+    {
+        @* --- Bandeja de sugerencias del colaborador --- *@
+        <div class="trx-list">
+            <div class="cfg-grid-sug cfg-head">
+                <div>Nivel</div><div>Codigo</div><div>Nombre propuesto</div><div>Dependencia</div><div>Accion</div>
+            </div>
+            @if (_sugerencias.Count == 0)
+            {
+                <div class="trx-empty">No hay propuestas de catalogo pendientes.</div>
+            }
+            @foreach (var s in _sugerencias)
+            {
+                <div class="cfg-grid-sug cfg-row">
+                    <div><span class="tcl-propia">@s.Nivel</span></div>
+                    <div class="num">@s.Codigo</div>
+                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@s.Nombre</div>
+                    <div class="txt">@s.Dependencia</div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-outline-success btn-sm" @onclick="() => Resolver(s, true)">Aprobar</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => Resolver(s, false)">Rechazar</button>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="cfg-nota">
+            Al aprobar, la entrada pasa al catalogo maestro y la ven todas las dependencias.
+            Al rechazar queda archivada y desaparece de la encuesta del colaborador.
+        </div>
+    }
+</div>
+
+@* ===================== Modal complementos ===================== *@
+@if (_compOpen)
+{
+    <div class="doktrino-drawer-scrim" style="display: block;" @onclick="() => _compOpen = false"></div>
+    <div class="cfg-modal">
+        <div class="cfg-modal-head" style="background: linear-gradient(135deg, #5b3fa8, #7c5cd0);">
+            <div style="flex: 1;">
+                <div class="ttl">Complementos</div>
+                <div class="sub">Paquetes de catalogo listos para aplicar sobre tu banco documental.</div>
+            </div>
+            <span class="cls" @onclick="() => _compOpen = false">&#10005;</span>
+        </div>
+        <div class="cfg-modal-body">
+            @if (_complementos.Count == 0)
+            {
+                <div class="trx-empty">No hay complementos publicados en la plataforma.</div>
+            }
+            @foreach (var c in _complementos)
+            {
+                <div class="cfg-comp-item">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 700; font-size: 13px; color: #1f2433;">@c.Nombre</div>
+                        <div style="font-size: 11.5px; color: #8a93a8; margin-top: 2px;">@c.Descripcion</div>
+                    </div>
+                    <span class="tcl-count">@c.Series series</span>
+                    <button class="trx-btn" @onclick="() => Aplicar(c)">Aplicar</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* ===================== Modal importador AGN ===================== *@
+@if (_importOpen)
+{
+    <div class="doktrino-drawer-scrim" style="display: block;" @onclick="() => _importOpen = false"></div>
+    <div class="cfg-modal">
+        <div class="cfg-modal-head">
+            <div style="flex: 1;">
+                <div class="ttl">Importar del bunker (AGN)</div>
+                <div class="sub">Pega el cuadro de clasificacion en CSV separado por punto y coma.</div>
+            </div>
+            <span class="cls" @onclick="() => _importOpen = false">&#10005;</span>
+        </div>
+        <div class="cfg-modal-body">
+            <div class="cfg-nota" style="margin: 0 0 10px;">
+                Columnas: <code>codigo_serie;nombre_serie;codigo_subserie;nombre_subserie;codigo_tipologia;nombre_tipologia</code>
+            </div>
+            <textarea class="tcl-input" rows="10" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px;"
+                      @bind="_csv" placeholder="100;Actas;100-10;Actas de comite;100-10-01;Acta de comite directivo"></textarea>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+                <button class="trx-btn ghost" @onclick="() => _importOpen = false">Cancelar</button>
+                <button class="trx-btn" @onclick="Importar">Importar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cfg-grid { display:grid; grid-template-columns:120px 1fr 90px 90px 150px 110px; gap:12px; align-items:center; }
+    .cfg-grid-banco { display:grid; grid-template-columns:130px 1.4fr 1.2fr 160px; gap:12px; align-items:center; }
+    .cfg-grid-sug { display:grid; grid-template-columns:110px 130px 1fr 160px 170px; gap:12px; align-items:center; }
+    .cfg-head { padding:12px 18px; background:#161c2e; font-size:10.5px; font-weight:600; color:#cdd5ea; text-transform:uppercase; letter-spacing:.4px; }
+    .cfg-row { padding:13px 18px; border-bottom:1px solid #f4f6fb; }
+    .cfg-row:hover { background:#f8faff; }
+    .cfg-row .num { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--primary); font-weight:600; }
+    .cfg-row .txt { font-size:12px; font-weight:600; color:#6b7488; }
+    .cfg-row .mono { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8a93a8; }
+    .cfg-nota { font-size:11.5px; line-height:1.5; color:var(--chrome-label); margin-top:12px; }
+    .cfg-comp-btn { border:1px solid #cdbdf0; cursor:pointer; background:#f4efff; color:#7c5cd0; border-radius:10px; padding:10px 15px; font-size:12.5px; font-weight:700; }
+    .cfg-import-btn { border:1px solid #c3d2f7; cursor:pointer; background:#eef3fe; color:var(--primary); border-radius:10px; padding:10px 17px; font-size:12.5px; font-weight:700; }
+    .cfg-modal { position:fixed; top:6vh; left:50%; transform:translateX(-50%); width:720px; max-width:94vw; max-height:85vh; overflow:auto; z-index:1950; background:#faf9f5; border-radius:20px; box-shadow:0 30px 80px rgba(0,0,0,.32); }
+    .cfg-modal-head { background:linear-gradient(135deg,#243391,var(--primary)); color:#fff; padding:18px 22px; display:flex; align-items:center; gap:12px; }
+    .cfg-modal-head .ttl { font-size:17px; font-weight:800; letter-spacing:-.3px; }
+    .cfg-modal-head .sub { font-size:12px; font-weight:500; color:#e2e8fb; margin-top:2px; }
+    .cfg-modal-head .cls { cursor:pointer; font-size:20px; color:#cdd5f6; }
+    .cfg-modal-body { padding:18px 22px; }
+    .cfg-comp-item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e9ecf5; border-radius:13px; padding:13px 15px; margin-bottom:10px; }
+    @@media (max-width: 1000px) {
+        .cfg-grid, .cfg-grid-banco, .cfg-grid-sug { grid-template-columns:1fr; gap:4px; }
+    }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _tab = "series";
+    private string _filtro = "";
+    private string _csv = "";
+    private bool _compOpen, _importOpen;
+    private string? _error, _ok;
+
+    private List<SerieConfigDto> _series = new();
+    private List<BancoItemDto> _banco = new();
+    private List<ComplementoDto> _complementos = new();
+    private List<SugerenciaDto> _sugerencias = new();
+
+    protected override async Task OnInitializedAsync() => await Recargar();
+
+    private async Task Recargar()
+    {
+        _series = (await Cfg.ListarSeriesAsync(null)).ToList();
+        _banco = (await Cfg.ListarBancoAsync(null)).ToList();
+        _complementos = (await Cfg.ListarComplementosAsync()).ToList();
+        _sugerencias = (await Cfg.ListarSugerenciasAsync()).ToList();
+    }
+
+    private void Cambiar(string tab) { _tab = tab; _filtro = ""; }
+
+    // El filtro se aplica en memoria: las listas ya vienen acotadas al tenant.
+    private List<SerieConfigDto> Filtradas(List<SerieConfigDto> origen) =>
+        string.IsNullOrWhiteSpace(_filtro)
+            ? origen
+            : origen.Where(s => s.Codigo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)
+                                || s.Nombre.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private List<BancoItemDto> FiltradasBanco() =>
+        string.IsNullOrWhiteSpace(_filtro)
+            ? _banco
+            : _banco.Where(b => b.Codigo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)
+                                || b.Nombre.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task Aplicar(ComplementoDto c)
+    {
+        _error = _ok = null;
+        try
+        {
+            var n = await Cfg.AplicarComplementoAsync(c.Id, await Actor());
+            _ok = n > 0
+                ? $"Complemento \"{c.Nombre}\" aplicado: {n} entradas nuevas en el catalogo."
+                : $"El complemento \"{c.Nombre}\" ya estaba aplicado; no habia nada nuevo que crear.";
+            _compOpen = false;
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Importar()
+    {
+        _error = _ok = null;
+        if (string.IsNullOrWhiteSpace(_csv)) { _error = "Pega primero el CSV."; return; }
+        try
+        {
+            var r = await Cfg.ImportarAgnCsvAsync(_csv, await Actor());
+            _ok = $"Importadas {r.Series} series, {r.Subseries} subseries y {r.Tipologias} tipologias.";
+            if (r.Errores.Count > 0) { _error = string.Join(" | ", r.Errores.Take(5)); }
+            _importOpen = false;
+            _csv = "";
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Resolver(SugerenciaDto s, bool aprobar)
+    {
+        _error = _ok = null;
+        await Cfg.ResolverSugerenciaAsync(s.Nivel, s.Id, aprobar, await Actor());
+        _ok = aprobar
+            ? $"\"{s.Nombre}\" pasa al catalogo maestro."
+            : $"\"{s.Nombre}\" quedo rechazada.";
+        await Recargar();
+    }
+}

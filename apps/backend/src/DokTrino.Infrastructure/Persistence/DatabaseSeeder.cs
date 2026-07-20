@@ -437,4 +437,78 @@ public sealed class DatabaseSeeder
             agregados, usuarios.Length, sedes.Count);
     }
 
+
+    /// <summary>
+    /// Publica los complementos base del AGN. Son globales a la plataforma (no
+    /// cuelgan de un tenant) y se aplican bajo demanda desde Configuracion
+    /// Documental. Idempotente por codigo.
+    /// </summary>
+    public async Task EnsureComplementosAgnAsync(CancellationToken cancellationToken = default)
+    {
+        var paquetes = new (string Codigo, string Nombre, string Descripcion, string Payload)[]
+        {
+            ("AGN_ACTAS", "Actas y cuerpos colegiados",
+             "Serie de actas con sus subseries de comite y junta.",
+             """
+             {"series":[{"codigo":"100","nombre":"Actas","subseries":[
+               {"codigo":"100-10","nombre":"Actas de comite","tipologias":[
+                 {"codigo":"100-10-01","nombre":"Acta de comite directivo"},
+                 {"codigo":"100-10-02","nombre":"Acta de comite tecnico"}]},
+               {"codigo":"100-20","nombre":"Actas de junta","tipologias":[
+                 {"codigo":"100-20-01","nombre":"Acta de junta directiva"}]}]}]}
+             """),
+
+            ("AGN_CONTRATOS", "Contratacion",
+             "Serie de contratos con subseries de prestacion de servicios y suministro.",
+             """
+             {"series":[{"codigo":"200","nombre":"Contratos","subseries":[
+               {"codigo":"200-10","nombre":"Contratos de prestacion de servicios","tipologias":[
+                 {"codigo":"200-10-01","nombre":"Minuta de contrato"},
+                 {"codigo":"200-10-02","nombre":"Acta de inicio"},
+                 {"codigo":"200-10-03","nombre":"Acta de liquidacion"}]},
+               {"codigo":"200-20","nombre":"Contratos de suministro","tipologias":[
+                 {"codigo":"200-20-01","nombre":"Orden de compra"}]}]}]}
+             """),
+
+            ("AGN_HISTORIAS_LABORALES", "Historias laborales",
+             "Serie de historias laborales con la documentacion minima exigida.",
+             """
+             {"series":[{"codigo":"300","nombre":"Historias laborales","subseries":[
+               {"codigo":"300-10","nombre":"Historia laboral","tipologias":[
+                 {"codigo":"300-10-01","nombre":"Hoja de vida"},
+                 {"codigo":"300-10-02","nombre":"Acta de posesion"},
+                 {"codigo":"300-10-03","nombre":"Evaluacion de desempenio"}]}]}]}
+             """),
+
+            ("AGN_PQRS", "PQRS",
+             "Peticiones, quejas, reclamos y sugerencias con su respuesta.",
+             """
+             {"series":[{"codigo":"400","nombre":"PQRS","subseries":[
+               {"codigo":"400-10","nombre":"Peticiones","tipologias":[
+                 {"codigo":"400-10-01","nombre":"Peticion radicada"},
+                 {"codigo":"400-10-02","nombre":"Respuesta a peticion"}]},
+               {"codigo":"400-20","nombre":"Quejas y reclamos","tipologias":[
+                 {"codigo":"400-20-01","nombre":"Queja radicada"}]}]}]}
+             """),
+        };
+
+        foreach (var p in paquetes)
+        {
+            if (await _db.Complementos.AnyAsync(c => c.Codigo == p.Codigo, cancellationToken))
+            {
+                continue;
+            }
+
+            _db.Complementos.Add(new Complemento
+            {
+                Codigo = p.Codigo,
+                Nombre = p.Nombre,
+                Descripcion = p.Descripcion,
+                PayloadJson = p.Payload,
+                Activo = true
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
 }

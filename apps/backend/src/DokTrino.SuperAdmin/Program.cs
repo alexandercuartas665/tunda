@@ -99,6 +99,7 @@ else
     await seeder.EnsureAdministradorRolAsync();
     await seeder.EnsureSedesDokTrinoAsync();
     await seeder.EnsureDokTrinoRealUsersAsync();
+    await seeder.EnsureComplementosAgnAsync();
 
     // Geografia (Pais/Departamento/Municipio) via api-colombia.com. Idempotente.
     // Si la API esta caida, solo registra warning y sigue.

@@ -90,6 +90,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TokenDependencia> TokensDependencia => Set<TokenDependencia>();
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
+    public DbSet<Complemento> Complementos => Set<Complemento>();
+    public DbSet<CatalogoCaracteristica> CatalogoCaracteristicas => Set<CatalogoCaracteristica>();
     public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
     public DbSet<FormacionDependencia> FormacionesDependencia => Set<FormacionDependencia>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
@@ -756,6 +758,23 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
             b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<Complemento>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(160).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(500);
+            b.Property(x => x.PayloadJson).HasColumnType("jsonb").IsRequired();
+            b.HasIndex(x => x.Codigo).IsUnique();
+        });
+
+        modelBuilder.Entity<CatalogoCaracteristica>(b =>
+        {
+            b.Property(x => x.EntidadTipo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Clave).HasMaxLength(80).IsRequired();
+            b.Property(x => x.Valor).HasColumnType("text").IsRequired();
+            b.HasIndex(x => new { x.EntidadTipo, x.EntidadId, x.Clave }).IsUnique();
         });
 
         modelBuilder.Entity<TokenDependencia>(b =>
