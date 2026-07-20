@@ -636,4 +636,19 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
     return Results.File(d.Content, d.Mime, d.FileName);
 }).RequireAuthorization();
 
+// Endpoint publico consumido por Power BI / conectores externos (spec 2.D5). El token ES la
+// autenticacion: se resuelve contra bi_token_uso, acota al tenant del token, ejecuta SOLO
+// SELECT con parametros nombrados y registra la ejecucion (duracion/error) en bi_log.
+app.MapGet("/api/public/bi/{token}", async (
+    string token,
+    HttpRequest request,
+    DokTrino.Application.Tenancy.IBiEjecucionService bi,
+    CancellationToken ct) =>
+{
+    var inputs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    foreach (var q in request.Query) { inputs[q.Key] = q.Value.ToString(); }
+    var resultado = await bi.EjecutarAsync(token, inputs, ct);
+    return resultado.Ok ? Results.Ok(resultado) : Results.BadRequest(resultado);
+}).AllowAnonymous();
+
 app.Run();

@@ -104,7 +104,10 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<ProcesoInstancia> ProcesoInstancias => Set<ProcesoInstancia>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
 
-    public DbSet<PowerBiReporte> PowerBiReportes => Set<PowerBiReporte>();
+    // ----- 2.D5 Power BI Servicios -----
+    public DbSet<BiServicio> BiServicios => Set<BiServicio>();
+    public DbSet<BiTokenUso> BiTokensUso => Set<BiTokenUso>();
+    public DbSet<BiLog> BiLogs => Set<BiLog>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -883,11 +886,30 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.InstanciaId });
         });
 
-        modelBuilder.Entity<PowerBiReporte>(b =>
+        // ----- 2.D5 Power BI Servicios -----
+        modelBuilder.Entity<BiServicio>(b =>
         {
+            b.Property(x => x.Codigo).HasMaxLength(20).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
-            b.Property(x => x.EmbedUrl).HasColumnType("text").IsRequired();
-            b.HasIndex(x => new { x.TenantId, x.Orden });
+            b.Property(x => x.Descripcion).HasColumnType("text");
+            b.Property(x => x.SchemaConsulta).HasColumnType("jsonb").IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<BiTokenUso>(b =>
+        {
+            b.Property(x => x.Token).HasMaxLength(120).IsRequired();
+            b.Property(x => x.Parametros).HasColumnType("jsonb").IsRequired();
+            b.HasOne(x => x.Servicio).WithMany(s => s.Tokens).HasForeignKey(x => x.ServicioId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => x.Token).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.ServicioId });
+        });
+
+        modelBuilder.Entity<BiLog>(b =>
+        {
+            b.Property(x => x.Error).HasColumnType("text");
+            b.HasOne(x => x.Servicio).WithMany().HasForeignKey(x => x.ServicioId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.ServicioId, x.Fecha });
         });
     }
 

@@ -1,0 +1,203 @@
+@page "/bi-servicios"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject IBiServicioAdminService Bi
+@inject NavigationManager Nav
+
+<PageTitle>Power BI Servicios - DokTrino</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Analitica - 2.D5</div>
+        <h1 class="ase-title">Power BI Servicios</h1>
+    </div>
+    <div>@if (_items.Count == 0) { <button class="btn btn-outline-primary btn-sm" @onclick="SeedDemo">Sembrar servicio demo</button> }</div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+<div class="ase-card">
+    <div class="ase-card-h">Servicios publicados (@_items.Count)</div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Codigo</th><th>Nombre</th><th>Descripcion</th><th class="text-center">Tokens</th><th class="text-center">Ejecuciones</th><th class="text-center">Activo</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in _items)
+                {
+                    <tr class="@(s.Id == _selId ? "bi-sel" : "")">
+                        <td><span class="mono">@s.Codigo</span></td><td>@s.Nombre</td><td>@(s.Descripcion ?? "-")</td>
+                        <td class="text-center">@s.Tokens</td><td class="text-center">@s.Ejecuciones</td>
+                        <td class="text-center">@(s.Activo ? "Si" : "No")</td>
+                        <td class="ase-row-actions">
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => Seleccionar(s.Id)">Tokens / Consulta</button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Eliminar(s.Id)">&times;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_items.Count == 0) { <div class="ase-empty">Sin servicios BI. Crea uno o siembra el demo.</div> }
+    </div>
+    <div class="bi-form">
+        <div class="bi-f bi-grow"><label>Nombre del servicio</label><input class="form-control form-control-sm" @bind="_n.Nombre" placeholder="Series documentales" /></div>
+        <div class="bi-f bi-grow"><label>Descripcion</label><input class="form-control form-control-sm" @bind="_n.Descripcion" /></div>
+        <div class="bi-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Crear">Crear servicio</button></div>
+    </div>
+</div>
+
+@if (_detalle is not null)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Consulta del servicio - @_detalle.Codigo (@_detalle.Nombre)</div>
+        <textarea class="form-control form-control-sm mono" rows="7" @bind="_schema"></textarea>
+        <small class="text-muted">JSON: <span class="mono">{"datasets":[{"nombre":"T1","sql":"SELECT ... WHERE tenant_id = @@tenant","params":["tenant"]}]}</span>. Solo SELECT; los parametros van como <span class="mono">@@nombre</span> (nunca interpolados). El parametro <span class="mono">@@tenant</span> se inyecta siempre desde el token.</small>
+        <div class="bi-form">
+            <button class="btn btn-primary btn-sm" @onclick="GuardarSchema">Guardar consulta</button>
+        </div>
+    </div>
+
+    <div class="ase-card">
+        <div class="ase-card-h">Tokens de acceso (@_tokens.Count)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Token</th><th>Parametros</th><th>Expira</th><th>Estado</th><th>Endpoint</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _tokens)
+                    {
+                        <tr>
+                            <td><span class="mono small">@Corto(t.Token)</span></td>
+                            <td><span class="mono small">@t.Parametros</span></td>
+                            <td>@(t.ExpiraEn?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            <td>@(t.RevocadoEn is null ? "activo" : "revocado")</td>
+                            <td><a class="mono small" href="@UrlPublica(t.Token)" target="_blank">@Corto(UrlPublica(t.Token))</a></td>
+                            <td class="ase-row-actions">@if (t.RevocadoEn is null) { <button class="btn btn-outline-danger btn-sm" @onclick="() => Revocar(t.Id)">Revocar</button> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_tokens.Count == 0) { <div class="ase-empty">Sin tokens. Genera uno para que Power BI consuma el servicio.</div> }
+        </div>
+        <div class="bi-form">
+            <div class="bi-f bi-grow"><label>Parametros fijos del token (JSON)</label><input class="form-control form-control-sm mono" @bind="_paramsToken" placeholder='{"anio":"2026"}' /></div>
+            <div class="bi-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="GenerarToken">Generar token</button></div>
+        </div>
+    </div>
+
+    <div class="ase-card">
+        <div class="ase-card-h">Historial de ejecuciones (@_logs.Count)</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Fecha</th><th class="text-center">Duracion (ms)</th><th>Resultado</th></tr></thead>
+                <tbody>
+                    @foreach (var l in _logs)
+                    {
+                        <tr>
+                            <td>@l.Fecha.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td class="text-center">@l.DuracionMs</td>
+                            <td>@(l.Error is null ? "OK" : $"ERROR: {l.Error}")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_logs.Count == 0) { <div class="ase-empty">Sin ejecuciones registradas.</div> }
+        </div>
+    </div>
+}
+
+<style>
+    .bi-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
+    .bi-f { display:flex; flex-direction:column; gap:3px; }
+    .bi-f label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
+    .bi-grow { flex:1; min-width:220px; }
+    .bi-sel { background:var(--primary-soft); }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private List<BiServicioDto> _items = new();
+    private List<BiTokenDto> _tokens = new();
+    private List<BiLogDto> _logs = new();
+    private BiServicioDetalleDto? _detalle;
+    private Guid? _selId;
+    private SaveBiServicioRequest _n = new();
+    private string _schema = "";
+    private string _paramsToken = "{}";
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _items = (await Bi.ListarAsync()).ToList();
+        if (_selId is Guid id)
+        {
+            _detalle = await Bi.ObtenerAsync(id);
+            if (_detalle is not null) { _schema = _detalle.SchemaConsulta; }
+            _tokens = (await Bi.ListarTokensAsync(id)).ToList();
+            _logs = (await Bi.HistorialAsync(id)).ToList();
+        }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private string UrlPublica(string token) => $"{Nav.BaseUri.TrimEnd('/')}/api/public/bi/{token}";
+    private static string Corto(string s) => s.Length > 40 ? s[..18] + "..." + s[^12..] : s;
+
+    private async Task Seleccionar(Guid id) { _selId = id; await Load(); }
+
+    private async Task Crear()
+    {
+        _error = _ok = null;
+        try { var s = await Bi.GuardarAsync(_n, await Actor()); if (s is null) { _error = "Sin tenant."; return; } _ok = $"Servicio {s.Codigo} creado."; _n = new(); await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task GuardarSchema()
+    {
+        _error = _ok = null;
+        if (_detalle is null) { return; }
+        try
+        {
+            var req = new SaveBiServicioRequest { Id = _detalle.Id, Nombre = _detalle.Nombre, Descripcion = _detalle.Descripcion, SchemaConsulta = _schema, Activo = _detalle.Activo };
+            await Bi.GuardarAsync(req, await Actor());
+            _ok = "Consulta guardada.";
+            await Load();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Eliminar(Guid id)
+    {
+        _error = _ok = null;
+        if (_selId == id) { _selId = null; _detalle = null; }
+        await Bi.EliminarAsync(id, await Actor());
+        await Load();
+    }
+
+    private async Task GenerarToken()
+    {
+        _error = _ok = null;
+        if (_selId is not Guid id) { return; }
+        try { await Bi.GenerarTokenAsync(id, await Actor(), _paramsToken, await Actor()); _ok = "Token generado."; _paramsToken = "{}"; await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Revocar(Guid tokenId) { _error = _ok = null; await Bi.RevocarTokenAsync(tokenId, await Actor()); _ok = "Token revocado."; await Load(); }
+
+    private async Task SeedDemo()
+    {
+        _error = _ok = null;
+        var n = await Bi.SeedDemoAsync(await Actor());
+        _ok = n > 0 ? "Servicio demo sembrado." : "Ya existian servicios.";
+        await Load();
+    }
+}

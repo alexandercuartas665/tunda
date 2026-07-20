@@ -57,6 +57,8 @@ public static class DependencyInjection
         services.AddHttpClient<DokTrino.Application.Auth.IGoogleOAuthClient, Auth.GoogleOAuthClient>();
         services.AddScoped<DatabaseSeeder>();
         services.AddScoped<DokTrino.Application.Tenancy.ISqlConsoleService, Sql.SqlConsoleService>();
+        // Ejecucion de servicios BI (SQL crudo parametrizado, solo SELECT) - spec 2.D5.
+        services.AddScoped<DokTrino.Application.Tenancy.IBiEjecucionService, Bi.BiEjecucionService>();
         services.AddHttpClient("api-colombia");
         services.AddScoped<Geo.ApiColombiaSeeder>();
 
