@@ -6,9 +6,16 @@
   --background: oklch(0.985 0.003 280);
   --foreground: oklch(0.2 0.04 280);
   --card: oklch(1 0 0);
-  --primary: oklch(0.55 0.22 237);
-  --primary-foreground: oklch(0.99 0.005 280);
-  --primary-soft: oklch(0.96 0.025 237);
+  --primary: #3b63e8;
+  --primary-deep: #2c3e9e;
+  --primary-foreground: #ffffff;
+  --primary-soft: #eef3fe;
+  /* Cromo calido del prototipo v3.0: bordes, superficies suaves y texto atenuado. */
+  --chrome-border: #f0ede4;
+  --chrome-surface: #f4f2ea;
+  --chrome-muted: #a59f8c;
+  --chrome-label: #b3ab94;
+  --chrome-nav: #5c5747;
   --muted: oklch(0.97 0.008 280);
   --muted-foreground: oklch(0.5 0.025 280);
   --accent-foreground: oklch(0.4 0.18 237);
@@ -83,45 +90,157 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   .ase-f-wide, .ase-f-full { grid-column: span 2; }
 }
 
-/* ===== Layout shell ===== */
-.doktrino-shell { display: flex; min-height: 100vh; }
+/* ===== Layout shell (prototipo v3.0: rail 64 + panel con topbar/aside/footer) ===== */
+/* Altura fija: el scroll vive dentro de <main>, para que el footer quede anclado
+   abajo como en el prototipo (la pagina completa no scrollea). */
+.doktrino-shell { display: flex; height: 100vh; overflow: hidden; background: #faf9f5; }
 
-.doktrino-sidebar {
-  width: 268px;
+/* Riel de iconos: columna fija a la izquierda, siempre visible. */
+.doktrino-rail {
+  width: 64px;
   flex-shrink: 0;
-  background: var(--sidebar);
-  border-right: 1px solid var(--sidebar-border);
+  background: #fff;
+  border-right: 1px solid var(--chrome-border);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
   position: sticky;
   top: 0;
   height: 100vh;
 }
+.doktrino-rail-toggle {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: #f3f1ea; border: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #7a8094; font-size: 16px; font-weight: 700;
+  margin-bottom: 12px; cursor: pointer;
+}
+.doktrino-rail-item {
+  position: relative;
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; margin-bottom: 2px;
+  background: transparent; color: #a7adbf; text-decoration: none;
+}
+.doktrino-rail-item.active {
+  background: var(--primary); color: #fff;
+  box-shadow: 0 6px 16px rgba(59, 99, 232, .3);
+}
+.doktrino-rail-item svg { width: 19px; height: 19px; }
 
-.doktrino-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Tooltip del riel (titulo + descripcion), igual que el prototipo. */
+.doktrino-tip {
+  position: absolute; left: 52px; top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  background: #161c2e; color: #fff;
+  padding: 11px 15px; border-radius: 13px; width: 210px;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+  box-shadow: 0 14px 36px rgba(20, 28, 50, .28);
+  z-index: 200; text-align: left;
+}
+.doktrino-tip::before {
+  content: ''; position: absolute; left: -6px; top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent; border-right-color: #161c2e;
+}
+.doktrino-tip b { display: block; font-size: 13.5px; font-weight: 700; letter-spacing: -.2px; }
+.doktrino-tip span { display: block; margin-top: 3px; font-size: 11.5px; line-height: 1.45; font-weight: 500; color: #aab2c8; }
+.doktrino-rail-item:hover .doktrino-tip { opacity: 1; visibility: visible; transform: translateY(-50%) translateX(0); }
+
+/* Panel principal: topbar arriba, cuerpo (aside + main) y footer abajo. */
+.doktrino-panel { flex: 1; min-width: 0; background: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
 .doktrino-topbar {
-  height: 60px;
+  padding: 15px 26px;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--chrome-border);
+}
+.doktrino-topbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.doktrino-topbar-brand:hover { text-decoration: none; }
+.doktrino-topbar-mark {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, #4f7ce8, var(--primary-deep));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 16px;
+}
+.doktrino-topbar-mark img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; background: #fff; }
+.doktrino-topbar-name { font-weight: 800; font-size: 19px; color: #1f2433; letter-spacing: -.4px; }
+.doktrino-page-title {
+  font-weight: 700; font-size: 16px; color: #2a3346;
+  border-left: 1px solid #ece8dd; padding-left: 18px;
+}
+.doktrino-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 13px; }
+.doktrino-search {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--chrome-surface); border: 0; border-radius: 22px;
+  padding: 9px 16px; width: 210px; height: 38px;
+  color: var(--chrome-muted); font-size: 12.5px; font-weight: 500;
+  line-height: 1;
+}
+.doktrino-search input {
+  border: 0; background: transparent; outline: none;
+  width: 100%; font-size: 12.5px; font-weight: 500; color: #37415c;
+}
+.doktrino-search input::placeholder { color: var(--chrome-muted); }
+.doktrino-help {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid #d8e2fb; cursor: pointer;
+  background: var(--primary-soft); color: var(--primary);
+  border-radius: 11px; padding: 9px 14px; font-size: 12px; font-weight: 700;
+}
+.doktrino-help svg { width: 15px; height: 15px; }
+.doktrino-mail {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--chrome-surface);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary); position: relative; border: 0; cursor: pointer;
+}
+.doktrino-mail .dot {
+  position: absolute; top: 8px; right: 9px;
+  width: 7px; height: 7px; border-radius: 50%; background: #e5484d;
+}
+.doktrino-topbar-user { display: flex; align-items: center; gap: 9px; }
+.doktrino-topbar-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.doktrino-topbar-user .nm { font-size: 12px; font-weight: 700; color: #2a3346; }
+.doktrino-topbar-user .em { font-size: 10px; font-weight: 500; color: var(--chrome-muted); }
+
+.doktrino-body { flex: 1; display: flex; min-height: 0; }
+
+.doktrino-sidebar {
+  width: 228px;
+  flex-shrink: 0;
+  padding: 20px 16px;
+  border-right: 1px solid var(--chrome-border);
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--border);
-  background: oklch(1 0 0 / 0.7);
-  backdrop-filter: blur(8px);
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  flex-direction: column;
+  overflow: auto;
 }
 
-.doktrino-content { padding: 26px 30px; width: 100%; }
+.doktrino-content { flex: 1; overflow: auto; padding: 24px; background: #fff; min-width: 0; }
+
+.doktrino-footer {
+  border-top: 1px solid var(--chrome-border);
+  padding: 12px 26px;
+  display: flex; justify-content: space-between;
+  font-size: 11.5px; font-weight: 500; line-height: 1.2;
+  color: var(--chrome-muted);
+}
+.doktrino-footer b { color: #16a34a; }
 
 /* Piezas del menu movil: ocultas en escritorio. */
-.doktrino-nav-toggle { display: none; }
+.doktrino-nav-toggle {
+  position: absolute; width: 0; height: 0;
+  opacity: 0; pointer-events: none; margin: 0;
+}
 .doktrino-nav-overlay { display: none; }
 .doktrino-hamburger { display: none; }
-.doktrino-topbar-brand { display: none; }
 
 /* ===== Sidebar header / brand ===== */
 .doktrino-brand {
@@ -196,33 +315,71 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .doktrino-agency .meta { font-size: 11px; color: var(--muted-foreground); }
 
 /* ===== Sidebar nav ===== */
-.doktrino-nav { flex: 1; overflow-y: auto; padding: 8px 10px; }
+.doktrino-nav { display: flex; flex-direction: column; }
 .doktrino-nav-label {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em;
-  color: oklch(0.5 0.025 280 / 0.8); padding: 14px 8px 6px;
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--chrome-label); padding: 18px 10px 9px;
 }
+/* El primer rotulo va pegado al borde superior del aside. */
+.doktrino-nav-label:first-child { padding-top: 0; }
 .doktrino-nav-link {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; border-radius: 9px;
-  color: oklch(0.35 0.04 280); text-decoration: none;
-  font-size: 13.5px; font-weight: 500; line-height: 1.2;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 13px; border-radius: 12px;
+  color: var(--chrome-nav); text-decoration: none;
+  font-size: 12.5px; font-weight: 600; line-height: 1.2;
+  margin-bottom: 3px; cursor: pointer;
   transition: background .12s, color .12s;
 }
-.doktrino-nav-link svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .85; }
-.doktrino-nav-link:hover { background: var(--muted); color: var(--foreground); }
-.doktrino-nav-link.active { background: var(--primary-soft); color: var(--accent-foreground); font-weight: 600; }
-.doktrino-nav-link.active svg { opacity: 1; color: var(--primary); }
-.doktrino-nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 7px; background: oklch(0.55 0.22 237 / 0.12); color: var(--primary); }
+.doktrino-nav-link svg { width: 17px; height: 17px; flex-shrink: 0; }
+.doktrino-nav-link:hover { background: var(--chrome-surface); }
+.doktrino-nav-link.active { color: var(--primary); font-weight: 700; background: transparent; }
+.doktrino-nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 7px; background: rgba(59, 99, 232, .12); color: var(--primary); }
 
-/* ===== Sidebar footer (user) ===== */
-.doktrino-user { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--sidebar-border); }
-.doktrino-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, oklch(0.82 0.13 70), oklch(0.74 0.15 70)); color: var(--gold-foreground); display: grid; place-items: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
-.doktrino-user .nm { font-size: 12.5px; font-weight: 600; }
-.doktrino-user .rl { font-size: 11px; color: var(--muted-foreground); }
-.doktrino-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); margin-left: auto; }
+/* ===== Drawer de Ayuda / Formacion (boton Ayuda de la barra superior) =====
+   Abre con el checkbox #doktrino-help-toggle: el layout es SSR estatico y no
+   puede depender de @onclick de Blazor. */
+/* Oculto pero renderizado: con display:none el navegador no reenvia el click del
+   <label> al control, y el drawer no abriria. */
+.doktrino-help-toggle {
+  position: absolute; width: 0; height: 0;
+  opacity: 0; pointer-events: none; margin: 0;
+}
+.doktrino-drawer-scrim {
+  position: fixed; inset: 0; z-index: 1900;
+  background: rgba(20, 26, 44, .45);
+  display: none; border: 0;
+}
+.doktrino-help-toggle:checked ~ .doktrino-drawer-scrim { display: block; }
+.doktrino-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 440px; max-width: 92vw; z-index: 1950;
+  background: #fff; box-shadow: -12px 0 40px rgba(20, 28, 50, .22);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .22s ease;
+}
+.doktrino-help-toggle:checked ~ .doktrino-drawer { transform: translateX(0); }
+.doktrino-help { cursor: pointer; }
+.doktrino-drawer-head { background: linear-gradient(135deg, #243391, var(--primary)); color: #fff; padding: 20px 22px; }
+.doktrino-drawer-head .row1 { display: flex; align-items: center; }
+.doktrino-drawer-head .ttl { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
+.doktrino-drawer-head .cls { margin-left: auto; cursor: pointer; font-size: 20px; color: #cdd5f6; background: none; border: 0; line-height: 1; user-select: none; }
+.doktrino-drawer-head .sub { font-size: 13px; font-weight: 600; color: #e7ecfb; margin-top: 8px; }
+.doktrino-drawer-head .txt { font-size: 12px; line-height: 1.5; color: #c3cdf4; margin-top: 4px; }
+.doktrino-drawer-body { flex: 1; overflow: auto; padding: 20px 22px; }
+.doktrino-drawer-body .lbl { font-size: 12px; font-weight: 700; color: #6b7488; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 11px; }
+.doktrino-drawer-empty { font-size: 12.5px; line-height: 1.6; color: #8a93a8; margin: 0; }
 
-/* topbar user chip */
-.doktrino-user-chip { font-size: 13px; color: var(--muted-foreground); }
+/* ===== Tarjeta de tenant al pie del sidebar ===== */
+.doktrino-tenant-card {
+  margin-top: auto;
+  background: var(--chrome-surface);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+}
+.doktrino-tenant-card .nm { font-size: 12px; font-weight: 700; color: #2a3346; }
+.doktrino-tenant-card .mt { font-size: 10px; font-weight: 500; color: var(--chrome-muted); margin-top: 2px; }
 .doktrino-user-chip strong { color: var(--foreground); font-weight: 600; }
 
 /* ===== Page header ===== */
@@ -966,26 +1123,26 @@ h1, h2, h3 { letter-spacing: -0.01em; }
     transition: transform .25s ease;
     box-shadow: 0 0 40px rgba(0,0,0,.18);
   }
-  /* Abierto cuando el checkbox esta marcado. */
-  .doktrino-nav-toggle:checked ~ .doktrino-sidebar { transform: translateX(0); }
+  /* Abierto cuando el checkbox esta marcado (el aside vive dentro del panel). */
+  .doktrino-nav-toggle:checked ~ .doktrino-panel .doktrino-sidebar { transform: translateX(0); }
 
   /* Capa oscura detras del menu abierto. */
   .doktrino-nav-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1040; border: 0; }
   .doktrino-nav-toggle:checked ~ .doktrino-nav-overlay { display: block; }
 
-  /* Topbar: hamburguesa a la izquierda + marca, usuario a la derecha. */
-  .doktrino-topbar { justify-content: flex-start; gap: 10px; padding: 0 14px; }
+  /* Riel y buscador se ocultan; la hamburguesa abre el menu. */
+  .doktrino-rail { display: none; }
+  .doktrino-search { display: none; }
+  .doktrino-topbar { gap: 10px; padding: 12px 14px; }
   .doktrino-hamburger {
     display: inline-flex; align-items: center; justify-content: center;
     width: 40px; height: 40px; margin-left: -6px;
     border-radius: 10px; cursor: pointer; color: var(--foreground);
   }
-  .doktrino-hamburger:hover { background: var(--muted); }
+  .doktrino-hamburger:hover { background: var(--chrome-surface); }
   .doktrino-hamburger svg { width: 22px; height: 22px; }
-  .doktrino-topbar-brand { display: inline-block; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
-  .doktrino-topbar-brand span { color: var(--primary); }
-  .doktrino-topbar form { margin-left: auto; }            /* empuja "Salir" a la derecha */
-  .doktrino-user-chip { display: none; }                   /* se oculta para no saturar */
+  .doktrino-page-title { display: none; }
+  .doktrino-topbar-user .nm, .doktrino-topbar-user .em { display: none; }
 
   /* Mas aire util en pantallas chicas. */
   .doktrino-content { padding: 16px 14px; }
@@ -1005,7 +1162,8 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 
 /* Telefonos pequenos. */
 @media (max-width: 560px) {
-  .doktrino-topbar-brand { font-size: 14px; }
+  .doktrino-topbar-name { font-size: 15px; }
+  .doktrino-help span { display: none; }
   .doktrino-content { padding: 14px 11px; }
   .page-title { font-size: 1.32rem; }
   .page-sub { font-size: .86rem; }

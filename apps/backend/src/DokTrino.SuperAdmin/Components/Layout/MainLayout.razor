@@ -1,35 +1,117 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject IServiceScopeFactory ScopeFactory
 
 <div class="doktrino-shell">
-    <!-- Toggle solo-CSS del menu (off-canvas en movil). Funciona en cualquier render mode. -->
+    <!-- Toggles solo-CSS (menu off-canvas y drawer de ayuda). El layout se renderiza
+         en SSR estatico, asi que @onclick no dispara aqui: el checkbox si funciona
+         en cualquier render mode. -->
     <input type="checkbox" id="doktrino-nav-toggle" class="doktrino-nav-toggle" autocomplete="off" />
+    <input type="checkbox" id="doktrino-help-toggle" class="doktrino-help-toggle" autocomplete="off" />
 
-    <aside class="doktrino-sidebar">
-        <NavMenu />
-    </aside>
+    <!-- Riel de iconos (prototipo v3.0): navegacion primaria siempre visible. -->
+    <nav class="doktrino-rail">
+        <label for="doktrino-nav-toggle" class="doktrino-rail-toggle" title="Contraer menu">&lsaquo;</label>
+
+        @foreach (var item in RailItems)
+        {
+            <a class="doktrino-rail-item @(IsActive(item.Href) ? "active" : "")" href="@item.Href">
+                @item.Icon
+                <span class="doktrino-tip"><b>@item.Label</b><span>@item.Hint</span></span>
+            </a>
+        }
+    </nav>
 
     <!-- Capa oscura: al tocarla se cierra el menu (es un label del checkbox). -->
     <label for="doktrino-nav-toggle" class="doktrino-nav-overlay" aria-hidden="true"></label>
 
-    <div class="doktrino-main">
-        <div class="doktrino-topbar">
+    <div class="doktrino-panel">
+        <header class="doktrino-topbar">
             <label for="doktrino-nav-toggle" class="doktrino-hamburger" aria-label="Abrir menu">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h18" /></svg>
             </label>
-            <span class="doktrino-topbar-brand">DokTrino</span>
 
-            <AuthorizeView>
-                <Authorized>
-                    <span class="doktrino-user-chip">@(context.User.FindFirst("platform_role") is not null ? "Operador" : "Agencia") · <strong>@context.User.Identity?.Name</strong></span>
-                    <form method="post" action="/auth/logout" class="m-0">
-                        <button type="submit" class="btn btn-sm btn-outline-secondary">Salir</button>
-                    </form>
-                </Authorized>
-            </AuthorizeView>
+            <a class="doktrino-topbar-brand" href="">
+                <span class="doktrino-topbar-mark">
+                    @if (!string.IsNullOrWhiteSpace(_brandLogoUrl))
+                    {
+                        <img src="@_brandLogoUrl" alt="@_brandName" />
+                    }
+                    else
+                    {
+                        @(_brandName.Length > 0 ? _brandName[..1].ToUpperInvariant() : "D")
+                    }
+                </span>
+                <span class="doktrino-topbar-name">@_brandName</span>
+            </a>
+
+            <div class="doktrino-page-title">@PageTitle</div>
+
+            <div class="doktrino-topbar-right">
+                <label class="doktrino-search">
+                    <span>&#8981;</span>
+                    <input type="search" placeholder="Buscar..." aria-label="Buscar" />
+                </label>
+
+                <label for="doktrino-help-toggle" class="doktrino-help">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3" /><path d="M12 17h.01" /></svg>
+                    <span>Ayuda</span>
+                </label>
+
+                <span class="doktrino-mail" title="Notificaciones">&#9993;<span class="dot"></span></span>
+
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="doktrino-topbar-user">
+                            <span class="doktrino-topbar-avatar">@Initials(context.User.Identity?.Name)</span>
+                            <div>
+                                <div class="nm">@context.User.Identity?.Name</div>
+                                <div class="em">@(context.User.FindFirst("platform_role") is not null ? "Operador de plataforma" : "Usuario de entidad")</div>
+                            </div>
+                        </div>
+                        <form method="post" action="/auth/logout" class="m-0">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">Salir</button>
+                        </form>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <div class="doktrino-body">
+            <aside class="doktrino-sidebar">
+                <NavMenu />
+            </aside>
+
+            <main class="doktrino-content">
+                @Body
+            </main>
         </div>
 
-        <div class="doktrino-content">
-            @Body
+        <footer class="doktrino-footer">
+            <span>Estado <b>Servidor OK</b></span>
+            <span>@_brandName &middot; v3.0.0 &copy; @DateTime.Now.Year</span>
+        </footer>
+    </div>
+
+    @* Drawer de ayuda. Se renderiza siempre y lo muestra/oculta el checkbox de arriba;
+       el contenido de formacion lo llena la Fase 2I. *@
+    <label for="doktrino-help-toggle" class="doktrino-drawer-scrim" aria-hidden="true"></label>
+    <div class="doktrino-drawer">
+        <div class="doktrino-drawer-head">
+            <div class="row1">
+                <div class="ttl">@_brandName</div>
+                <label for="doktrino-help-toggle" class="cls" aria-label="Cerrar ayuda">&#10005;</label>
+            </div>
+            <div class="sub">Centro de ayuda y formacion documental</div>
+            <div class="txt">Aprende a clasificar tus documentos. Puedes abrir esta ayuda en cualquier momento, no es obligatoria para empezar.</div>
+        </div>
+        <div class="doktrino-drawer-body">
+            <div class="lbl">Recursos de formacion</div>
+            <p class="doktrino-drawer-empty">
+                Aun no hay recursos de formacion publicados para tu entidad.
+                El catalogo de clases y el quiz se habilitan desde el modulo de Formacion.
+            </p>
         </div>
     </div>
 </div>
@@ -50,3 +132,122 @@
         }
     });
 </script>
+
+@code {
+    private string _brandName = "DokTrino";
+    private string? _brandLogoUrl;
+
+    private sealed record RailItem(string Href, string Label, string Hint, MarkupString Icon);
+
+    // El riel replica la navegacion primaria del prototipo v3.0, apuntando a las
+    // rutas reales del build.
+    private static readonly RailItem[] RailItems =
+    [
+        new("", "Inicio", "Panel general con indicadores documentales",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>""")),
+        new("trd-cliente", "Cliente Encuesta", "Diligencia la TRD de tu dependencia",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M8.5 13l2 2 4-4.5"/></svg>""")),
+        new("trd", "Encuesta Documental", "Administra las Tablas de Retencion (TRD)",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>""")),
+        new("archivo-digital", "Archivo Digital", "Repositorio central de documentos digitalizados",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>""")),
+        new("procesos", "Procesos", "Flujos documentales (BPMN)",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M7 11v2a2 2 0 0 0 2 2h2"/></svg>""")),
+        new("bi-servicios", "Power BI Service", "Indicadores y reportes archivisticos",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="12" width="3.5" height="8" rx="1"/><rect x="10.2" y="7" width="3.5" height="13" rx="1"/><rect x="16.5" y="4" width="3.5" height="16" rx="1"/></svg>""")),
+        new("cfg-empresa", "Configuracion Documental", "Constructor de formularios y catalogos",
+            new MarkupString("""<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="8" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg>""")),
+    ];
+
+    // Titulos de la barra superior por ruta. Lo que no este mapeado cae al
+    // nombre del segmento capitalizado, para que ninguna pagina quede sin titulo.
+    private static readonly Dictionary<string, string> PageTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [""] = "Dashboard",
+        ["trd"] = "Encuesta Documental",
+        ["trd-cliente"] = "Cliente Encuesta",
+        ["radicacion"] = "Radicacion",
+        ["archivo-fisico"] = "Archivo Fisico",
+        ["archivo-digital"] = "Archivo Digital",
+        ["procesos"] = "Procesos",
+        ["formularios"] = "Formularios",
+        ["bi-servicios"] = "Power BI Service",
+        ["clasificador-trd"] = "Clasificador TRD",
+        ["importacion-trd"] = "Importacion TRD",
+        ["cfg-empresa"] = "Configuracion Documental",
+        ["cfg-usuarios"] = "Administracion de Usuarios",
+        ["cfg-roles"] = "Roles y Permisos",
+        ["tenants"] = "Entidades",
+        ["auditoria"] = "Auditoria",
+        ["mi-cuenta"] = "Mi cuenta",
+    };
+
+    private string PageTitle
+    {
+        get
+        {
+            var path = CurrentPath();
+            if (PageTitles.TryGetValue(path, out var titulo))
+            {
+                return titulo;
+            }
+
+            var seg = path.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            if (string.IsNullOrWhiteSpace(seg))
+            {
+                return "Dashboard";
+            }
+
+            seg = seg.Replace('-', ' ');
+            return char.ToUpperInvariant(seg[0]) + seg[1..];
+        }
+    }
+
+    private string CurrentPath() =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+
+    private bool IsActive(string href)
+    {
+        var path = CurrentPath();
+        return href.Length == 0 ? path.Length == 0 : path.Equals(href, StringComparison.OrdinalIgnoreCase);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+
+        // La marca de la barra superior sale de la configuracion de plataforma
+        // (modulo Marca), no de una constante en el layout.
+        //
+        // Se resuelve en un scope propio: el layout se inicializa en paralelo con la
+        // pagina, y compartir el DbContext scoped con ella revienta con
+        // "A second operation was started on this context instance".
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var branding = scope.ServiceProvider.GetRequiredService<DokTrino.Application.Admin.IPlatformBrandingService>();
+            var brand = await branding.GetAsync();
+            if (!string.IsNullOrWhiteSpace(brand.PlatformName))
+            {
+                _brandName = brand.PlatformName;
+            }
+            _brandLogoUrl = brand.LoginLogoUrl;
+        }
+        catch
+        {
+            // Sin branding configurado el layout sigue con el valor por defecto.
+        }
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant()
+            : $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => StateHasChanged();
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

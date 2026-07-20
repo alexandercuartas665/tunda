@@ -1,47 +1,16 @@
 @implements IDisposable
 @inject NavigationManager Navigation
-@inject ITenantAdminService TenantsSvc
-
-<div class="doktrino-brand doktrino-brand-stack">
-    <div class="doktrino-logo @( !_showAdmin && !string.IsNullOrWhiteSpace(_tenantLogoUrl) ? "doktrino-logo-wide" : "" )">
-        @* Para usuarios de tenant: si configuraron un logo en /mi-cuenta lo usamos
-           aqui; si no, mostramos el SVG por defecto. Para super-admin de plataforma
-           queda siempre el SVG (es la consola, no una agencia). El logo del tenant
-           se muestra ancho para que se vea completo (no recortado en cuadrado). *@
-        @if (!_showAdmin && !string.IsNullOrWhiteSpace(_tenantLogoUrl))
-        {
-            <img src="@_tenantLogoUrl" alt="Logo" />
-        }
-        else
-        {
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        }
-    </div>
-    <div class="doktrino-brand-text">
-        <div class="doktrino-brand-name">@(_showAdmin || string.IsNullOrWhiteSpace(_tenantName) ? "DokTrino" : _tenantName)</div>
-        <div class="doktrino-brand-sub">@(_showAdmin ? "Consola de gobierno" : (string.IsNullOrWhiteSpace(_tenantSlogan) ? "Gestion Documental" : _tenantSlogan))</div>
-    </div>
-</div>
-
-<div class="doktrino-agency">
-    @if (_showAdmin)
-    {
-        <div class="lbl">Plataforma</div>
-        <div class="name">DokTrino</div>
-        <div class="meta">Consola de gobierno</div>
-    }
-    else
-    {
-        <div class="lbl">Agencia</div>
-        <div class="name">@(_tenantName ?? "Mi agencia")</div>
-        <div class="meta">@_roleLabel</div>
-    }
-</div>
+@inject IServiceScopeFactory ScopeFactory
 
 <nav class="doktrino-nav">
     @if (_showTenant)
     {
-        <div class="doktrino-nav-label">Operacion</div>
+        <div class="doktrino-nav-label">Menu principal</div>
+
+        <NavLink class="doktrino-nav-link" href="" Match="NavLinkMatch.All">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span>Inicio</span>
+        </NavLink>
 
         <NavLink class="doktrino-nav-link" href="radicacion">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
@@ -63,6 +32,8 @@
             <span>Archivo digital</span>
         </NavLink>
 
+        <div class="doktrino-nav-label">Plataforma</div>
+
         <NavLink class="doktrino-nav-link" href="procesos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="1"/><rect width="8" height="8" x="13" y="13" rx="1"/><path d="M7 11v2a2 2 0 0 0 2 2h2"/><path d="M11 7h2a2 2 0 0 1 2 2v2"/></svg>
             <span>Procesos (BPMN)</span>
@@ -72,8 +43,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
             <span>Formularios</span>
         </NavLink>
-
-        <div class="doktrino-nav-label">Infraestructura & IA</div>
 
         <NavLink class="doktrino-nav-link" href="lineas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
@@ -105,8 +74,6 @@
             <span>Power BI Servicios</span>
         </NavLink>
 
-        <div class="doktrino-nav-label">Configuracion del Sistema</div>
-
         <NavLink class="doktrino-nav-link" href="cfg-profesionales">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span>Colaboradores</span>
@@ -137,7 +104,7 @@
             <span>Consola SQL</span>
         </NavLink>
 
-        <div class="doktrino-nav-label">Configuracion de la Entidad</div>
+        <div class="doktrino-nav-label">Otros</div>
 
         <NavLink class="doktrino-nav-link" href="cfg-empresa">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
@@ -153,9 +120,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
             <span>Administracion de Usuarios</span>
         </NavLink>
-
-        @* MI AGENCIA: ultimo grupo del sidebar, contiene plantillas y mi cuenta. *@
-        <div class="doktrino-nav-label">Mi agencia</div>
 
         <NavLink class="doktrino-nav-link" href="plantillas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg>
@@ -229,13 +193,18 @@
     }
 </nav>
 
-<div class="doktrino-user">
-    <div class="doktrino-avatar">@_avatar</div>
-    <div>
-        <div class="nm">@(_userName ?? "Usuario")</div>
-        <div class="rl">@_roleLabel</div>
-    </div>
-    <span class="doktrino-dot"></span>
+@* Tarjeta de entidad al pie del sidebar (prototipo v3.0). *@
+<div class="doktrino-tenant-card">
+    @if (_showAdmin)
+    {
+        <div class="nm">Plataforma</div>
+        <div class="mt">Consola de gobierno</div>
+    }
+    else
+    {
+        <div class="nm">@(_tenantName ?? "Mi entidad")</div>
+        <div class="mt">@(string.IsNullOrWhiteSpace(_tenantSlogan) ? $"Plan Documental - {_roleLabel}" : _tenantSlogan)</div>
+    }
 </div>
 
 @code {
@@ -249,12 +218,9 @@
     /// <summary>True cuando el tenant_role es Owner o Admin. Solo estos perfiles ven
     /// "Mi cuenta" (datos de la agencia, plan, facturacion).</summary>
     private bool _esAdminAgencia;
-    private string? _userName;
     private string? _tenantName;
-    private string? _tenantLogoUrl;
     private string? _tenantSlogan;
     private string _roleLabel = "Operador de plataforma";
-    private string _avatar = "SA";
 
     protected override async Task OnInitializedAsync()
     {
@@ -275,9 +241,6 @@
         var rol = state.User.FindFirst("tenant_role")?.Value ?? "";
         _esAdminAgencia = isPlatformOperator || rol.Equals("Owner", StringComparison.OrdinalIgnoreCase) || rol.Equals("Admin", StringComparison.OrdinalIgnoreCase);
 
-        _userName = state.User.Identity?.Name;
-        _avatar = Initials(_userName);
-
         if (isPlatformOperator)
         {
             _roleLabel = "Operador de plataforma";
@@ -287,21 +250,15 @@
             _roleLabel = state.User.FindFirst("tenant_role")?.Value ?? "Agencia";
             if (Guid.TryParse(tenantClaim, out var tenantId))
             {
-                var tenant = await TenantsSvc.GetAsync(tenantId);
+                // Scope propio: el menu se inicializa en paralelo con la pagina y no
+                // puede compartir con ella el DbContext scoped.
+                using var scope = ScopeFactory.CreateScope();
+                var tenantsSvc = scope.ServiceProvider.GetRequiredService<ITenantAdminService>();
+                var tenant = await tenantsSvc.GetAsync(tenantId);
                 _tenantName = tenant?.Name;
-                _tenantLogoUrl = tenant?.LogoUrl;
                 _tenantSlogan = tenant?.Slogan;
             }
         }
-    }
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "U";
-        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 1
-            ? parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant()
-            : $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant();
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => StateHasChanged();
