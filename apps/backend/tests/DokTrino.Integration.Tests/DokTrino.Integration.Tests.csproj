@@ -25,7 +25,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DokTrino.Infrastructure\DokTrino.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\DokTrino.Application\DokTrino.Application.csproj" />
-    <ProjectReference Include="..\..\src\DokTrino.Shared\DokTrino.Shared.csproj" />
     <ProjectReference Include="..\..\src\DokTrino.Api\DokTrino.Api.csproj" />
   </ItemGroup>
 

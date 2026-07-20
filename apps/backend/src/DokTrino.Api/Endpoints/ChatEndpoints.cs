@@ -7,6 +7,12 @@ namespace DokTrino.Api.Endpoints;
 /// Chat: webhook de ingesta de Evolution (anonimo, token por tenant; ver ADR-0006) y
 /// lectura/envio autenticado para asesores del tenant (politica TenantMember).
 /// </summary>
+/// <remarks>
+/// Heredado del CRM de Visal: no forma parte del alcance documental de
+/// DokTrino. Se conserva mientras haya clientes apuntando a el; se retira
+/// cuando se confirme que nadie lo consume.
+/// </remarks>
+[Obsolete("Modulo CRM heredado de Visal; fuera del alcance documental.")]
 public static class ChatEndpoints
 {
     public static void MapChatEndpoints(this WebApplication app)

@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\DokTrino.Shared\DokTrino.Shared.csproj" />
     <ProjectReference Include="..\DokTrino.Application\DokTrino.Application.csproj" />
     <ProjectReference Include="..\DokTrino.Infrastructure\DokTrino.Infrastructure.csproj" />
   </ItemGroup>

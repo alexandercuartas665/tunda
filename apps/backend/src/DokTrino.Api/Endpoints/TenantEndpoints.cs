@@ -9,6 +9,12 @@ namespace DokTrino.Api.Endpoints;
 /// TenantAdmin (rol Owner o Admin dentro de la agencia activa). El aislamiento por
 /// tenant lo garantiza el filtro global del DbContext mas el claim tenant_id.
 /// </summary>
+/// <remarks>
+/// Heredado del CRM de Visal: no forma parte del alcance documental de
+/// DokTrino. Se conserva mientras haya clientes apuntando a el; se retira
+/// cuando se confirme que nadie lo consume.
+/// </remarks>
+[Obsolete("Modulo CRM heredado de Visal; fuera del alcance documental.")]
 public static class TenantEndpoints
 {
     public static void MapTenantEndpoints(this WebApplication app)

@@ -1,6 +1,7 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 @inject IServiceScopeFactory ScopeFactory
+@inject IConfiguration Config
 
 <nav class="doktrino-nav">
     @if (_showTenant)
@@ -54,25 +55,34 @@
             <span>Formularios</span>
         </NavLink>
 
+        @if (_crmHabilitado)
+        {
         <NavLink class="doktrino-nav-link" href="lineas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
             <span>Lineas WhatsApp</span>
         </NavLink>
+        }
 
+        @if (_crmHabilitado)
+        {
         <NavLink class="doktrino-nav-link" href="agentes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
             <span>Agentes IA</span>
         </NavLink>
+        }
 
         <NavLink class="doktrino-nav-link" href="clasificador-trd">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2"/></svg>
             <span>Clasificador TRD (IA)</span>
         </NavLink>
 
+        @if (_crmHabilitado)
+        {
         <NavLink class="doktrino-nav-link" href="automatizaciones">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
             <span>Automatizaciones</span>
         </NavLink>
+        }
 
         <NavLink class="doktrino-nav-link" href="metricas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -131,10 +141,13 @@
             <span>Administracion de Usuarios</span>
         </NavLink>
 
+        @if (_crmHabilitado)
+        {
         <NavLink class="doktrino-nav-link" href="plantillas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg>
             <span>Plantillas</span>
         </NavLink>
+        }
 
         @if (_esAdminAgencia)
         {
@@ -232,9 +245,17 @@
     private string? _tenantSlogan;
     private string _roleLabel = "Operador de plataforma";
 
+    /// <summary>
+    /// Modulos CRM heredados de Visal (WhatsApp, agentes, automatizaciones,
+    /// plantillas). Quedan ocultos por defecto: no son documentales. Se pueden
+    /// reactivar con Modulos:EnableCrm mientras se decide si se retiran.
+    /// </summary>
+    private bool _crmHabilitado;
+
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
+        _crmHabilitado = Config.GetValue("Modulos:EnableCrm", false);
 
         if (AuthState is null)
         {
