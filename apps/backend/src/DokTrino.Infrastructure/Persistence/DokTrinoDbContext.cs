@@ -91,6 +91,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
     public DbSet<Expediente> Expedientes => Set<Expediente>();
+    public DbSet<NivelTopografico> NivelesTopograficos => Set<NivelTopografico>();
+    public DbSet<ElementoTopografico> ElementosTopograficos => Set<ElementoTopografico>();
     public DbSet<Complemento> Complementos => Set<Complemento>();
     public DbSet<CatalogoCaracteristica> CatalogoCaracteristicas => Set<CatalogoCaracteristica>();
     public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
@@ -759,6 +761,24 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
             b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<NivelTopografico>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
+            b.Property(x => x.Prefijo).HasMaxLength(10).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Orden }).IsUnique();
+        });
+
+        modelBuilder.Entity<ElementoTopografico>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(160).IsRequired();
+            b.Property(x => x.CodigoTopografico).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("DISPONIBLE");
+            b.HasOne(x => x.Nivel).WithMany().HasForeignKey(x => x.NivelId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Padre).WithMany(p => p.Hijos).HasForeignKey(x => x.PadreId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.CodigoTopografico }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.PadreId });
         });
 
         modelBuilder.Entity<Expediente>(b =>

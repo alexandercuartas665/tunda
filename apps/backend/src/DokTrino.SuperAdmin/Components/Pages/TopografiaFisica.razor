@@ -1,0 +1,234 @@
+@page "/topografia-fisica"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject ITopografiaService Topo
+
+<PageTitle>Topografia fisica - DokTrino</PageTitle>
+
+<div class="trx">
+    <div class="trx-breadcrumb">Inicio &middot; Archivo fisico &middot; Topografia</div>
+
+    <div class="trx-head">
+        <div>
+            <div class="trx-title">Topografia fisica</div>
+            <div class="trx-sub">Define los niveles de almacenamiento de tu entidad y ubica los contenedores en cascada.</div>
+        </div>
+    </div>
+
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    @* --- Niveles --- *@
+    <div class="ase-card">
+        <div class="ase-card-h">Niveles de la jerarquia (@_niveles.Count)</div>
+
+        @if (_niveles.Count == 0)
+        {
+            <div class="trx-empty">
+                Sin niveles definidos. Empieza por el nivel raiz (por ejemplo Bodega) y sigue bajando.
+            </div>
+        }
+        else
+        {
+            <div class="topo-niveles">
+                @foreach (var n in _niveles)
+                {
+                    <div class="topo-nivel">
+                        <span class="topo-orden">@n.Orden</span>
+                        <div style="flex: 1;">
+                            <div class="topo-nivel-n">@n.Nombre</div>
+                            <div class="topo-nivel-m">
+                                prefijo <b>@n.Prefijo</b> &middot;
+                                @(n.CapacidadPorDefecto == 0 ? "sin limite" : $"capacidad {n.CapacidadPorDefecto}") &middot;
+                                @n.Elementos elementos
+                            </div>
+                        </div>
+                        @if (n.Elementos == 0)
+                        {
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => BorrarNivel(n.Id)">&times;</button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="ad-form">
+            <div class="ad-f ad-grow"><label>Nombre del nivel</label><input class="form-control form-control-sm" @bind="_nvNombre" placeholder="Bodega, Estante, Entrepano, Caja..." /></div>
+            <div class="ad-f"><label>Prefijo</label><input class="form-control form-control-sm" style="width: 90px;" @bind="_nvPrefijo" placeholder="BOD" /></div>
+            <div class="ad-f"><label>Capacidad</label><input type="number" min="0" class="form-control form-control-sm" style="width: 100px;" @bind="_nvCapacidad" /></div>
+            <div class="ad-f"><label>&nbsp;</label><button class="trx-btn" @onclick="CrearNivel">+ Nivel</button></div>
+        </div>
+        <small class="text-muted">Capacidad 0 = sin limite. El orden lo fija el momento de creacion: el primero es la raiz.</small>
+    </div>
+
+    @* --- Arbol de elementos --- *@
+    <div class="ase-card">
+        <div class="ase-card-h">Ubicaciones (@_elementos.Count)</div>
+
+        @if (_niveles.Count == 0)
+        {
+            <div class="trx-empty">Define al menos un nivel antes de crear ubicaciones.</div>
+        }
+        else
+        {
+            @if (_elementos.Count == 0)
+            {
+                <div class="trx-empty">Sin ubicaciones. Crea la primera con el formulario de abajo.</div>
+            }
+            else
+            {
+                <div class="topo-arbol">
+                    @foreach (var e in _elementos)
+                    {
+                        <div class="topo-item @(_sel?.Id == e.Id ? "on" : "")"
+                             style="padding-left: @((e.Orden - 1) * 22 + 10)px;"
+                             @onclick="() => Seleccionar(e)">
+                            <span class="topo-code">@e.CodigoTopografico</span>
+                            <span class="topo-nom">@e.Nombre</span>
+                            <span class="topo-niv">@e.Nivel</span>
+                            <span class="topo-cap">
+                                @if (e.Capacidad > 0)
+                                {
+                                    <text>@e.Ocupacion / @e.Capacidad</text>
+                                }
+                                else
+                                {
+                                    <text>@e.Ocupacion</text>
+                                }
+                            </span>
+                            <span class="topo-estado @e.Estado.ToLowerInvariant()">@e.Estado</span>
+                            <button class="btn btn-outline-danger btn-sm" @onclick:stopPropagation="true" @onclick="() => BorrarElemento(e.Id)">&times;</button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="ad-form">
+                <div class="ad-f ad-grow">
+                    <label>Crear dentro de</label>
+                    <select class="form-select form-select-sm" @bind="_padre">
+                        <option value="">(raiz - @(_niveles.FirstOrDefault()?.Nombre ?? "nivel 1"))</option>
+                        @foreach (var e in _elementos.Where(x => x.Orden < _niveles.Count))
+                        {
+                            <option value="@e.Id">@e.CodigoTopografico - @e.Nombre</option>
+                        }
+                    </select>
+                </div>
+                <div class="ad-f ad-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_elNombre" placeholder="Bodega Norte / Estante 05..." /></div>
+                <div class="ad-f"><label>Capacidad</label><input type="number" min="0" class="form-control form-control-sm" style="width: 100px;" @bind="_elCapacidad" /></div>
+                <div class="ad-f"><label>&nbsp;</label><button class="trx-btn" @onclick="CrearElemento">+ Ubicacion</button></div>
+            </div>
+            <small class="text-muted">El codigo topografico se compone solo a partir del padre. Capacidad vacia = la del nivel.</small>
+        }
+    </div>
+
+    @if (_sel is not null)
+    {
+        <div class="ase-card">
+            <div class="ase-card-h">Ubicacion seleccionada</div>
+            <div style="font-size: 13px; color: #37415c;">
+                <b>@_sel.CodigoTopografico</b> &mdash; @_ruta
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .topo-niveles { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+    .topo-nivel { display:flex; align-items:center; gap:12px; background:#f7f9fd; border:1px solid #e9ecf5; border-radius:12px; padding:10px 14px; }
+    .topo-orden { width:26px; height:26px; border-radius:8px; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
+    .topo-nivel-n { font-size:13px; font-weight:700; color:#1f2433; }
+    .topo-nivel-m { font-size:11px; color:#8a93a8; margin-top:2px; }
+    .topo-arbol { display:flex; flex-direction:column; gap:2px; margin-bottom:14px; }
+    .topo-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; }
+    .topo-item:hover { background:#f6f8fc; }
+    .topo-item.on { background:#eef3fe; }
+    .topo-code { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600; color:var(--primary); min-width:150px; }
+    .topo-nom { font-size:12.5px; font-weight:600; color:#37415c; flex:1; }
+    .topo-niv { font-size:11px; color:#8a93a8; }
+    .topo-cap { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#6f6754; min-width:60px; text-align:right; }
+    .topo-estado { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:8px; }
+    .topo-estado.disponible { background:#e8f7ee; color:#15803d; }
+    .topo-estado.lleno { background:#fff3d6; color:#b8770b; }
+    .topo-estado.inactivo { background:#f1efe7; color:#8a7f66; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<NivelTopograficoDto> _niveles = new();
+    private List<ElementoTopograficoDto> _elementos = new();
+    private ElementoTopograficoDto? _sel;
+    private string _ruta = "";
+
+    private string _nvNombre = "", _nvPrefijo = "";
+    private int _nvCapacidad;
+    private string _padre = "", _elNombre = "";
+    private int? _elCapacidad;
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync() => await Recargar();
+
+    private async Task Recargar()
+    {
+        _niveles = (await Topo.ListarNivelesAsync()).ToList();
+        _elementos = (await Topo.ListarElementosAsync()).ToList();
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task CrearNivel()
+    {
+        _error = _ok = null;
+        try
+        {
+            var n = await Topo.CrearNivelAsync(_nvNombre, _nvPrefijo, _nvCapacidad, await Actor());
+            _ok = $"Nivel {n!.Orden} \"{n.Nombre}\" creado.";
+            _nvNombre = _nvPrefijo = ""; _nvCapacidad = 0;
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task BorrarNivel(Guid id)
+    {
+        _error = _ok = null;
+        try { await Topo.EliminarNivelAsync(id); await Recargar(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task CrearElemento()
+    {
+        _error = _ok = null;
+        try
+        {
+            Guid? padre = Guid.TryParse(_padre, out var g) ? g : null;
+            var e = await Topo.CrearElementoAsync(padre, _elNombre, _elCapacidad, await Actor());
+            _ok = $"Ubicacion {e!.CodigoTopografico} creada.";
+            _elNombre = ""; _elCapacidad = null;
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task BorrarElemento(Guid id)
+    {
+        _error = _ok = null;
+        if (_sel?.Id == id) { _sel = null; }
+        try { await Topo.EliminarElementoAsync(id, await Actor()); await Recargar(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Seleccionar(ElementoTopograficoDto e)
+    {
+        _sel = e;
+        _ruta = await Topo.RutaAsync(e.Id);
+    }
+}
