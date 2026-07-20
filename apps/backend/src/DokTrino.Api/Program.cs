@@ -105,6 +105,7 @@ app.UseAuthorization();
 app.MapConnectEndpoints();
 app.MapAdminEndpoints();
 app.MapTenantEndpoints();
+app.MapDocumentalEndpoints();
 app.MapChatEndpoints();
 app.MapWompiEndpoints();
 
