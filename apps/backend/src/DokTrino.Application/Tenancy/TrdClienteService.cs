@@ -104,7 +104,251 @@ public sealed class TrdClienteService : ITrdClienteService
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { return Array.Empty<OpcionDto>(); }
         return await _db.TipologiasDocumentales.IgnoreQueryFilters().AsNoTracking()
-            .Where(x => x.TenantId == s.TenantId && x.Activo).OrderBy(x => x.Codigo)
+            .Where(x => x.TenantId == s.TenantId && x.Activo
+                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+            .OrderBy(x => x.Codigo)
             .Select(x => new OpcionDto(x.Id, x.Codigo + " - " + x.Nombre)).ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<CatalogoItemDto>> CatalogoSeriesAsync(string token, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return Array.Empty<CatalogoItemDto>(); }
+
+        // El colaborador ve el catalogo maestro mas lo que su propia dependencia
+        // haya sugerido: las sugerencias de otras dependencias quedan ocultas
+        // hasta que el admin las apruebe.
+        return await _db.Series.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.TenantId == s.TenantId && x.Activo
+                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+            .OrderBy(x => x.Codigo)
+            .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado,
+                _db.Subseries.IgnoreQueryFilters().Count(sb => sb.SerieId == x.Id)))
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<CatalogoItemDto>> CatalogoSubseriesAsync(string token, Guid serieId, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return Array.Empty<CatalogoItemDto>(); }
+        return await _db.Subseries.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.SerieId == serieId && x.TenantId == s.TenantId
+                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+            .OrderBy(x => x.Codigo)
+            .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado,
+                _db.TipologiasDocumentales.IgnoreQueryFilters().Count(t => t.SubserieId == x.Id)))
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<CatalogoItemDto>> CatalogoTipologiasAsync(string token, Guid subserieId, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return Array.Empty<CatalogoItemDto>(); }
+        return await _db.TipologiasDocumentales.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.SubserieId == subserieId && x.TenantId == s.TenantId && x.Activo
+                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+            .OrderBy(x => x.Codigo)
+            .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado, 0))
+            .ToListAsync(ct);
+    }
+
+    public async Task<Guid?> SugerirCatalogoAsync(string token, SugerirCatalogoCommand cmd, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { throw new InvalidOperationException("Token invalido."); }
+        if (s.SoloLectura) { throw new InvalidOperationException("La TRD o la dependencia estan CERRADAS; no se puede sugerir catalogo."); }
+
+        var nombre = (cmd.Nombre ?? "").Trim();
+        if (nombre.Length == 0) { throw new InvalidOperationException("El nombre es obligatorio."); }
+
+        switch (cmd.Nivel?.ToUpperInvariant())
+        {
+            case "SERIE":
+            {
+                var codigo = await CodigoLibreSerieAsync(s.TenantId, cmd.Codigo, ct);
+                var serie = new Serie
+                {
+                    TenantId = s.TenantId, Codigo = codigo, Nombre = nombre, Activo = true,
+                    Estado = "SUGERIDA", SugeridaPorDependenciaId = s.DependenciaId
+                };
+                _db.Series.Add(serie);
+                await _db.SaveChangesAsync(ct);
+                return serie.Id;
+            }
+
+            case "SUBSERIE":
+            {
+                if (cmd.PadreId is not Guid serieId) { throw new InvalidOperationException("Falta la serie padre."); }
+                var codigo = await CodigoLibreSubserieAsync(serieId, cmd.Codigo, ct);
+                var sub = new Subserie
+                {
+                    TenantId = s.TenantId, SerieId = serieId, Codigo = codigo, Nombre = nombre,
+                    Estado = "SUGERIDA", SugeridaPorDependenciaId = s.DependenciaId
+                };
+                _db.Subseries.Add(sub);
+                await _db.SaveChangesAsync(ct);
+                return sub.Id;
+            }
+
+            case "TIPOLOGIA":
+            {
+                if (cmd.PadreId is not Guid subserieId) { throw new InvalidOperationException("Falta la subserie padre."); }
+                var codigo = await CodigoLibreTipologiaAsync(s.TenantId, cmd.Codigo, ct);
+                var tipo = new TipologiaDocumental
+                {
+                    TenantId = s.TenantId, SubserieId = subserieId, Codigo = codigo, Nombre = nombre,
+                    Tipo = "GENERAL", Activo = true,
+                    Estado = "SUGERIDA", SugeridaPorDependenciaId = s.DependenciaId
+                };
+                _db.TipologiasDocumentales.Add(tipo);
+                await _db.SaveChangesAsync(ct);
+                return tipo.Id;
+            }
+
+            default:
+                throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
+        }
+    }
+
+    public async Task<IReadOnlyList<FormatoDto>> FormatosAsync(string token, Guid respuestaId, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return Array.Empty<FormatoDto>(); }
+        return await _db.FormatosSerie.IgnoreQueryFilters().AsNoTracking()
+            .Where(f => f.RespuestaId == respuestaId && f.TenantId == s.TenantId)
+            .Select(f => new FormatoDto(f.Id, f.Soporte, f.Formato))
+            .ToListAsync(ct);
+    }
+
+    public async Task<Guid?> DeclararFormatoAsync(string token, Guid respuestaId, string soporte, string formato, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { throw new InvalidOperationException("Token invalido."); }
+        if (s.SoloLectura) { throw new InvalidOperationException("La TRD o la dependencia estan CERRADAS."); }
+
+        var nombre = (formato ?? "").Trim();
+        if (nombre.Length == 0) { throw new InvalidOperationException("Indica el formato (PDF, papel, video...)."); }
+
+        // La respuesta tiene que ser de la dependencia del token: si no, se ignora.
+        var pertenece = await _db.RespuestasTablaDocumental.IgnoreQueryFilters()
+            .AnyAsync(r => r.Id == respuestaId && r.TenantId == s.TenantId && r.DependenciaId == s.DependenciaId, ct);
+        if (!pertenece) { throw new InvalidOperationException("El registro no pertenece a tu dependencia."); }
+
+        var entidad = new FormatoSerie
+        {
+            TenantId = s.TenantId,
+            RespuestaId = respuestaId,
+            Soporte = string.IsNullOrWhiteSpace(soporte) ? "PAPEL" : soporte.Trim().ToUpperInvariant(),
+            Formato = nombre
+        };
+        _db.FormatosSerie.Add(entidad);
+        await _db.SaveChangesAsync(ct);
+        return entidad.Id;
+    }
+
+    public async Task<EstadoEncuestaDto> EstadoEncuestaAsync(string token, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return new EstadoEncuestaDto(false, false, false, 0, Array.Empty<PendienteDto>()); }
+
+        var respuestas = await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AsNoTracking()
+            .Where(r => r.TenantId == s.TenantId && r.TrdId == s.TrdId && r.DependenciaId == s.DependenciaId)
+            .Select(r => new
+            {
+                r.Id,
+                r.SubserieId,
+                r.TipologiaId,
+                Serie = _db.Series.IgnoreQueryFilters().Where(x => x.Id == r.SerieId).Select(x => x.Nombre).FirstOrDefault(),
+                Subserie = r.SubserieId == null ? null : _db.Subseries.IgnoreQueryFilters().Where(x => x.Id == r.SubserieId).Select(x => x.Nombre).FirstOrDefault(),
+                TieneFormato = _db.FormatosSerie.IgnoreQueryFilters().Any(f => f.RespuestaId == r.Id)
+            })
+            .ToListAsync(ct);
+
+        var pendientes = respuestas
+            .Where(r => !r.TieneFormato)
+            .Select(r => new PendienteDto(r.Serie ?? "-", r.Subserie ?? "(sin subserie)"))
+            .ToList();
+
+        // Los tres pasos del asistente: elegir serie, marcar tipologias, declarar formato.
+        var paso1 = respuestas.Count > 0;
+        var paso2 = respuestas.Any(r => r.TipologiaId != null);
+        var paso3 = respuestas.Count > 0 && pendientes.Count == 0;
+
+        return new EstadoEncuestaDto(paso1, paso2, paso3, respuestas.Count, pendientes);
+    }
+
+    public async Task<bool> MostrarHintAsync(string token, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return false; }
+        var fila = await FormacionDeLaDependenciaAsync(s, ct);
+        return fila?.MostrarHint ?? true;
+    }
+
+    public async Task OcultarHintAsync(string token, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { return; }
+
+        var fila = await FormacionDeLaDependenciaAsync(s, ct, track: true);
+        if (fila is null)
+        {
+            // Aun no hay colaborador registrado para la dependencia: sin fila que
+            // marcar, el banner se limita a la sesion actual.
+            return;
+        }
+
+        fila.MostrarHint = false;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task<FormacionDependencia?> FormacionDeLaDependenciaAsync(
+        TokenSesionDto s, CancellationToken ct, bool track = false)
+    {
+        var q = _db.FormacionesDependencia.IgnoreQueryFilters();
+        if (!track) { q = q.AsNoTracking(); }
+
+        return await q.FirstOrDefaultAsync(
+            f => f.TenantId == s.TenantId
+                 && _db.ColaboradoresDependencia.IgnoreQueryFilters()
+                     .Any(c => c.Id == f.ColaboradorId && c.DependenciaId == s.DependenciaId),
+            ct);
+    }
+
+    /// <summary>Sufija el codigo hasta encontrar uno libre; los indices son unicos.</summary>
+    private async Task<string> CodigoLibreSerieAsync(Guid tenantId, string? deseado, CancellationToken ct)
+    {
+        var baseCod = string.IsNullOrWhiteSpace(deseado) ? "PROP" : deseado.Trim();
+        var codigo = baseCod;
+        var i = 1;
+        while (await _db.Series.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId && x.Codigo == codigo, ct))
+        {
+            codigo = $"{baseCod}-{i++}";
+        }
+        return codigo;
+    }
+
+    private async Task<string> CodigoLibreSubserieAsync(Guid serieId, string? deseado, CancellationToken ct)
+    {
+        var baseCod = string.IsNullOrWhiteSpace(deseado) ? "PROP" : deseado.Trim();
+        var codigo = baseCod;
+        var i = 1;
+        while (await _db.Subseries.IgnoreQueryFilters().AnyAsync(x => x.SerieId == serieId && x.Codigo == codigo, ct))
+        {
+            codigo = $"{baseCod}-{i++}";
+        }
+        return codigo;
+    }
+
+    private async Task<string> CodigoLibreTipologiaAsync(Guid tenantId, string? deseado, CancellationToken ct)
+    {
+        var baseCod = string.IsNullOrWhiteSpace(deseado) ? "PROP" : deseado.Trim();
+        var codigo = baseCod;
+        var i = 1;
+        while (await _db.TipologiasDocumentales.IgnoreQueryFilters().AnyAsync(x => x.TenantId == tenantId && x.Codigo == codigo, ct))
+        {
+            codigo = $"{baseCod}-{i++}";
+        }
+        return codigo;
     }
 }

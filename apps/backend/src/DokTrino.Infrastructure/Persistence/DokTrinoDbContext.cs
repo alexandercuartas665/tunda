@@ -731,6 +731,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         {
             b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
+            b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
@@ -739,6 +741,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
             b.HasOne(x => x.Serie).WithMany(s => s.Subseries).HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
+            b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.SerieId, x.Codigo }).IsUnique();
         });
 
@@ -749,6 +753,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
             b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.SetNull);
             b.HasOne(x => x.Subserie).WithMany().HasForeignKey(x => x.SubserieId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
+            b.HasIndex(x => new { x.TenantId, x.Estado });
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 

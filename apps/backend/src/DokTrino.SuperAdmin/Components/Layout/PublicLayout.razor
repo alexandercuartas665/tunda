@@ -1,19 +1,48 @@
 @inherits LayoutComponentBase
 
 <div class="pub-shell">
+    @* El drawer de ayuda usa el mismo patron checkbox+CSS del shell privado:
+       esta pagina tambien se sirve en SSR estatico. *@
+    <input type="checkbox" id="doktrino-help-toggle" class="doktrino-help-toggle" autocomplete="off" />
+
     <div class="pub-top">
         <div class="pub-brand">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
             <span>DokTrino</span>
         </div>
         <div class="pub-sub">Gestion Documental</div>
+
+        <label for="doktrino-help-toggle" class="doktrino-help" style="margin-left: auto;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3" /><path d="M12 17h.01" /></svg>
+            <span>Ayuda</span>
+        </label>
     </div>
+
     <div class="pub-body">@Body</div>
+
+    <label for="doktrino-help-toggle" class="doktrino-drawer-scrim" aria-hidden="true"></label>
+    <div class="doktrino-drawer">
+        <div class="doktrino-drawer-head">
+            <div class="row1">
+                <div class="ttl">Formacion</div>
+                <label for="doktrino-help-toggle" class="cls" aria-label="Cerrar ayuda">&#10005;</label>
+            </div>
+            <div class="sub">Centro de ayuda y formacion documental</div>
+            <div class="txt">Aprende a clasificar tus documentos. Puedes abrir esta ayuda en cualquier momento, no es obligatoria para empezar.</div>
+        </div>
+        <div class="doktrino-drawer-body">
+            <div class="lbl">Recursos de formacion</div>
+            <p class="doktrino-drawer-empty">
+                Aun no hay recursos de formacion publicados para tu entidad.
+                El catalogo de clases y el cuestionario se habilitan desde el modulo de Formacion.
+            </p>
+        </div>
+    </div>
 </div>
 
 <style>
     .pub-shell { min-height: 100vh; background: var(--background); }
-    .pub-top { display: flex; align-items: baseline; gap: 12px; padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--card); }
+    .pub-top { display: flex; align-items: center; gap: 12px; padding: 16px 28px; border-bottom: 1px solid var(--border); background: var(--card); }
     .pub-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.1rem; color: var(--primary); }
     .pub-brand svg { width: 22px; height: 22px; }
     .pub-sub { color: var(--muted-foreground); font-size: .85rem; }

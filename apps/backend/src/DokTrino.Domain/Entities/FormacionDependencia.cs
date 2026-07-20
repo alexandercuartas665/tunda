@@ -12,4 +12,7 @@ public class FormacionDependencia : TenantEntity
     public bool Superado { get; set; }
     public int Intentos { get; set; }
     public DateTimeOffset? FechaSuperado { get; set; }
+
+    /// <summary>Controla el banner "primera vez aqui" de la encuesta del cliente.</summary>
+    public bool MostrarHint { get; set; } = true;
 }

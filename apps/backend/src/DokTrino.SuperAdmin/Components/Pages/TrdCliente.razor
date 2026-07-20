@@ -5,7 +5,7 @@
 @using DokTrino.Application.Tenancy
 @inject ITrdClienteService Cliente
 
-<PageTitle>Cliente TRD - DokTrino</PageTitle>
+<PageTitle>Encuesta documental - DokTrino</PageTitle>
 
 @if (_sesion is null)
 {
@@ -13,75 +13,284 @@
 }
 else
 {
-    <div class="ase-eyebrow">Levantamiento TRD - Dependencia</div>
-    <h1 class="ase-title">@_sesion.DependenciaCargo</h1>
-    <p class="text-muted">TRD <span class="mono">@_sesion.TrdConsecutivo</span> - @_sesion.TrdTitulo - estado <b>@_sesion.TrdEstado</b></p>
+    <div class="tcl">
+        <div class="tcl-breadcrumb">Inicio &middot; Documental &middot; Encuesta del colaborador</div>
 
-    @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
-    else if (_sesion.SoloLectura) { <div class="ase-alert">La TRD o tu dependencia estan CERRADAS: solo lectura.</div> }
-    @if (_error is not null) { <div class="ase-alert">@_error</div> }
-    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+        @* --- Banner de onboarding --- *@
+        @if (_mostrarHint)
+        {
+            <div class="tcl-coach">
+                <div class="tcl-coach-ico">&#128075;</div>
+                <div style="flex: 1;">
+                    <div class="t">&iquest;Primera vez aqui? Llena tu TRD en 3 pasos.</div>
+                    <div class="s">
+                        Si tienes dudas sobre que seleccionar, abre <b>Formacion</b> desde el boton de Ayuda: esta disponible siempre.
+                    </div>
+                </div>
+                <label for="doktrino-help-toggle" class="tcl-add" style="width: auto; margin: 0; padding: 10px 16px;">Ver formacion</label>
+                <button class="tcl-coach-x" title="No volver a mostrar" @onclick="OcultarHint">&#10005;</button>
+            </div>
+        }
 
-    <div class="ase-card">
-        <div class="ase-card-h">Series documentales de tu dependencia (@_resp.Count)</div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle">
-                <thead><tr><th>Serie</th><th>Tipologia</th><th class="text-center">AG</th><th class="text-center">AC</th><th>Disposicion</th><th>Valoracion</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var r in _resp)
-                    {
-                        <tr>
-                            <td>@r.SerieNombre</td><td>@(r.TipologiaNombre ?? "-")</td>
-                            <td class="text-center">@(r.TiempoAg?.ToString("0.#") ?? "-")</td>
-                            <td class="text-center">@(r.TiempoAc?.ToString("0.#") ?? "-")</td>
-                            <td><span class="mono">@(string.IsNullOrEmpty(r.Disposicion) ? "-" : r.Disposicion)</span></td>
-                            <td>@(string.IsNullOrEmpty(r.Valoracion) ? "-" : r.Valoracion)</td>
-                            <td class="ase-row-actions">@if (!_sesion.SoloLectura) { <button class="btn btn-outline-danger btn-sm" @onclick="() => Del(r.Id)">&times;</button> }</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            @if (_resp.Count == 0) { <div class="ase-empty">Aun no has registrado series. Agrega la primera abajo.</div> }
+        @* --- Asistente de 3 pasos --- *@
+        <div class="tcl-steps">
+            <div class="tcl-step @(_estado.PasoCategoria ? "done" : "")">
+                <span class="n">@(_estado.PasoCategoria ? "✓" : "1")</span>
+                <div><div class="t">Elige la categoria</div><div class="s">Serie del activo</div></div>
+            </div>
+            <div class="tcl-step @(_estado.PasoTipologias ? "done" : "")">
+                <span class="n">@(_estado.PasoTipologias ? "✓" : "2")</span>
+                <div><div class="t">Marca las tipologias</div><div class="s">Las que apliquen</div></div>
+            </div>
+            <div class="tcl-step @(_estado.PasoFormato ? "done" : "")">
+                <span class="n">@(_estado.PasoFormato ? "✓" : "3")</span>
+                <div><div class="t">Indica el formato</div><div class="s">Papel, PDF, multimedia...</div></div>
+            </div>
         </div>
 
-        @if (!_sesion.SoloLectura)
-        {
-            <div class="cl-form">
-                <div class="cl-f cl-grow"><label>Serie</label>
-                    <select class="form-select form-select-sm" @bind="_serie">
-                        <option value="">(elige serie)</option>
-                        @foreach (var o in _series) { <option value="@o.Id">@o.Etiqueta</option> }
-                    </select>
-                </div>
-                <div class="cl-f cl-grow"><label>Tipologia</label>
-                    <select class="form-select form-select-sm" @bind="_tipo">
-                        <option value="">(opcional)</option>
-                        @foreach (var o in _tipos) { <option value="@o.Id">@o.Etiqueta</option> }
-                    </select>
-                </div>
-                <div class="cl-f cl-sm"><label>AG</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAg" /></div>
-                <div class="cl-f cl-sm"><label>AC</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAc" /></div>
-                <div class="cl-f cl-chk"><label>CT</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispCt" /></div>
-                <div class="cl-f cl-chk"><label>S</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispS" /></div>
-                <div class="cl-f cl-chk"><label>E</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispE" /></div>
-                <div class="cl-f cl-chk"><label>D</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispD" /></div>
-                <div class="cl-f cl-chk"><label>V.Adm</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val1Admin" /></div>
-                <div class="cl-f cl-chk"><label>V.Hist</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val2Historica" /></div>
-                <div class="cl-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Guardar">Agregar</button></div>
+        @* --- Tabs --- *@
+        <div class="tcl-tabs">
+            <button class="tcl-tab @(_tab == "encuesta" ? "on" : "")" @onclick='() => _tab = "encuesta"'>Encuesta</button>
+            <button class="tcl-tab @(_tab == "estructura" ? "on" : "")" @onclick='() => _tab = "estructura"'>
+                Estructura <span class="badge2">@_resp.Count</span>
+            </button>
+        </div>
+
+        @* --- Dependencia / area productora --- *@
+        <div class="tcl-dep">
+            <div class="k">Dependencia / Area productora</div>
+            <div class="v">
+                @_sesion.DependenciaCargo.ToUpperInvariant()
+                <span class="sep">/</span>
+                <span class="who">TRD @_sesion.TrdConsecutivo &middot; @_sesion.TrdTitulo</span>
             </div>
-            <small class="text-muted">AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion. Valoracion administrativa / historica (Ley 594/2000, AGN).</small>
+        </div>
+
+        @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
+        else if (_sesion.SoloLectura) { <div class="ase-alert">La TRD o tu dependencia estan CERRADAS: solo lectura.</div> }
+        @if (_error is not null) { <div class="ase-alert">@_error</div> }
+        @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+        @if (_tab == "encuesta")
+        {
+            <div class="tcl-cols">
+                @* ----- Columna izquierda: series ----- *@
+                <div class="tcl-panel izq">
+                    <div class="tcl-panel-t">Categoria principal del activo</div>
+
+                    @if (!_sesion.SoloLectura)
+                    {
+                        <button class="tcl-add" @onclick="SugerirSerie">&#65291; Agregar serie propia</button>
+                    }
+                    <input class="tcl-input" @bind="_nuevaSerie" @bind:event="oninput"
+                           placeholder="Nombre de la serie a agregar / buscar..." />
+
+                    <div class="tcl-lista">
+                        @foreach (var s in SeriesVisibles)
+                        {
+                            <div class="tcl-item @(_serieSel?.Id == s.Id ? "on" : "")" @onclick="() => SeleccionarSerie(s)">
+                                <span>&#128193;</span>
+                                <span>@s.Nombre</span>
+                                @if (s.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                @if (s.Hijos > 0) { <span class="tcl-count">@s.Hijos</span> }
+                                <span class="code">@s.Codigo</span>
+                            </div>
+                        }
+                        @if (SeriesVisibles.Count == 0)
+                        {
+                            <div class="dkd-empty">Sin series en el catalogo. Escribe un nombre y usa "Agregar serie propia".</div>
+                        }
+                    </div>
+                </div>
+
+                @* ----- Columna derecha: subseries + tipologias ----- *@
+                <div class="tcl-panel der">
+                    @if (_serieSel is null)
+                    {
+                        <div class="tcl-panel-t">Subcategoria</div>
+                        <div class="dkd-empty">Elige una categoria a la izquierda para ver sus subseries.</div>
+                    }
+                    else
+                    {
+                        <div style="display: flex; align-items: center; margin-bottom: 11px;">
+                            <div class="tcl-panel-t" style="margin: 0;">
+                                Subcategoria &middot; <span style="color: var(--primary);">@_serieSel.Nombre</span>
+                            </div>
+                            <div class="code" style="margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #aab2c8;">@_serieSel.Codigo</div>
+                        </div>
+
+                        @if (!_sesion.SoloLectura)
+                        {
+                            <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 12px;">
+                                <input class="tcl-input dashed" @bind="_nuevaSubserie" @bind:event="oninput"
+                                       placeholder="+ Agregar subserie propia..." />
+                                <button class="tcl-add" style="width: auto; margin: 0; padding: 9px 15px;" @onclick="SugerirSubserie">+ Subserie</button>
+                            </div>
+                        }
+
+                        <div class="tcl-tree">
+                            @if (_subseries.Count == 0)
+                            {
+                                <div class="dkd-empty">Esta serie aun no tiene subseries.</div>
+                            }
+                            @foreach (var sub in _subseries)
+                            {
+                                <div class="tcl-sub">
+                                    <div class="tcl-sub-h" @onclick="() => AlternarSubserie(sub)">
+                                        <span class="caret">@(_subAbierta == sub.Id ? "▾" : "▸")</span>
+                                        <span>&#128194; @sub.Nombre</span>
+                                        @if (sub.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                        <span class="code">@sub.Codigo</span>
+                                    </div>
+                                    @if (_subAbierta == sub.Id)
+                                    {
+                                        <div class="tcl-tipos">
+                                            @foreach (var t in _tipologias)
+                                            {
+                                                <label class="tcl-tipo">
+                                                    <input type="checkbox" checked="@_tiposMarcadas.Contains(t.Id)"
+                                                           @onchange="e => MarcarTipologia(t.Id, e)" />
+                                                    <span>@t.Nombre</span>
+                                                    @if (t.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                                </label>
+                                            }
+                                            @if (_tipologias.Count == 0)
+                                            {
+                                                <div class="dkd-empty">Sin tipologias. Agrega una propia abajo.</div>
+                                            }
+                                            @if (!_sesion.SoloLectura)
+                                            {
+                                                <div style="display: flex; gap: 7px; margin-top: 6px;">
+                                                    <input class="tcl-input dashed" @bind="_nuevaTipologia" @bind:event="oninput"
+                                                           placeholder="+ Agregar tipologia propia..." />
+                                                    <button class="tcl-add" style="width: auto; margin: 0; padding: 9px 15px;" @onclick="SugerirTipologia">+ Tipologia</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @* --- Matriz archivistica de la seleccion --- *@
+                        @if (!_sesion.SoloLectura)
+                        {
+                            <div class="cl-form">
+                                <div class="cl-f cl-sm"><label>AG</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAg" /></div>
+                                <div class="cl-f cl-sm"><label>AC</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAc" /></div>
+                                <div class="cl-f cl-chk"><label>CT</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispCt" /></div>
+                                <div class="cl-f cl-chk"><label>S</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispS" /></div>
+                                <div class="cl-f cl-chk"><label>E</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispE" /></div>
+                                <div class="cl-f cl-chk"><label>D</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispD" /></div>
+                                <div class="cl-f cl-chk"><label>V.Adm</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val1Admin" /></div>
+                                <div class="cl-f cl-chk"><label>V.Hist</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val2Historica" /></div>
+                                <div class="cl-f"><label>&nbsp;</label><button class="tcl-add" style="width: auto; margin: 0; padding: 9px 16px;" @onclick="Guardar">Registrar en mi TRD</button></div>
+                            </div>
+                            <small class="text-muted">
+                                AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion
+                                (Ley 594/2000, AGN).
+                            </small>
+                        }
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            @* ----- Tab Estructura ----- *@
+            <div class="tcl-det-t">Detalle</div>
+            <div class="tcl-det-s">Todos los registros cargados en este modulo de informacion.</div>
+
+            @if (_estado.Pendientes.Count > 0)
+            {
+                <div class="tcl-pend">
+                    <div class="tcl-pend-h">
+                        &#9888; PENDIENTES <span class="tcl-pend-n">@_estado.Pendientes.Count</span>
+                    </div>
+                    <div class="tcl-pend-s">SubSerie pendiente, falta identificar formatos documentales:</div>
+                    <ul style="margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px;">
+                        @foreach (var p in _estado.Pendientes)
+                        {
+                            <li>&bull; SERIE <b>(@p.Serie)</b> en SubSerie <b>(@p.Subserie)</b></li>
+                        }
+                    </ul>
+                </div>
+            }
+            else if (_resp.Count > 0)
+            {
+                <div class="tcl-ok">&#10003; Todas las subseries tienen formato identificado. Sin pendientes.</div>
+            }
+
+            @if (_resp.Count == 0)
+            {
+                <div class="tcl-serie-card"><div class="trx-empty">Aun no has registrado ninguna serie en tu TRD.</div></div>
+            }
+            else
+            {
+                @foreach (var grupo in _resp.GroupBy(r => r.SerieNombre))
+                {
+                    <div class="tcl-serie-card">
+                        <div class="tcl-serie-h">
+                            <span class="code">@(grupo.Key.Split(" - ").FirstOrDefault())</span>
+                            <span class="name">@(grupo.Key.Contains(" - ") ? grupo.Key[(grupo.Key.IndexOf(" - ", StringComparison.Ordinal) + 3)..] : grupo.Key)</span>
+                        </div>
+                        <div style="padding: 6px 18px 14px;">
+                            @foreach (var r in grupo)
+                            {
+                                <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f4f6fb;">
+                                    <span style="font-size: 12.5px; font-weight: 600; color: #37415c;">@(r.SubserieNombre ?? "(sin subserie)")</span>
+                                    <span style="font-size: 12px; color: #6f6754;">@(r.TipologiaNombre ?? "-")</span>
+                                    <span style="margin-left: auto; font-size: 11.5px; color: #9aa3bd;">
+                                        AG @(r.TiempoAg?.ToString() ?? "-") &middot; AC @(r.TiempoAc?.ToString() ?? "-") &middot; @r.Disposicion
+                                    </span>
+
+                                    @* Paso 3 del asistente: hasta declarar formato, el registro
+                                       queda con el boton ambar de "pendiente". *@
+                                    @if (_formatos.TryGetValue(r.Id, out var fmts) && fmts.Count > 0)
+                                    {
+                                        <span class="tcl-fmt-ok">@string.Join(", ", fmts.Select(f => $"{f.Soporte}/{f.Formato}"))</span>
+                                    }
+                                    else if (!_sesion.SoloLectura)
+                                    {
+                                        <button class="tcl-fmt-btn" @onclick="() => AbrirFormato(r.Id)">Selecciona formato</button>
+                                    }
+
+                                    @if (!_sesion.SoloLectura)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="() => Del(r.Id)">&times;</button>
+                                    }
+                                </div>
+
+                                @if (_formatoAbierto == r.Id)
+                                {
+                                    <div class="tcl-fmt-form">
+                                        <select class="tcl-input" style="width: 150px;" @bind="_fmtSoporte">
+                                            <option value="PAPEL">Papel</option>
+                                            <option value="DIGITAL">Digital</option>
+                                            <option value="MIXTO">Mixto</option>
+                                        </select>
+                                        <input class="tcl-input" style="flex: 1;" @bind="_fmtNombre"
+                                               placeholder="PDF, video, oficio impreso..." />
+                                        <button class="tcl-add" style="width: auto; margin: 0; padding: 9px 15px;"
+                                                @onclick="() => GuardarFormato(r.Id)">Guardar formato</button>
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _formatoAbierto = null">Cancelar</button>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+            }
         }
     </div>
 }
 
 <style>
-    .cl-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
+    .cl-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:14px; }
     .cl-f { display:flex; flex-direction:column; gap:3px; }
     .cl-f label { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
-    .cl-grow { flex:1; min-width:200px; }
     .cl-sm input { width:64px; }
     .cl-chk { align-items:center; }
-    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
 </style>
 
 @code {
@@ -89,36 +298,177 @@ else
 
     private TokenSesionDto? _sesion;
     private List<RespuestaTrdDto> _resp = new();
-    private List<OpcionDto> _series = new();
-    private List<OpcionDto> _tipos = new();
+    private List<CatalogoItemDto> _series = new();
+    private List<CatalogoItemDto> _subseries = new();
+    private List<CatalogoItemDto> _tipologias = new();
+    private readonly HashSet<Guid> _tiposMarcadas = new();
+
+    private CatalogoItemDto? _serieSel;
+    private Guid? _subAbierta;
+
+    private EstadoEncuestaDto _estado = new(false, false, false, 0, Array.Empty<PendienteDto>());
+    private bool _mostrarHint;
+    private string _tab = "encuesta";
+
     private GuardarRespuestaCommand _cmd = new();
-    private string _serie = "", _tipo = "";
+    private string _nuevaSerie = "", _nuevaSubserie = "", _nuevaTipologia = "";
     private string? _error, _ok;
+
+    // Paso 3: formatos declarados por registro.
+    private readonly Dictionary<Guid, List<FormatoDto>> _formatos = new();
+    private Guid? _formatoAbierto;
+    private string _fmtSoporte = "PAPEL", _fmtNombre = "";
+
+    /// <summary>Filtra el catalogo por lo que el colaborador escribe en el buscador.</summary>
+    private List<CatalogoItemDto> SeriesVisibles => string.IsNullOrWhiteSpace(_nuevaSerie)
+        ? _series
+        : _series.Where(s => s.Nombre.Contains(_nuevaSerie.Trim(), StringComparison.OrdinalIgnoreCase)
+                             || s.Codigo.Contains(_nuevaSerie.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
 
     protected override async Task OnInitializedAsync()
     {
         var t = Token ?? "";
         _sesion = await Cliente.ResolverTokenAsync(t);
-        if (_sesion is not null)
+        if (_sesion is null) { return; }
+
+        _mostrarHint = await Cliente.MostrarHintAsync(t);
+        await Recargar();
+    }
+
+    private async Task Recargar()
+    {
+        var t = Token ?? "";
+        _series = (await Cliente.CatalogoSeriesAsync(t)).ToList();
+        _resp = (await Cliente.ListarRespuestasAsync(t)).ToList();
+        _estado = await Cliente.EstadoEncuestaAsync(t);
+
+        if (_serieSel is not null)
         {
-            _series = (await Cliente.SeriesAsync(t)).ToList();
-            _tipos = (await Cliente.TipologiasAsync(t)).ToList();
-            _resp = (await Cliente.ListarRespuestasAsync(t)).ToList();
+            _serieSel = _series.FirstOrDefault(s => s.Id == _serieSel.Id);
+            _subseries = _serieSel is null
+                ? new()
+                : (await Cliente.CatalogoSubseriesAsync(t, _serieSel.Id)).ToList();
         }
+
+        if (_subAbierta is Guid sub)
+        {
+            _tipologias = (await Cliente.CatalogoTipologiasAsync(t, sub)).ToList();
+        }
+
+        _formatos.Clear();
+        foreach (var r in _resp)
+        {
+            _formatos[r.Id] = (await Cliente.FormatosAsync(t, r.Id)).ToList();
+        }
+    }
+
+    private void AbrirFormato(Guid respuestaId)
+    {
+        _formatoAbierto = respuestaId;
+        _fmtSoporte = "PAPEL";
+        _fmtNombre = "";
+    }
+
+    private async Task GuardarFormato(Guid respuestaId)
+    {
+        _error = _ok = null;
+        try
+        {
+            await Cliente.DeclararFormatoAsync(Token ?? "", respuestaId, _fmtSoporte, _fmtNombre);
+            _ok = "Formato declarado.";
+            _formatoAbierto = null;
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task SeleccionarSerie(CatalogoItemDto s)
+    {
+        _serieSel = s;
+        _subAbierta = null;
+        _tipologias = new();
+        _subseries = (await Cliente.CatalogoSubseriesAsync(Token ?? "", s.Id)).ToList();
+    }
+
+    private async Task AlternarSubserie(CatalogoItemDto sub)
+    {
+        if (_subAbierta == sub.Id) { _subAbierta = null; _tipologias = new(); return; }
+        _subAbierta = sub.Id;
+        _tipologias = (await Cliente.CatalogoTipologiasAsync(Token ?? "", sub.Id)).ToList();
+    }
+
+    private void MarcarTipologia(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is bool marcada && marcada) { _tiposMarcadas.Add(id); }
+        else { _tiposMarcadas.Remove(id); }
+    }
+
+    private async Task OcultarHint()
+    {
+        _mostrarHint = false;
+        await Cliente.OcultarHintAsync(Token ?? "");
+    }
+
+    private async Task SugerirSerie() => await Sugerir("SERIE", null, _nuevaSerie, () => _nuevaSerie = "");
+
+    private async Task SugerirSubserie()
+    {
+        if (_serieSel is null) { _error = "Elige primero una serie."; return; }
+        await Sugerir("SUBSERIE", _serieSel.Id, _nuevaSubserie, () => _nuevaSubserie = "");
+    }
+
+    private async Task SugerirTipologia()
+    {
+        if (_subAbierta is not Guid sub) { _error = "Abre primero una subserie."; return; }
+        await Sugerir("TIPOLOGIA", sub, _nuevaTipologia, () => _nuevaTipologia = "");
+    }
+
+    private async Task Sugerir(string nivel, Guid? padre, string nombre, Action limpiar)
+    {
+        _error = _ok = null;
+        if (string.IsNullOrWhiteSpace(nombre)) { _error = "Escribe primero el nombre."; return; }
+        try
+        {
+            await Cliente.SugerirCatalogoAsync(Token ?? "", new SugerirCatalogoCommand
+            {
+                Nivel = nivel,
+                PadreId = padre,
+                Nombre = nombre
+            });
+            _ok = $"Se agrego tu propuesta ({nivel.ToLowerInvariant()}). Queda marcada como PROPIA hasta que el administrador la apruebe.";
+            limpiar();
+
+            // Refresca el nivel afectado.
+            if (nivel == "SUBSERIE" && _serieSel is not null)
+            {
+                _subseries = (await Cliente.CatalogoSubseriesAsync(Token ?? "", _serieSel.Id)).ToList();
+            }
+            else if (nivel == "TIPOLOGIA" && _subAbierta is Guid s)
+            {
+                _tipologias = (await Cliente.CatalogoTipologiasAsync(Token ?? "", s)).ToList();
+            }
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     private async Task Guardar()
     {
         _error = _ok = null;
-        if (!Guid.TryParse(_serie, out var sid)) { _error = "Elige una serie."; return; }
-        _cmd.SerieId = sid;
-        _cmd.TipologiaId = Guid.TryParse(_tipo, out var tid) ? tid : null;
+        if (_serieSel is null) { _error = "Elige una serie."; return; }
+
+        _cmd.SerieId = _serieSel.Id;
+        _cmd.SubserieId = _subAbierta;
+        _cmd.TipologiaId = _tiposMarcadas.Count > 0 ? _tiposMarcadas.First() : null;
+        _cmd.SinSubserie = _subAbierta is null;
+
         try
         {
             await Cliente.GuardarRespuestaAsync(Token ?? "", _cmd);
-            _ok = "Serie registrada en tu TRD.";
-            _cmd = new(); _serie = ""; _tipo = "";
-            _resp = (await Cliente.ListarRespuestasAsync(Token ?? "")).ToList();
+            _ok = "Registro agregado a tu TRD.";
+            _cmd = new();
+            _tiposMarcadas.Clear();
+            await Recargar();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
@@ -127,6 +477,6 @@ else
     {
         _error = _ok = null;
         await Cliente.EliminarRespuestaAsync(Token ?? "", id);
-        _resp = (await Cliente.ListarRespuestasAsync(Token ?? "")).ToList();
+        await Recargar();
     }
 }
