@@ -97,6 +97,10 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Caja> Cajas => Set<Caja>();
     public DbSet<Carpeta> Carpetas => Set<Carpeta>();
     public DbSet<ArchivoDigital> ArchivosDigitales => Set<ArchivoDigital>();
+    public DbSet<CarpetaArchivo> CarpetasArchivo => Set<CarpetaArchivo>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<ArchivoTag> ArchivoTags => Set<ArchivoTag>();
+    public DbSet<AprobacionDocumento> AprobacionesDocumento => Set<AprobacionDocumento>();
 
     // ----- BPMN / Procesos -----
     public DbSet<ProcesoDefinicion> ProcesosDefinicion => Set<ProcesoDefinicion>();
@@ -845,11 +849,49 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.BlobKey).HasMaxLength(400).IsRequired();
             b.Property(x => x.Mime).HasMaxLength(150).IsRequired();
             b.Property(x => x.Sha256).HasMaxLength(64);
-            b.Property(x => x.Estado).HasMaxLength(40).IsRequired();
+            b.Property(x => x.EstadoAprobacion).HasMaxLength(20).IsRequired();
+            b.Property(x => x.IdentificadorPrincipal).HasMaxLength(120);
+            b.Property(x => x.Concepto).HasMaxLength(300);
+            b.Property(x => x.RechazoMotivo).HasColumnType("text");
             b.HasOne(x => x.Carpeta).WithMany().HasForeignKey(x => x.CarpetaId).OnDelete(DeleteBehavior.SetNull);
+            b.HasOne(x => x.CarpetaArchivo).WithMany().HasForeignKey(x => x.CarpetaArchivoId).OnDelete(DeleteBehavior.SetNull);
             b.HasOne(x => x.Tipologia).WithMany().HasForeignKey(x => x.TipologiaId).OnDelete(DeleteBehavior.SetNull);
             b.HasIndex(x => new { x.TenantId, x.FechaSubida });
+            b.HasIndex(x => new { x.TenantId, x.EstadoAprobacion });
+            b.HasIndex(x => new { x.TenantId, x.FlagIdentificado });
+            b.HasIndex(x => new { x.TenantId, x.IdentificadorPrincipal });
             b.HasIndex(x => new { x.TenantId, x.CarpetaId });
+        });
+
+        // ----- 2.D3 Archivo Central: carpetas de clasificacion, tags y aprobacion -----
+        modelBuilder.Entity<CarpetaArchivo>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.HasOne(x => x.Padre).WithMany(p => p.Hijos).HasForeignKey(x => x.PadreId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.TenantId, x.PadreId, x.Nombre }).IsUnique();
+        });
+
+        modelBuilder.Entity<Tag>(b =>
+        {
+            b.Property(x => x.Codigo).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(120).IsRequired();
+            b.Property(x => x.ColorHex).HasMaxLength(7);
+            b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
+        });
+
+        modelBuilder.Entity<ArchivoTag>(b =>
+        {
+            b.HasOne(x => x.Archivo).WithMany().HasForeignKey(x => x.ArchivoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Tag).WithMany().HasForeignKey(x => x.TagId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.ArchivoId, x.TagId }).IsUnique();
+        });
+
+        modelBuilder.Entity<AprobacionDocumento>(b =>
+        {
+            b.Property(x => x.Decision).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Comentario).HasColumnType("text");
+            b.HasOne(x => x.Archivo).WithMany().HasForeignKey(x => x.ArchivoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.ArchivoId, x.DecididoEn });
         });
 
         modelBuilder.Entity<ProcesoDefinicion>(b =>

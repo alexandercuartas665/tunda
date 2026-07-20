@@ -64,6 +64,10 @@ public interface IApplicationDbContext
     DbSet<Caja> Cajas { get; }
     DbSet<Carpeta> Carpetas { get; }
     DbSet<ArchivoDigital> ArchivosDigitales { get; }
+    DbSet<CarpetaArchivo> CarpetasArchivo { get; }
+    DbSet<Tag> Tags { get; }
+    DbSet<ArchivoTag> ArchivoTags { get; }
+    DbSet<AprobacionDocumento> AprobacionesDocumento { get; }
     DbSet<ProcesoDefinicion> ProcesosDefinicion { get; }
     DbSet<ProcesoActividad> ProcesoActividades { get; }
     DbSet<ProcesoInstancia> ProcesoInstancias { get; }

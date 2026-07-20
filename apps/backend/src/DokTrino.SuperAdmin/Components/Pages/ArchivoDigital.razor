@@ -5,12 +5,12 @@
 @using DokTrino.Application.Tenancy
 @inject IArchivoDigitalService Arch
 
-<PageTitle>Archivo digital - DokTrino</PageTitle>
+<PageTitle>Archivo Documental Central - DokTrino</PageTitle>
 
 <div class="ase-head">
     <div>
-        <div class="ase-eyebrow">Gestion Documental</div>
-        <h1 class="ase-title">Archivo digital (documentos en MinIO)</h1>
+        <div class="ase-eyebrow">Gestion Documental - 2.D3</div>
+        <h1 class="ase-title">Archivo Documental Central</h1>
     </div>
 </div>
 
@@ -18,157 +18,268 @@
 @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
 <div class="ase-card">
-    <div class="ase-card-h">Subir documento</div>
+    <div class="ase-card-h">Cargar documento</div>
     <div class="ad-form">
-        <div class="ad-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_n.Sucursal" /></div>
-        <div class="ad-f ad-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_n.Nombre" placeholder="Acta firmada.pdf" /></div>
-        <div class="ad-f ad-grow"><label>Descripcion</label><input class="form-control form-control-sm" @bind="_n.Descripcion" /></div>
-        <div class="ad-f ad-grow"><label>Carpeta</label>
-            <select class="form-select form-select-sm" @bind="_nCarpeta">
-                <option value="">(sin carpeta)</option>
-                @foreach (var o in _carpOpc) { <option value="@o.Id">@o.Etiqueta</option> }
-            </select>
-        </div>
-        <div class="ad-f ad-grow"><label>Tipologia</label>
-            <select class="form-select form-select-sm" @bind="_nTip">
-                <option value="">(sin tipologia)</option>
-                @foreach (var o in _tipOpc) { <option value="@o.Id">@o.Etiqueta</option> }
-            </select>
-        </div>
-    </div>
-    <div class="ad-form" style="margin-top:8px;">
         <div class="ad-f ad-grow"><label>Archivo</label><InputFile class="form-control form-control-sm" OnChange="OnFile" /></div>
-        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Subir" disabled="@(_file is null || _busy)">@(_busy ? "Subiendo..." : "Subir")</button></div>
-        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-outline-primary btn-sm" @onclick="SubirDemo" disabled="@_busy">Subir documento demo</button></div>
+        <div class="ad-f ad-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_n.Nombre" placeholder="Oficio 001" /></div>
+        <div class="ad-f ad-grow"><label>Tipologia (opcional)</label>
+            <select class="form-select form-select-sm" @bind="_nTip">
+                <option value="">(sin identificar)</option>
+                @foreach (var o in _tipos) { <option value="@o.Id">@o.Etiqueta</option> }
+            </select>
+        </div>
+        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Subir" disabled="@(_file is null)">Cargar</button></div>
     </div>
-    @if (_file is not null) { <small class="text-muted">Seleccionado: @_file.Name (@FormatSize(_file.Size)) - @_file.ContentType</small> }
+    <small class="text-muted">Si cargas sin tipologia, el documento entra a "Documentos sin Identificar". Todo documento nuevo queda PENDIENTE de aprobacion.</small>
 </div>
 
 <div class="ase-card">
-    <div class="ase-card-h">Documentos (@_items.Count)</div>
+    <div class="ase-tabs">
+        <button class="ase-tab @(_bandeja == BandejaArchivo.Clasificados ? "on" : "")" @onclick="() => Cambiar(BandejaArchivo.Clasificados)">Archivos clasificados</button>
+        <button class="ase-tab @(_bandeja == BandejaArchivo.SinIdentificar ? "on" : "")" @onclick="() => Cambiar(BandejaArchivo.SinIdentificar)">Documentos sin Identificar</button>
+        <button class="ase-tab @(_bandeja == BandejaArchivo.SinAprobar ? "on" : "")" @onclick="() => Cambiar(BandejaArchivo.SinAprobar)">Documentos sin Aprobar</button>
+    </div>
+
+    <div class="ad-form">
+        <div class="ad-f ad-grow"><label>Filtrar por identificador principal</label><input class="form-control form-control-sm" @bind="_filtroIdent" placeholder="cedula, contrato..." /></div>
+        <div class="ad-f ad-grow"><label>Carpeta</label>
+            <select class="form-select form-select-sm" @bind="_filtroCarpeta">
+                <option value="">(todas)</option>
+                @foreach (var c in _carpetas) { <option value="@c.Id">@c.Nombre (@c.Archivos)</option> }
+            </select>
+        </div>
+        <div class="ad-f"><label>&nbsp;</label><button class="btn btn-outline-primary btn-sm" @onclick="Load">Filtrar</button></div>
+    </div>
+
     <div class="table-responsive">
         <table class="table table-sm align-middle">
-            <thead><tr><th>Nombre</th><th>Tamano</th><th>Tipo</th><th>Carpeta</th><th>Tipologia</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+            <thead>
+                <tr><th>Documento</th><th>Identificador</th><th>Tipologia</th><th>Carpeta</th><th>Tags</th><th>Estado</th><th></th></tr>
+            </thead>
             <tbody>
                 @foreach (var a in _items)
                 {
                     <tr>
-                        <td>@a.Nombre</td>
-                        <td>@FormatSize(a.SizeBytes)</td>
-                        <td><span class="mono">@a.Mime</span></td>
-                        <td><span class="mono">@(a.CarpetaCodigo ?? "-")</span></td>
+                        <td>@a.Nombre <span class="ad-muted">(@(a.SizeBytes / 1024) KB)</span></td>
+                        <td>@(a.IdentificadorPrincipal ?? "-")</td>
                         <td>@(a.TipologiaNombre ?? "-")</td>
-                        <td>@a.FechaSubida.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                        <td>@a.Estado</td>
+                        <td>@(a.CarpetaArchivoNombre ?? "-")</td>
+                        <td>@(string.IsNullOrEmpty(a.Tags) ? "-" : a.Tags)</td>
+                        <td><span class="ad-badge ad-@a.EstadoAprobacion">@a.EstadoAprobacion</span></td>
                         <td class="ase-row-actions">
-                            <a class="btn btn-outline-primary btn-sm" href="/archivo-digital/@a.Id/contenido" target="_blank">Descargar</a>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="() => Seleccionar(a)">Clasificar</button>
+                            @if (a.EstadoAprobacion == "PENDIENTE")
+                            {
+                                <button class="btn btn-outline-success btn-sm" @onclick="() => Aprobar(a.Id)">Aprobar</button>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="() => Rechazar(a.Id)">Rechazar</button>
+                            }
                             <button class="btn btn-outline-danger btn-sm" @onclick="() => Eliminar(a.Id)">&times;</button>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
-        @if (_items.Count == 0) { <div class="ase-empty">Aun no hay documentos. Sube el primero.</div> }
+        @if (_items.Count == 0) { <div class="ase-empty">Sin documentos en esta bandeja.</div> }
+    </div>
+</div>
+
+@if (_sel is not null)
+{
+    <div class="ase-card">
+        <div class="ase-card-h">Clasificar: @_sel.Nombre</div>
+        <div class="ad-form">
+            <div class="ad-f ad-grow"><label>Identificador principal</label><input class="form-control form-control-sm" @bind="_cls.IdentificadorPrincipal" placeholder="1130597152" /></div>
+            <div class="ad-f ad-grow"><label>Concepto</label><input class="form-control form-control-sm" @bind="_cls.Concepto" /></div>
+            <div class="ad-f ad-grow"><label>Tipologia</label>
+                <select class="form-select form-select-sm" @bind="_clsTip">
+                    <option value="">(sin tipologia)</option>
+                    @foreach (var o in _tipos) { <option value="@o.Id">@o.Etiqueta</option> }
+                </select>
+            </div>
+            <div class="ad-f ad-grow"><label>Carpeta</label>
+                <select class="form-select form-select-sm" @bind="_clsCarpeta">
+                    <option value="">(sin carpeta)</option>
+                    @foreach (var c in _carpetas) { <option value="@c.Id">@c.Nombre</option> }
+                </select>
+            </div>
+            <div class="ad-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="Clasificar">Guardar</button></div>
+        </div>
+        <div class="ad-form">
+            <div class="ad-f ad-grow"><label>Asignar tag</label>
+                <select class="form-select form-select-sm" @bind="_selTag">
+                    <option value="">(elige tag)</option>
+                    @foreach (var t in _tags) { <option value="@t.Id">@t.Nombre@(t.Privado ? " (privado)" : "")</option> }
+                </select>
+            </div>
+            <div class="ad-f"><label>&nbsp;</label><button class="btn btn-outline-primary btn-sm" @onclick="AsignarTag">Asignar</button></div>
+        </div>
+    </div>
+}
+
+<div class="ase-card">
+    <div class="ase-card-h">Carpetas de clasificacion (@_carpetas.Count) y tags (@_tags.Count)</div>
+    <div class="ad-cols">
+        <div>
+            @foreach (var c in _carpetas) { <div class="ad-row">@(c.PadreId is null ? "" : "- ")@c.Nombre <span class="ad-muted">(@c.Archivos)</span></div> }
+            <div class="ad-form">
+                <select class="form-select form-select-sm" style="max-width:170px" @bind="_nuevaCarpetaPadre">
+                    <option value="">(raiz)</option>
+                    @foreach (var c in _carpetas) { <option value="@c.Id">@c.Nombre</option> }
+                </select>
+                <input class="form-control form-control-sm" @bind="_nuevaCarpeta" placeholder="Contratos 2026" />
+                <button class="btn btn-primary btn-sm" @onclick="CrearCarpeta">+ Carpeta</button>
+            </div>
+        </div>
+        <div>
+            @foreach (var t in _tags) { <div class="ad-row">@t.Nombre <span class="ad-muted">@t.Codigo@(t.Privado ? " - privado" : "")</span></div> }
+            <div class="ad-form">
+                <input class="form-control form-control-sm mono" style="max-width:110px" @bind="_nuevoTagCod" placeholder="URG" />
+                <input class="form-control form-control-sm" @bind="_nuevoTagNom" placeholder="Urgente" />
+                <label class="ad-chk"><input type="checkbox" class="form-check-input" @bind="_nuevoTagPriv" /> privado</label>
+                <button class="btn btn-primary btn-sm" @onclick="CrearTag">+ Tag</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <style>
-    .ad-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-    .ad-f { display: flex; flex-direction: column; gap: 3px; }
-    .ad-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
-    .ad-grow { flex: 1; min-width: 180px; }
-    .mono { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 11px; }
+    .ad-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
+    .ad-f { display:flex; flex-direction:column; gap:3px; }
+    .ad-f label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
+    .ad-grow { flex:1; min-width:170px; }
+    .ad-muted { color:var(--muted-foreground); font-size:11px; }
+    .ad-row { padding:3px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .ad-cols { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .ad-chk { display:flex; align-items:center; gap:5px; font-size:12px; }
+    .ase-tabs { display:flex; gap:6px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+    .ase-tab { background:none; border:none; padding:8px 14px; font-size:13px; font-weight:600; color:var(--muted-foreground); cursor:pointer; border-bottom:2px solid transparent; }
+    .ase-tab.on { color:var(--primary); border-bottom-color:var(--primary); }
+    .ad-badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; }
+    .ad-PENDIENTE { background:#fef9c3; color:#854d0e; }
+    .ad-APROBADO { background:#dcfce7; color:#166534; }
+    .ad-RECHAZADO { background:#fee2e2; color:#991b1b; }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
 </style>
 
 @code {
+    private const long MaxBytes = 20L * 1024 * 1024;
+
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
-    private List<ArchivoDigitalDto> _items = new();
-    private List<OpcionDto> _carpOpc = new(), _tipOpc = new();
-    private SubirArchivoRequest _n = new() { Sucursal = "PRINCIPAL" };
-    private string _nCarpeta = "", _nTip = "";
-    private Microsoft.AspNetCore.Components.Forms.IBrowserFile? _file;
-    private bool _busy;
+    private List<ArchivoCentralDto> _items = new();
+    private List<CarpetaArchivoDto> _carpetas = new();
+    private List<TagDto> _tags = new();
+    private List<OpcionDto> _tipos = new();
+    private BandejaArchivo _bandeja = BandejaArchivo.Clasificados;
+    private ArchivoCentralDto? _sel;
+    private ClasificarRequest _cls = new();
+    private SubirArchivoRequest _n = new();
+    private IBrowserFile? _file;
+    private string _nTip = "", _clsTip = "", _clsCarpeta = "", _selTag = "";
+    private string _filtroIdent = "", _filtroCarpeta = "";
+    private string _nuevaCarpeta = "", _nuevaCarpetaPadre = "";
+    private string _nuevoTagCod = "", _nuevoTagNom = "";
+    private bool _nuevoTagPriv;
     private string? _error, _ok;
 
-    private const long MaxBytes = 16L * 1024 * 1024;
-
-    protected override async Task OnInitializedAsync() => await LoadAll();
-
-    private async Task LoadAll()
-    {
-        _items = (await Arch.ListAsync()).ToList();
-        _carpOpc = (await Arch.CarpetasParaSelectAsync()).ToList();
-        _tipOpc = (await Arch.TipologiasParaSelectAsync()).ToList();
-    }
-
-    private void OnFile(InputFileChangeEventArgs e)
-    {
-        _file = e.File;
-        _error = _ok = null;
-        if (string.IsNullOrWhiteSpace(_n.Nombre)) { _n.Nombre = _file.Name; }
-    }
-
-    private async Task Subir()
-    {
-        _error = _ok = null;
-        if (_file is null) { _error = "Selecciona un archivo."; return; }
-        if (_file.Size > MaxBytes) { _error = "El archivo supera el limite de 16 MB."; return; }
-        _busy = true;
-        try
-        {
-            _n.CarpetaId = Guid.TryParse(_nCarpeta, out var c) ? c : null;
-            _n.TipologiaId = Guid.TryParse(_nTip, out var t) ? t : null;
-            _n.Mime = string.IsNullOrWhiteSpace(_file.ContentType) ? "application/octet-stream" : _file.ContentType;
-            await using var stream = _file.OpenReadStream(MaxBytes);
-            var saved = await Arch.SubirAsync(_n, stream, await Actor());
-            if (saved is null) { _error = "No se pudo subir (sin tenant activo)."; return; }
-            _ok = $"Documento '{saved.Nombre}' subido a MinIO ({FormatSize(saved.SizeBytes)}).";
-            _n = new() { Sucursal = "PRINCIPAL" };
-            _nCarpeta = ""; _nTip = ""; _file = null;
-            await LoadAll();
-        }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
-        catch (Exception ex) { _error = "Error al subir: " + ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task SubirDemo()
-    {
-        _error = _ok = null;
-        _busy = true;
-        try
-        {
-            var texto = "ACTA DE COMITE DIRECTIVO\nDokTrino - documento demo del archivo digital.\nAlmacenado en object storage (MinIO).\nFecha: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\n";
-            var bytes = System.Text.Encoding.UTF8.GetBytes(texto);
-            using var ms = new MemoryStream(bytes);
-            var req = new SubirArchivoRequest { Sucursal = "PRINCIPAL", Nombre = "Acta demo.txt", Descripcion = "Documento de prueba subido a MinIO", Mime = "text/plain" };
-            var saved = await Arch.SubirAsync(req, ms, await Actor());
-            if (saved is null) { _error = "Sin tenant activo."; return; }
-            _ok = $"Documento demo '{saved.Nombre}' subido a MinIO ({FormatSize(saved.SizeBytes)}).";
-            await LoadAll();
-        }
-        catch (Exception ex) { _error = "Error al subir demo: " + ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task Eliminar(Guid id)
-    {
-        _error = _ok = null;
-        await Arch.EliminarAsync(id, await Actor());
-        await LoadAll();
-    }
-
-    private static string FormatSize(long bytes)
-    {
-        if (bytes < 1024) { return bytes + " B"; }
-        if (bytes < 1024 * 1024) { return (bytes / 1024.0).ToString("0.#") + " KB"; }
-        return (bytes / (1024.0 * 1024)).ToString("0.##") + " MB";
-    }
+    protected override async Task OnInitializedAsync() => await Load();
 
     private async Task<Guid> Actor()
     {
         if (AuthState is null) { return Guid.Empty; }
         var st = await AuthState;
         return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task Load()
+    {
+        Guid? carpeta = Guid.TryParse(_filtroCarpeta, out var cf) ? cf : null;
+        _items = (await Arch.ListarAsync(_bandeja, carpeta, _filtroIdent)).ToList();
+        _carpetas = (await Arch.ListarCarpetasAsync()).ToList();
+        _tags = (await Arch.ListarTagsAsync(await Actor())).ToList();
+        _tipos = (await Arch.TipologiasParaSelectAsync()).ToList();
+    }
+
+    private async Task Cambiar(BandejaArchivo b) { _bandeja = b; _sel = null; await Load(); }
+
+    private void OnFile(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        if (string.IsNullOrWhiteSpace(_n.Nombre)) { _n.Nombre = e.File.Name; }
+        _n.Mime = string.IsNullOrWhiteSpace(e.File.ContentType) ? "application/octet-stream" : e.File.ContentType;
+    }
+
+    private async Task Subir()
+    {
+        _error = _ok = null;
+        if (_file is null) { _error = "Elige un archivo."; return; }
+        _n.TipologiaId = Guid.TryParse(_nTip, out var t) ? t : null;
+        try
+        {
+            await using var stream = _file.OpenReadStream(MaxBytes);
+            var saved = await Arch.SubirAsync(_n, stream, await Actor());
+            if (saved is null) { _error = "Sin tenant activo."; return; }
+            _ok = $"Documento '{saved.Nombre}' cargado ({saved.EstadoAprobacion}).";
+            _n = new(); _file = null; _nTip = "";
+            await Load();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private void Seleccionar(ArchivoCentralDto a)
+    {
+        _sel = a;
+        _cls = new ClasificarRequest { ArchivoId = a.Id, IdentificadorPrincipal = a.IdentificadorPrincipal, Concepto = a.Concepto };
+        _clsTip = a.TipologiaId?.ToString() ?? "";
+        _clsCarpeta = a.CarpetaArchivoId?.ToString() ?? "";
+    }
+
+    private async Task Clasificar()
+    {
+        _error = _ok = null;
+        _cls.TipologiaId = Guid.TryParse(_clsTip, out var t) ? t : null;
+        _cls.CarpetaArchivoId = Guid.TryParse(_clsCarpeta, out var c) ? c : null;
+        try { await Arch.ClasificarAsync(_cls, await Actor()); _ok = "Documento clasificado."; _sel = null; await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task AsignarTag()
+    {
+        _error = _ok = null;
+        if (_sel is null || !Guid.TryParse(_selTag, out var tid)) { _error = "Elige un tag."; return; }
+        await Arch.AsignarTagAsync(_sel.Id, tid, await Actor());
+        _ok = "Tag asignado."; _selTag = "";
+        await Load();
+    }
+
+    private async Task Aprobar(Guid id)
+    {
+        _error = _ok = null;
+        await Arch.AprobarAsync(id, null, await Actor());
+        _ok = "Documento aprobado.";
+        await Load();
+    }
+
+    private async Task Rechazar(Guid id)
+    {
+        _error = _ok = null;
+        try { await Arch.RechazarAsync(id, "Rechazado desde la bandeja de aprobacion.", await Actor()); _ok = "Documento rechazado."; await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Eliminar(Guid id) { _error = _ok = null; await Arch.EliminarAsync(id, await Actor()); await Load(); }
+
+    private async Task CrearCarpeta()
+    {
+        _error = _ok = null;
+        Guid? padre = Guid.TryParse(_nuevaCarpetaPadre, out var p) ? p : null;
+        try { await Arch.CrearCarpetaAsync(padre, _nuevaCarpeta, await Actor()); _nuevaCarpeta = ""; _nuevaCarpetaPadre = ""; await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task CrearTag()
+    {
+        _error = _ok = null;
+        try { await Arch.CrearTagAsync(_nuevoTagCod, _nuevoTagNom, null, _nuevoTagPriv, await Actor()); _nuevoTagCod = ""; _nuevoTagNom = ""; _nuevoTagPriv = false; await Load(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 }
