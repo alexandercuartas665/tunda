@@ -1,0 +1,56 @@
+@page "/buscar"
+@attribute [Authorize]
+@using DokTrino.Application.Tenancy
+@inject IBusquedaGlobalService BusquedaSvc
+
+<PageTitle>Buscar - DokTrino</PageTitle>
+
+<div class="dkd">
+    <div>
+        <div class="page-eyebrow">Busqueda transversal</div>
+        <h1 class="page-title">Resultados</h1>
+        <p class="page-sub">
+            @if (string.IsNullOrWhiteSpace(Q))
+            {
+                <text>Escribe al menos 2 caracteres en el buscador de la barra superior.</text>
+            }
+            else
+            {
+                <text>@_resultados.Count resultado(s) para "@Q" en documentos, radicados, series y dependencias.</text>
+            }
+        </p>
+    </div>
+
+    <div class="dkd-card">
+        @if (_resultados.Count == 0)
+        {
+            <div class="dkd-empty">Sin coincidencias.</div>
+        }
+        else
+        {
+            <div class="dkd-act-head" style="grid-template-columns: 120px 130px 1fr 160px;">
+                <div>Modulo</div><div>Codigo</div><div>Titulo</div><div>Detalle</div>
+            </div>
+            @foreach (var r in _resultados)
+            {
+                <a class="dkd-act-row" style="grid-template-columns: 120px 130px 1fr 160px; text-decoration: none;" href="@r.Url">
+                    <div><span class="dkd-badge rev">@r.Modulo</span></div>
+                    <div class="dkd-act-code">@r.Codigo</div>
+                    <div class="dkd-act-doc">@r.Titulo</div>
+                    <div class="dkd-act-dep">@r.Detalle</div>
+                </a>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private IReadOnlyList<ResultadoBusqueda> _resultados = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _resultados = await BusquedaSvc.BuscarAsync(Q);
+    }
+}

@@ -1,0 +1,37 @@
+@using DokTrino.Application.Tenancy
+
+@* Avance de diligenciamiento por dependencia: porcentaje de sus respuestas de TRD
+   que ya declararon formato. *@
+
+<div class="dkd-card">
+    <div class="dkd-card-t" style="margin-bottom: 14px;">Documentos por dependencia</div>
+
+    @if (Datos.Count == 0)
+    {
+        <div class="dkd-empty">Ninguna dependencia ha empezado a diligenciar su TRD.</div>
+    }
+    else
+    {
+        @foreach (var (dep, indice) in Datos.Select((d, i) => (d, i)))
+        {
+            <div class="dkd-dep">
+                <div class="dkd-dep-h">
+                    <span>@dep.Nombre</span>
+                    <span class="pct">@dep.Porcentaje%</span>
+                </div>
+                <div class="dkd-dep-track">
+                    <div class="dkd-dep-fill" style="width: @(dep.Porcentaje)%; background: @Color(indice);"></div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DocsPorDependenciaDto> Datos { get; set; } = [];
+
+    // Rampa de color del prototipo, en orden de posicion.
+    private static readonly string[] Colores = ["#3b63e8", "#4f7ce8", "#f0a23b", "#7a90e0"];
+
+    private static string Color(int indice) => Colores[indice % Colores.Length];
+}

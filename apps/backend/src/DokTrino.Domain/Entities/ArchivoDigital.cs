@@ -47,6 +47,12 @@ public class ArchivoDigital : TenantEntity
     public DateTimeOffset? AprobadoEn { get; set; }
     public string? RechazoMotivo { get; set; }
 
+    /// <summary>
+    /// Fase del ciclo vital archivistico: GESTION | CENTRAL | HISTORICO.
+    /// Alimenta el bloque "Ciclo documental" del dashboard.
+    /// </summary>
+    public string FaseArchivistica { get; set; } = "GESTION";
+
     public DateTimeOffset FechaSubida { get; set; }
     public bool Activo { get; set; } = true;
     public int? LegacyReg { get; set; }

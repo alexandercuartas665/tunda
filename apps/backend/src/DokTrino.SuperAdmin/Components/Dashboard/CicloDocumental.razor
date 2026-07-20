@@ -1,0 +1,44 @@
+@using DokTrino.Application.Tenancy
+
+@* Ciclo vital archivistico: gestion / central / historico. Las barras se escalan
+   contra la fase con mas documentos. *@
+
+<div class="dkd-card">
+    <div class="dkd-card-h">
+        <div class="dkd-card-t">Ciclo documental</div>
+        <div class="dkd-card-chip">Este anio</div>
+    </div>
+    <div class="dkd-ciclo">
+        <div class="dkd-ciclo-col">
+            <div class="dkd-ciclo-bar" style="height: @(Alto(Datos.Gestion))px; background: linear-gradient(180deg, #3b63e8, #5a7cf0);"></div>
+            <div class="dkd-ciclo-lbl">Gestion</div>
+        </div>
+        <div class="dkd-ciclo-col">
+            <div class="dkd-ciclo-bar" style="height: @(Alto(Datos.Central))px; background: repeating-linear-gradient(135deg, #9db6f5, #9db6f5 6px, #b9cbf8 6px, #b9cbf8 12px);"></div>
+            <div class="dkd-ciclo-lbl">Central</div>
+        </div>
+        <div class="dkd-ciclo-col">
+            <div class="dkd-ciclo-bar" style="height: @(Alto(Datos.Historico))px; background: #dfe5f5;"></div>
+            <div class="dkd-ciclo-lbl">Historico</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CicloDocumentalDto Datos { get; set; } = new(0, 0, 0);
+
+    private const int AltoMaximo = 120;
+    private const int AltoMinimo = 8;
+
+    /// <summary>Alto proporcional de la barra; el minimo mantiene visible el cero.</summary>
+    private int Alto(int valor)
+    {
+        var max = Math.Max(Datos.Gestion, Math.Max(Datos.Central, Datos.Historico));
+        if (max == 0)
+        {
+            return AltoMinimo;
+        }
+
+        return Math.Max(AltoMinimo, (int)Math.Round(valor * (double)AltoMaximo / max));
+    }
+}

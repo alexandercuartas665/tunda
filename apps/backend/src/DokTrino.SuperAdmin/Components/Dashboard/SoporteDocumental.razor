@@ -1,0 +1,35 @@
+@using DokTrino.Application.Tenancy
+
+@* Reparto papel vs digital tomado de los formatos declarados en la TRD. *@
+
+<div class="dkd-card">
+    <div class="dkd-card-t">Soporte documental</div>
+    <div class="dkd-soporte">
+        <div>
+            <div class="k">Papel</div>
+            <div class="v" style="color: var(--primary);">@Datos.Papel.ToString("N0")</div>
+        </div>
+        <div>
+            <div class="k">Digital</div>
+            <div class="v" style="color: #f0a23b;">@Datos.Digital.ToString("N0")</div>
+        </div>
+    </div>
+    <div class="dkd-bar" style="margin-top: 14px;">
+        <div style="width: @(Datos.PctPapel)%; background: var(--primary);"></div>
+        <div style="width: @(Datos.PctDigital)%; background: #f0a23b;"></div>
+    </div>
+    <div class="dkd-soporte-note">
+        @if (Datos.Total == 0)
+        {
+            <text>Aun no hay formatos declarados en la TRD.</text>
+        }
+        else
+        {
+            <text>@Datos.PctPapel% en papel - @Datos.PctDigital% digitalizado</text>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SoporteDocumentalDto Datos { get; set; } = new(0, 0);
+}

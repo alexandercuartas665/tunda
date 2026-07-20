@@ -850,6 +850,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Mime).HasMaxLength(150).IsRequired();
             b.Property(x => x.Sha256).HasMaxLength(64);
             b.Property(x => x.EstadoAprobacion).HasMaxLength(20).IsRequired();
+            b.Property(x => x.FaseArchivistica).HasMaxLength(20).IsRequired().HasDefaultValue("GESTION");
             b.Property(x => x.IdentificadorPrincipal).HasMaxLength(120);
             b.Property(x => x.Concepto).HasMaxLength(300);
             b.Property(x => x.RechazoMotivo).HasColumnType("text");
@@ -861,6 +862,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.FlagIdentificado });
             b.HasIndex(x => new { x.TenantId, x.IdentificadorPrincipal });
             b.HasIndex(x => new { x.TenantId, x.CarpetaId });
+            b.HasIndex(x => new { x.TenantId, x.FaseArchivistica });
         });
 
         // ----- 2.D3 Archivo Central: carpetas de clasificacion, tags y aprobacion -----

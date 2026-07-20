@@ -1,4 +1,6 @@
-@page "/"
+@* Consola SaaS del operador de plataforma. La raiz "/" la toma el dashboard
+   documental del tenant (Dashboard.razor), que redirige aqui al Super Admin. *@
+@page "/admin"
 @attribute [Authorize(Policy = "PlatformOperator")]
 @inject ITenantAdminService TenantsSvc
 @inject IPlanAdminService PlansSvc

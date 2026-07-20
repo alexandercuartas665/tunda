@@ -1,0 +1,140 @@
+@page "/"
+@attribute [Authorize]
+@using DokTrino.Application.Tenancy
+@using DokTrino.SuperAdmin.Components.Dashboard
+@inject IDashboardDocumentalService DashboardSvc
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - DokTrino</PageTitle>
+
+@if (_datos is null)
+{
+    <div class="dkd-empty">Cargando indicadores...</div>
+}
+else
+{
+    <div class="dkd">
+        @* --- Fila de KPIs --- *@
+        <div class="dkd-kpis">
+            <KpiCard Valor="_datos.DocumentosGestionados.Valor"
+                     Delta="_datos.DocumentosGestionados.DeltaPorcentaje"
+                     Label="Documentos gestionados" Icon="&#128196;" IconBackground="#eaf0fe" />
+            <KpiCard Valor="_datos.RadicadosDelMes.Valor"
+                     Delta="_datos.RadicadosDelMes.DeltaPorcentaje"
+                     Label="Radicados del mes" Icon="&#128229;" IconBackground="#fdf1e3" />
+            <KpiCard Valor="_datos.TrdActivas.Valor"
+                     Label="TRD activas" Icon="&#128209;" IconBackground="#eef0ff" />
+            <KpiCard Valor="_datos.SubseriesPendientes.Valor" Warn="true"
+                     Label="Subseries pendientes" Icon="&#9888;" IconBackground="#fff3d6" />
+        </div>
+
+        @* --- Rejilla principal --- *@
+        <div class="dkd-main">
+            <div class="dkd-col">
+                @* Hero: documentos gestionados + avance de diligenciamiento *@
+                <div class="dkd-hero">
+                    <div class="dkd-hero-top">
+                        <div>
+                            <div class="dkd-hero-lbl">Documentos gestionados</div>
+                            <div class="dkd-hero-val">@_datos.DocumentosGestionados.Valor.ToString("N0")</div>
+                            <div class="dkd-hero-sub">
+                                @if (_datos.DocumentosGestionados.DeltaPorcentaje is int d)
+                                {
+                                    <text>@(d >= 0 ? "+" : "")@(d)% respecto al mes anterior</text>
+                                }
+                                else
+                                {
+                                    <text>Sin historico del mes anterior</text>
+                                }
+                            </div>
+                        </div>
+                        <div class="dkd-hero-pill">Este mes</div>
+                    </div>
+
+                    <div class="dkd-hero-panel">
+                        <div class="dkd-hero-panel-h">
+                            <div>Avance de diligenciamiento</div>
+                            <a href="trd">Ver todo &rarr;</a>
+                        </div>
+                        <div class="dkd-bar">
+                            <div style="width: @(_datos.Avance.PctSeries)%; background: #9db6f5;"></div>
+                            <div style="width: @(_datos.Avance.PctSubseries)%; background: #f0a23b;"></div>
+                            <div style="width: @(_datos.Avance.PctPendientes)%; background: #e5e9f5;"></div>
+                        </div>
+                        <div class="dkd-legend">
+                            <div><div class="k">Series</div><div class="v">@_datos.Avance.PctSeries%</div></div>
+                            <div><div class="k">Subseries</div><div class="v">@_datos.Avance.PctSubseries%</div></div>
+                            <div><div class="k">Pendientes</div><div class="v">@_datos.Avance.PctPendientes%</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px;">
+                    <CicloDocumental Datos="_datos.Ciclo" />
+                    <SoporteDocumental Datos="_datos.Soporte" />
+                </div>
+
+                <ActividadReciente Datos="_datos.Actividad" />
+            </div>
+
+            <div class="dkd-col">
+                @* TRD activas + sparkline de creacion por mes *@
+                <div class="dkd-card">
+                    <div class="dkd-card-h">
+                        <div class="dkd-card-t">TRD activas</div>
+                        <div class="dkd-card-chip">@DateTime.Now.Year</div>
+                    </div>
+                    <div class="dkd-big">@_datos.TrdActivas.Valor</div>
+                    <div class="dkd-spark">
+                        @foreach (var mes in _datos.TrdPorMes)
+                        {
+                            <div style="height: @(AltoSpark(mes))%; background: @ColorSpark(mes);"></div>
+                        }
+                    </div>
+                </div>
+
+                <TopSeries Datos="_datos.TopSeries" />
+                <DocumentosPorDependencia Datos="_datos.PorDependencia" />
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardDocumentalDto? _datos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // El operador de plataforma no tiene datos documentales: su consola es /admin.
+        var state = AuthState is null ? null : await AuthState;
+        if (state?.User.FindFirst("platform_role") is not null)
+        {
+            Navigation.NavigateTo("admin", replace: true);
+            return;
+        }
+
+        _datos = await DashboardSvc.ObtenerAsync();
+    }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    /// <summary>Alto relativo de la barra del sparkline (minimo visible del 18%).</summary>
+    private int AltoSpark(int valor)
+    {
+        var max = _datos!.TrdPorMes.DefaultIfEmpty(0).Max();
+        return max == 0 ? 18 : Math.Max(18, (int)Math.Round(valor * 100d / max));
+    }
+
+    /// <summary>Los meses pico van en ambar fuerte, el resto en la rampa clara.</summary>
+    private string ColorSpark(int valor)
+    {
+        var max = _datos!.TrdPorMes.DefaultIfEmpty(0).Max();
+        if (max == 0)
+        {
+            return "#fbe2c2";
+        }
+
+        var ratio = valor / (double)max;
+        return ratio >= 0.85 ? "#f0a23b" : ratio >= 0.5 ? "#f7cf9c" : "#fbe2c2";
+    }
+}

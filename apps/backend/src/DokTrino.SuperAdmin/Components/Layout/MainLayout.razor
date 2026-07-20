@@ -49,10 +49,13 @@
             <div class="doktrino-page-title">@PageTitle</div>
 
             <div class="doktrino-topbar-right">
-                <label class="doktrino-search">
+                @* GET a la pagina de resultados: el layout es SSR estatico, asi que un
+                   autocomplete en vivo obligaria a volver interactivo todo el shell. *@
+                <form class="doktrino-search" method="get" action="/buscar">
                     <span>&#8981;</span>
-                    <input type="search" placeholder="Buscar..." aria-label="Buscar" />
-                </label>
+                    <input type="search" name="q" placeholder="Buscar..." aria-label="Buscar"
+                           value="@(CurrentPath() == "buscar" ? TerminoActual() : "")" />
+                </form>
 
                 <label for="doktrino-help-toggle" class="doktrino-help">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 0 1 4.5 1.5c0 1.5-2 2-2 3" /><path d="M12 17h.01" /></svg>
@@ -164,6 +167,7 @@
     private static readonly Dictionary<string, string> PageTitles = new(StringComparer.OrdinalIgnoreCase)
     {
         [""] = "Dashboard",
+        ["admin"] = "Consola SaaS",
         ["trd"] = "Encuesta Documental",
         ["trd-cliente"] = "Cliente Encuesta",
         ["radicacion"] = "Radicacion",
@@ -180,6 +184,7 @@
         ["tenants"] = "Entidades",
         ["auditoria"] = "Auditoria",
         ["mi-cuenta"] = "Mi cuenta",
+        ["buscar"] = "Busqueda",
     };
 
     private string PageTitle
@@ -201,6 +206,14 @@
             seg = seg.Replace('-', ' ');
             return char.ToUpperInvariant(seg[0]) + seg[1..];
         }
+    }
+
+    /// <summary>Conserva el termino en el input al volver de la pagina de resultados.</summary>
+    private string TerminoActual()
+    {
+        var query = new Uri(Navigation.Uri).Query;
+        return Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query)
+            .TryGetValue("q", out var v) ? v.ToString() : "";
     }
 
     private string CurrentPath() =>

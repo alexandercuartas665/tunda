@@ -1,0 +1,50 @@
+@using DokTrino.Application.Tenancy
+
+@* Ultimos documentos cargados con su estado de aprobacion. *@
+
+<div class="dkd-card">
+    <div class="dkd-card-h" style="margin-bottom: 6px;">
+        <div class="dkd-card-t">Actividad reciente</div>
+        <a class="dkd-link" href="archivo-digital">Ver todo &rarr;</a>
+    </div>
+
+    <div class="dkd-act-head">
+        <div>Codigo</div><div>Documento</div><div>Fecha</div><div>Dependencia</div><div>Estado</div>
+    </div>
+
+    @if (Datos.Count == 0)
+    {
+        <div class="dkd-empty">Todavia no se ha cargado ningun documento.</div>
+    }
+    else
+    {
+        @foreach (var a in Datos)
+        {
+            <div class="dkd-act-row">
+                <div class="dkd-act-code">@a.Codigo</div>
+                <div class="dkd-act-doc">@a.Documento</div>
+                <div class="dkd-act-date">@a.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                <div class="dkd-act-dep">@a.Dependencia</div>
+                <div><span class="dkd-badge @ClaseEstado(a.Estado)">@Etiqueta(a.Estado)</span></div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ActividadRecienteDto> Datos { get; set; } = [];
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "APROBADO" => "ok",
+        "RECHAZADO" => "rev",
+        _ => "pend"
+    };
+
+    private static string Etiqueta(string estado) => estado switch
+    {
+        "APROBADO" => "Aprobado",
+        "RECHAZADO" => "Rechazado",
+        _ => "Pendiente"
+    };
+}

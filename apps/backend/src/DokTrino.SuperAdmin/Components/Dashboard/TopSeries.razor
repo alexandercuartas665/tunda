@@ -1,0 +1,33 @@
+@using DokTrino.Application.Tenancy
+
+@* Series con mas documentos. Cada fila navega al archivo central filtrado. *@
+
+<div class="dkd-card">
+    <div class="dkd-card-h" style="margin-bottom: 10px;">
+        <div class="dkd-card-t">Top series</div>
+        <a class="dkd-link" href="trd">Ver todo &rarr;</a>
+    </div>
+
+    @if (Datos.Count == 0)
+    {
+        <div class="dkd-empty">Aun no hay documentos clasificados contra una serie.</div>
+    }
+    else
+    {
+        @foreach (var (serie, indice) in Datos.Select((s, i) => (s, i)))
+        {
+            <a class="dkd-ts @(indice == 0 ? "hot" : "")" href="@($"archivo-digital?serie={serie.SerieId}")">
+                <div class="dkd-ts-rank">@serie.Rank</div>
+                <div style="flex: 1;">
+                    <div class="dkd-ts-name">@serie.Nombre</div>
+                    <div class="dkd-ts-count">@serie.Documentos.ToString("N0") docs</div>
+                </div>
+                <div class="dkd-ts-arrow">&rsaquo;</div>
+            </a>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TopSerieDto> Datos { get; set; } = [];
+}

@@ -1,0 +1,30 @@
+@* Tarjeta KPI de la fila superior del dashboard documental. *@
+
+<div class="dkd-card @(Warn ? "warn" : "")">
+    <div class="dkd-kpi-top">
+        @* El icono llega como entidad HTML numerica (los archivos del proyecto son
+           ASCII puro), asi que hay que emitirlo sin escapar. *@
+        <div class="dkd-kpi-icon" style="background: @IconBackground;">@((MarkupString)Icon)</div>
+        @if (Warn)
+        {
+            <div class="dkd-kpi-delta">accion</div>
+        }
+        else if (Delta is int d)
+        {
+            <div class="dkd-kpi-delta">@(d >= 0 ? "+" : "")@(d)%</div>
+        }
+    </div>
+    <div class="dkd-kpi-val">@Valor.ToString("N0")</div>
+    <div class="dkd-kpi-lbl">@Label</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Valor { get; set; }
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter] public string IconBackground { get; set; } = "#eaf0fe";
+    [Parameter] public int? Delta { get; set; }
+
+    /// <summary>Variante ambar: el KPI exige accion del usuario.</summary>
+    [Parameter] public bool Warn { get; set; }
+}
