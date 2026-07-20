@@ -18,7 +18,7 @@ else
         <div class="dkd-kpis">
             <KpiCard Valor="_datos.DocumentosGestionados.Valor"
                      Delta="_datos.DocumentosGestionados.DeltaPorcentaje"
-                     Label="Documentos gestionados" Icon="&#128196;" IconBackground="#eaf0fe" />
+                     Label="Documentos gestionados" Icon="&#128196;" IconBackground="var(--primary-soft)" />
             <KpiCard Valor="_datos.RadicadosDelMes.Valor"
                      Delta="_datos.RadicadosDelMes.DeltaPorcentaje"
                      Label="Radicados del mes" Icon="&#128229;" IconBackground="#fdf1e3" />
@@ -57,7 +57,7 @@ else
                             <a href="trd">Ver todo &rarr;</a>
                         </div>
                         <div class="dkd-bar">
-                            <div style="width: @(_datos.Avance.PctSeries)%; background: #9db6f5;"></div>
+                            <div style="width: @(_datos.Avance.PctSeries)%; background: oklch(0.78 0.11 237);"></div>
                             <div style="width: @(_datos.Avance.PctSubseries)%; background: #f0a23b;"></div>
                             <div style="width: @(_datos.Avance.PctPendientes)%; background: #e5e9f5;"></div>
                         </div>

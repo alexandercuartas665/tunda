@@ -6,10 +6,15 @@
   --background: oklch(0.985 0.003 280);
   --foreground: oklch(0.2 0.04 280);
   --card: oklch(1 0 0);
-  --primary: #3b63e8;
-  --primary-deep: #2c3e9e;
-  --primary-foreground: #ffffff;
-  --primary-soft: #eef3fe;
+  /* Azul Telepacifico (decision de Fase 1). El prototipo v3.0 usa un indigo
+     var(--primary); prevalece la paleta institucional y el prototipo se ajusta. */
+  --primary: oklch(0.55 0.22 237);
+  --primary-deep: oklch(0.45 0.24 241);
+  --primary-foreground: oklch(0.99 0.005 280);
+  --primary-soft: oklch(0.96 0.025 237);
+  /* Sombras y realces del primario, para no repetir el color literal. */
+  --primary-shadow: oklch(0.55 0.22 237 / 0.28);
+  --primary-tint: oklch(0.55 0.22 237 / 0.12);
   /* Cromo calido del prototipo v3.0: bordes, superficies suaves y texto atenuado. */
   --chrome-border: #f0ede4;
   --chrome-surface: #f4f2ea;
@@ -125,7 +130,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 }
 .doktrino-rail-item.active {
   background: var(--primary); color: #fff;
-  box-shadow: 0 6px 16px rgba(59, 99, 232, .3);
+  box-shadow: 0 6px 16px var(--primary-shadow);
 }
 .doktrino-rail-item svg { width: 19px; height: 19px; }
 
@@ -161,7 +166,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .doktrino-topbar-brand:hover { text-decoration: none; }
 .doktrino-topbar-mark {
   width: 32px; height: 32px; border-radius: 9px;
-  background: linear-gradient(135deg, #4f7ce8, var(--primary-deep));
+  background: linear-gradient(135deg, oklch(0.62 0.19 237), var(--primary-deep));
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-weight: 800; font-size: 16px;
 }
@@ -186,7 +191,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .doktrino-search input::placeholder { color: var(--chrome-muted); }
 .doktrino-help {
   display: flex; align-items: center; gap: 7px;
-  border: 1px solid #d8e2fb; cursor: pointer;
+  border: 1px solid oklch(0.89 0.06 237); cursor: pointer;
   background: var(--primary-soft); color: var(--primary);
   border-radius: 11px; padding: 9px 14px; font-size: 12px; font-weight: 700;
 }
@@ -333,7 +338,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .doktrino-nav-link svg { width: 17px; height: 17px; flex-shrink: 0; }
 .doktrino-nav-link:hover { background: var(--chrome-surface); }
 .doktrino-nav-link.active { color: var(--primary); font-weight: 700; background: transparent; }
-.doktrino-nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 7px; background: rgba(59, 99, 232, .12); color: var(--primary); }
+.doktrino-nav-badge { margin-left: auto; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 7px; background: var(--primary-shadow); color: var(--primary); }
 
 /* ===== Drawer de Ayuda / Formacion (boton Ayuda de la barra superior) =====
    Abre con el checkbox #doktrino-help-toggle: el layout es SSR estatico y no
@@ -360,7 +365,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 }
 .doktrino-help-toggle:checked ~ .doktrino-drawer { transform: translateX(0); }
 .doktrino-help { cursor: pointer; }
-.doktrino-drawer-head { background: linear-gradient(135deg, #243391, var(--primary)); color: #fff; padding: 20px 22px; }
+.doktrino-drawer-head { background: linear-gradient(135deg, var(--primary-deep), var(--primary)); color: #fff; padding: 20px 22px; }
 .doktrino-drawer-head .row1 { display: flex; align-items: center; }
 .doktrino-drawer-head .ttl { font-size: 22px; font-weight: 800; letter-spacing: -.5px; }
 .doktrino-drawer-head .cls { margin-left: auto; cursor: pointer; font-size: 20px; color: #cdd5f6; background: none; border: 0; line-height: 1; user-select: none; }
@@ -1243,7 +1248,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 
 /* Hero azul */
 .dkd-hero {
-  background: linear-gradient(125deg, #243391, var(--primary));
+  background: linear-gradient(125deg, var(--primary-deep), var(--primary));
   border-radius: 20px; padding: 24px 26px; color: #fff;
   box-shadow: 0 16px 40px rgba(44, 62, 158, .28);
 }
@@ -1289,7 +1294,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .dkd-badge { font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 9px; }
 .dkd-badge.ok { background: #e8f7ee; color: #16a34a; }
 .dkd-badge.pend { background: #fff3d6; color: #b8770b; }
-.dkd-badge.rev { background: #eaf0fe; color: var(--primary); }
+.dkd-badge.rev { background: var(--primary-soft); color: var(--primary); }
 
 /* TRD activas (sparkline) */
 .dkd-spark { display: flex; align-items: flex-end; gap: 6px; height: 54px; margin-top: 10px; }
@@ -1348,7 +1353,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .trx-btn {
   border: 0; cursor: pointer; background: var(--primary); color: #fff;
   border-radius: 10px; padding: 10px 16px; font-size: 12.5px; font-weight: 700;
-  box-shadow: 0 6px 16px rgba(59, 99, 232, .25); text-decoration: none;
+  box-shadow: 0 6px 16px var(--primary-shadow); text-decoration: none;
 }
 .trx-btn.ghost { background: #fff; color: #8a7f66; border: 1px solid #e6e2d6; box-shadow: none; }
 .trx-btn.danger { background: #e5484d; box-shadow: 0 6px 16px rgba(229, 72, 77, .25); }
@@ -1387,10 +1392,10 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .trx-card-top { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .trx-num {
   font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;
-  color: var(--primary); background: #eaf0fe; padding: 3px 10px; border-radius: 8px;
+  color: var(--primary); background: var(--primary-soft); padding: 3px 10px; border-radius: 8px;
 }
 .trx-est { font-size: 10.5px; font-weight: 700; padding: 3px 10px; border-radius: 8px; letter-spacing: .3px; }
-.trx-est.desarrollo { background: #eaf0fe; color: var(--primary); }
+.trx-est.desarrollo { background: var(--primary-soft); color: var(--primary); }
 .trx-est.activo { background: #e8f7ee; color: #15803d; }
 .trx-est.cerrado { background: #f1efe7; color: #8a7f66; }
 .trx-dep { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: #6b7488; margin-bottom: 4px; }
@@ -1427,7 +1432,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 /* Detalle (acordeones) */
 .trx-acc { background: #fff; border: 1px solid #e9ecf5; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(33, 48, 110, .05); margin-bottom: 12px; }
 .trx-acc-h { display: flex; align-items: center; gap: 10px; padding: 15px 20px; }
-.trx-acc-ico { width: 28px; height: 28px; border-radius: 8px; background: #eaf0fe; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.trx-acc-ico { width: 28px; height: 28px; border-radius: 8px; background: var(--primary-soft); display: flex; align-items: center; justify-content: center; font-size: 14px; }
 .trx-acc-t { font-size: 14px; font-weight: 700; color: #1f2433; flex: 1; }
 .trx-acc-meta { font-size: 11px; font-weight: 600; color: #9aa3bd; }
 .trx-acc-b { padding: 4px 20px 20px; border-top: 1px solid #f0f2f8; }
@@ -1437,7 +1442,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   padding: 10px 12px; font-size: 12.5px; font-weight: 500; color: #37415c;
 }
 .trx-detalle-hero {
-  background: linear-gradient(135deg, #243391, var(--primary));
+  background: linear-gradient(135deg, var(--primary-deep), var(--primary));
   color: #fff; padding: 16px 24px; border-radius: 16px; margin-bottom: 16px;
 }
 .trx-detalle-hero .row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1464,14 +1469,14 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 
 /* Banner de onboarding */
 .tcl-coach {
-  background: linear-gradient(120deg, #eef3fe, #f3f6ff);
-  border: 1px solid #d8e2fb; border-radius: 16px;
+  background: linear-gradient(120deg, var(--primary-soft), #f3f6ff);
+  border: 1px solid oklch(0.89 0.06 237); border-radius: 16px;
   padding: 16px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 16px;
 }
 .tcl-coach-ico {
   width: 42px; height: 42px; border-radius: 12px; background: #fff;
   display: flex; align-items: center; justify-content: center; font-size: 20px;
-  box-shadow: 0 4px 12px rgba(59, 99, 232, .14); flex-shrink: 0;
+  box-shadow: 0 4px 12px var(--primary-shadow); flex-shrink: 0;
 }
 .tcl-coach .t { font-size: 13.5px; font-weight: 700; color: #1f2433; }
 .tcl-coach .s { font-size: 12px; font-weight: 500; color: #6b7488; margin-top: 2px; }
@@ -1485,7 +1490,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   padding: 11px 14px; border-radius: 13px;
   background: #f7f6f1; border: 1px solid #eee9dc;
 }
-.tcl-step.done { background: #eef3fe; border-color: #cfdcfa; }
+.tcl-step.done { background: var(--primary-soft); border-color: oklch(0.90 0.05 237); }
 .tcl-step .n {
   width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1528,13 +1533,13 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   background: var(--primary); color: #fff;
   display: flex; align-items: center; justify-content: center; gap: 7px;
   padding: 11px; font-size: 12.5px; font-weight: 700;
-  box-shadow: 0 5px 14px rgba(59, 99, 232, .26); margin-bottom: 11px;
+  box-shadow: 0 5px 14px var(--primary-shadow); margin-bottom: 11px;
 }
 .tcl-input {
   width: 100%; border: 1px solid #e3e7f2; background: #f6f8fc; border-radius: 10px;
   padding: 10px 12px; font-size: 12.5px; font-weight: 500; color: #37415c; outline: none;
 }
-.tcl-input.dashed { border: 1.5px dashed #b9cbf8; background: #f6f9ff; font-weight: 600; }
+.tcl-input.dashed { border: 1.5px dashed oklch(0.85 0.08 237); background: #f6f9ff; font-weight: 600; }
 .tcl-lista { display: flex; flex-direction: column; gap: 2px; max-height: 440px; overflow: auto; margin-top: 11px; }
 .tcl-item {
   display: flex; align-items: center; gap: 8px; cursor: pointer;
@@ -1542,7 +1547,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   font-size: 12.5px; font-weight: 600; color: #37415c;
 }
 .tcl-item:hover { background: #f6f8fc; }
-.tcl-item.on { background: #eef3fe; color: var(--primary); }
+.tcl-item.on { background: var(--primary-soft); color: var(--primary); }
 .tcl-item .code { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #aab2c8; margin-left: auto; }
 .tcl-propia {
   background: #f0ecfb; color: #7c5cd0; font-size: 8.5px; font-weight: 700;
@@ -1577,8 +1582,8 @@ h1, h2, h3 { letter-spacing: -0.01em; }
   display: flex; align-items: center; gap: 9px;
 }
 .tcl-serie-card { background: #fff; border: 1px solid #e9ecf5; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 3px rgba(33,48,110,.05); margin-bottom: 16px; }
-.tcl-serie-h { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #f4f7fd; border-bottom: 1px solid #e9ecf5; }
-.tcl-serie-h .code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--primary); font-weight: 600; background: #e7eefe; padding: 3px 9px; border-radius: 7px; }
+.tcl-serie-h { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: oklch(0.97 0.015 237); border-bottom: 1px solid #e9ecf5; }
+.tcl-serie-h .code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--primary); font-weight: 600; background: var(--primary-soft); padding: 3px 9px; border-radius: 7px; }
 .tcl-serie-h .name { font-size: 13.5px; font-weight: 700; color: #1f2433; }
 
 @media (max-width: 900px) {

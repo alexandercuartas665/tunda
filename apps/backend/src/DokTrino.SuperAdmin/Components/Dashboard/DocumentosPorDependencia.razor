@@ -31,7 +31,7 @@
     [Parameter, EditorRequired] public IReadOnlyList<DocsPorDependenciaDto> Datos { get; set; } = [];
 
     // Rampa de color del prototipo, en orden de posicion.
-    private static readonly string[] Colores = ["#3b63e8", "#4f7ce8", "#f0a23b", "#7a90e0"];
+    private static readonly string[] Colores = ["var(--primary)", "oklch(0.62 0.19 237)", "#f0a23b", "#7a90e0"];
 
     private static string Color(int indice) => Colores[indice % Colores.Length];
 }
