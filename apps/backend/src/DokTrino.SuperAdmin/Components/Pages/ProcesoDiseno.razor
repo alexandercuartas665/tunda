@@ -1,0 +1,154 @@
+@page "/procesos/{ProcesoId:guid}/diseno"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@implements IAsyncDisposable
+@using System.Security.Claims
+@using DokTrino.Application.Bpmn
+@using DokTrino.Application.Tenancy
+@inject IBpmnEngine Engine
+@inject IBpmnService Procesos
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Disenador BPMN - DokTrino</PageTitle>
+
+<div class="trx-breadcrumb">Inicio &middot; Procesos &middot; Disenador</div>
+
+<div class="trx-head">
+    <div>
+        <div class="trx-title">Disenador de procesos</div>
+        <div class="trx-sub">@(_nombre ?? "Proceso") &middot; arrastra elementos al lienzo y publica cuando el flujo este completo.</div>
+    </div>
+    <div class="trx-head-actions">
+        <button class="trx-btn ghost" @onclick="Guardar">Guardar borrador</button>
+        <button class="trx-btn" @onclick="Publicar">Publicar version</button>
+        <a class="trx-btn ghost" href="procesos">Volver</a>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+@if (_errores.Count > 0)
+{
+    <div class="ase-alert">
+        <b>El diagrama no se puede publicar:</b>
+        <ul style="margin: 6px 0 0; padding-left: 18px;">
+            @foreach (var e in _errores) { <li>@e</li> }
+        </ul>
+    </div>
+}
+
+<div class="bpmn-wrap">
+    <div id="bpmn-canvas" class="bpmn-canvas"></div>
+
+    <div class="bpmn-inspector">
+        <div class="bpmn-insp-t">Nodos publicados</div>
+        @if (_nodos.Count == 0)
+        {
+            <div class="dkd-empty">Sin publicar. Dibuja el flujo y pulsa "Publicar version".</div>
+        }
+        else
+        {
+            @foreach (var n in _nodos)
+            {
+                <div class="bpmn-nodo">
+                    <span class="bpmn-tipo @n.Tipo.ToLowerInvariant()">@n.Tipo</span>
+                    <span style="flex: 1;">@n.Nombre</span>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .bpmn-wrap { display:flex; gap:14px; align-items:stretch; }
+    .bpmn-canvas { flex:1; height:600px; background:#fff; border:1px solid var(--chrome-border); border-radius:16px; }
+    .bpmn-inspector { width:280px; flex-shrink:0; background:#fff; border:1px solid var(--chrome-border); border-radius:16px; padding:16px; overflow:auto; max-height:600px; }
+    .bpmn-insp-t { font-size:13px; font-weight:700; color:#1f2433; margin-bottom:11px; }
+    .bpmn-nodo { display:flex; align-items:center; gap:9px; padding:8px 6px; border-bottom:1px solid #f4f6fb; font-size:12.5px; color:#37415c; }
+    .bpmn-tipo { font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:6px; letter-spacing:.3px; }
+    .bpmn-tipo.inicio { background:#e8f7ee; color:#15803d; }
+    .bpmn-tipo.tarea { background:#eaf0fe; color:var(--primary); }
+    .bpmn-tipo.compuerta { background:#fff3d6; color:#b8770b; }
+    .bpmn-tipo.fin { background:#f1efe7; color:#8a7f66; }
+    @@media (max-width: 1000px) { .bpmn-wrap { flex-direction:column; } .bpmn-inspector { width:100%; } }
+</style>
+
+@code {
+    [Parameter] public Guid ProcesoId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string? _nombre;
+    private List<NodoDto> _nodos = new();
+    private List<string> _errores = new();
+    private string? _error, _ok;
+    private bool _iniciado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var procesos = await Procesos.ListProcesosAsync();
+        _nombre = procesos.FirstOrDefault(p => p.Id == ProcesoId)?.Nombre;
+        _nodos = (await Engine.NodosAsync(ProcesoId)).ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) { return; }
+
+        var xml = await Engine.ObtenerDiagramaAsync(ProcesoId);
+        var r = await JS.InvokeAsync<JsResultado>("doktrinoBpmn.iniciar", "bpmn-canvas", xml);
+        _iniciado = true;
+
+        if (!r.Ok)
+        {
+            _error = $"El diagrama guardado no se pudo cargar ({r.Error}); se abrio un lienzo nuevo.";
+            StateHasChanged();
+        }
+    }
+
+    private sealed record JsResultado(bool Ok, string? Error);
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+
+    private async Task<string?> XmlActual() =>
+        _iniciado ? await JS.InvokeAsync<string?>("doktrinoBpmn.obtenerXml") : null;
+
+    private async Task Guardar()
+    {
+        _error = _ok = null; _errores.Clear();
+        var xml = await XmlActual();
+        if (xml is null) { _error = "El lienzo aun no esta listo."; return; }
+
+        await Engine.GuardarDiagramaAsync(ProcesoId, xml, await Actor());
+        _ok = "Borrador guardado.";
+    }
+
+    private async Task Publicar()
+    {
+        _error = _ok = null; _errores.Clear();
+        var xml = await XmlActual();
+        if (xml is null) { _error = "El lienzo aun no esta listo."; return; }
+
+        var r = await Engine.PublicarAsync(ProcesoId, xml, await Actor());
+        if (!r.Ok)
+        {
+            _errores = r.Errores.ToList();
+            return;
+        }
+
+        _ok = $"Publicado: {r.Nodos} nodos y {r.Transiciones} transiciones. Ya admite instancias nuevas.";
+        _nodos = (await Engine.NodosAsync(ProcesoId)).ToList();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("doktrinoBpmn.destruir"); }
+        catch (JSDisconnectedException) { /* el circuito ya se cerro */ }
+    }
+}

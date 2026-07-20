@@ -15,6 +15,10 @@ public class Tarea : TenantEntity
     public ProcesoActividad? Actividad { get; set; }
 
     /// <summary>Nombre de la actividad (snapshot, para listar sin join).</summary>
+    /// <summary>Nodo del grafo BPMN que genero la tarea (motor nuevo).</summary>
+    public Guid? NodoId { get; set; }
+    public ProcesoNodo? Nodo { get; set; }
+
     public string ActividadNombre { get; set; } = null!;
 
     public Guid? AsignadoId { get; set; }

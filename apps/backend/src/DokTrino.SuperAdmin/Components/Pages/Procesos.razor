@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @using DokTrino.Application.Tenancy
 @inject IBpmnService Bpmn
+@inject DokTrino.Application.Bpmn.IBpmnEngine Engine
 
 <PageTitle>Procesos (BPMN) - DokTrino</PageTitle>
 
@@ -29,6 +30,7 @@
                         <td><span class="mono">@p.Sucursal</span></td><td><span class="mono">@p.Codigo</span></td>
                         <td>@p.Nombre</td><td class="text-center">@p.Actividades</td>
                         <td class="ase-row-actions">
+                            <a class="btn btn-primary btn-sm" href="@($"procesos/{p.Id}/diseno")">Disenar BPMN</a>
                             <button class="btn btn-outline-primary btn-sm" @onclick="() => SelProc(p.Id)">Actividades</button>
                             <button class="btn btn-outline-danger btn-sm" @onclick="() => DelProc(p.Id)">&times;</button>
                         </td>
@@ -212,14 +214,40 @@
         _error = _ok = null;
         if (!Guid.TryParse(_iProc, out var pid)) { _error = "Elige un proceso."; return; }
         Guid? rid = Guid.TryParse(_iRad, out var r) ? r : null;
-        try { var inst = await Bpmn.IniciarInstanciaAsync(pid, rid, await Actor()); if (inst is null) { _error = "Sin tenant."; return; } _ok = $"Instancia iniciada en '{inst.ActividadActual}'."; _iProc = ""; _iRad = ""; await LoadAll(); }
+        try
+        {
+            // Si el proceso ya tiene diagrama publicado, manda el motor de grafo;
+            // los procesos viejos siguen con el motor secuencial.
+            var nodos = await Engine.NodosAsync(pid);
+            if (nodos.Count > 0)
+            {
+                await Engine.IniciarInstanciaAsync(pid, rid, await Actor());
+                _ok = "Instancia iniciada con el motor BPMN (nodos y transiciones).";
+            }
+            else
+            {
+                var inst = await Bpmn.IniciarInstanciaAsync(pid, rid, await Actor());
+                if (inst is null) { _error = "Sin tenant."; return; }
+                _ok = $"Instancia iniciada en '{inst.ActividadActual}'.";
+            }
+            _iProc = ""; _iRad = ""; await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     private async Task Completar(Guid tareaId)
     {
         _error = _ok = null;
-        try { await Bpmn.CompletarTareaAsync(tareaId, await Actor()); _ok = "Tarea completada; la instancia avanzo."; await LoadAll(); }
+        try
+        {
+            // Las tareas del motor nuevo llevan NodoId; las viejas no.
+            if (!await Engine.CompletarTareaAsync(tareaId, await Actor()))
+            {
+                await Bpmn.CompletarTareaAsync(tareaId, await Actor());
+            }
+            _ok = "Tarea completada; la instancia avanzo.";
+            await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 }

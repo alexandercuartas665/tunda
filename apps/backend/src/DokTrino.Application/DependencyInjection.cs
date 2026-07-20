@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IConfiguracionDocumentalService, Tenancy.ConfiguracionDocumentalService>();
         services.AddScoped<Tenancy.IExpedienteService, Tenancy.ExpedienteService>();
         services.AddScoped<Tenancy.ITopografiaService, Tenancy.TopografiaService>();
+        services.AddScoped<Bpmn.IBpmnEngine, Bpmn.BpmnEngine>();
         services.AddScoped<Tenancy.IBpmnService, Tenancy.BpmnService>();
         services.AddScoped<Tenancy.IClasificadorTrdService, Tenancy.ClasificadorTrdService>();
         services.AddScoped<Tenancy.IBiServicioAdminService, Tenancy.BiServicioAdminService>();

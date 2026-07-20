@@ -14,5 +14,13 @@ public class ProcesoDefinicion : TenantEntity
     public int Version { get; set; } = 1;
     public bool Activo { get; set; } = true;
 
+    /// <summary>Diagrama BPMN 2.0 tal cual lo guarda el disenador.</summary>
+    public string? BpmnXml { get; set; }
+
+    /// <summary>True cuando la version esta publicada y admite instancias nuevas.</summary>
+    public bool Publicado { get; set; }
+
     public ICollection<ProcesoActividad> Actividades { get; set; } = new List<ProcesoActividad>();
+    public ICollection<ProcesoNodo> Nodos { get; set; } = new List<ProcesoNodo>();
+    public ICollection<ProcesoTransicion> Transiciones { get; set; } = new List<ProcesoTransicion>();
 }

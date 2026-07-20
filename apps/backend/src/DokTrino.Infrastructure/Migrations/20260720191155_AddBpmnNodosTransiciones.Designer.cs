@@ -3,6 +3,7 @@ using System;
 using DokTrino.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DokTrino.Infrastructure.Migrations
 {
     [DbContext(typeof(DokTrinoDbContext))]
-    partial class DokTrinoDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260720191155_AddBpmnNodosTransiciones")]
+    partial class AddBpmnNodosTransiciones
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

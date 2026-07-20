@@ -91,6 +91,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
     public DbSet<Expediente> Expedientes => Set<Expediente>();
+    public DbSet<ProcesoNodo> ProcesoNodos => Set<ProcesoNodo>();
+    public DbSet<ProcesoTransicion> ProcesoTransiciones => Set<ProcesoTransicion>();
     public DbSet<NivelTopografico> NivelesTopograficos => Set<NivelTopografico>();
     public DbSet<ElementoTopografico> ElementosTopograficos => Set<ElementoTopografico>();
     public DbSet<Complemento> Complementos => Set<Complemento>();
@@ -763,6 +765,27 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.Codigo }).IsUnique();
         });
 
+        modelBuilder.Entity<ProcesoNodo>(b =>
+        {
+            b.Property(x => x.ElementoBpmnId).HasMaxLength(120).IsRequired();
+            b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(250).IsRequired();
+            b.Property(x => x.Responsable).HasMaxLength(160);
+            b.HasOne(x => x.Proceso).WithMany(p => p.Nodos).HasForeignKey(x => x.ProcesoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.ProcesoId, x.ElementoBpmnId }).IsUnique();
+        });
+
+        modelBuilder.Entity<ProcesoTransicion>(b =>
+        {
+            b.Property(x => x.ElementoBpmnId).HasMaxLength(120).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(250);
+            b.Property(x => x.Condicion).HasColumnType("text");
+            b.HasOne(x => x.Proceso).WithMany(p => p.Transiciones).HasForeignKey(x => x.ProcesoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Origen).WithMany().HasForeignKey(x => x.OrigenId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(x => x.Destino).WithMany().HasForeignKey(x => x.DestinoId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.ProcesoId, x.ElementoBpmnId }).IsUnique();
+        });
+
         modelBuilder.Entity<NivelTopografico>(b =>
         {
             b.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
@@ -960,6 +983,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<ProcesoDefinicion>(b =>
         {
+            b.Property(x => x.BpmnXml).HasColumnType("text");
             b.Property(x => x.Sucursal).HasMaxLength(40).IsRequired();
             b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(300).IsRequired();
