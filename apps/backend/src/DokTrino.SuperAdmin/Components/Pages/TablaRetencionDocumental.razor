@@ -1,4 +1,5 @@
 @page "/trd"
+@page "/transacciones"
 @attribute [Authorize]
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.Security.Claims
@@ -6,142 +7,294 @@
 @inject ITrdAdminService Trd
 @inject NavigationManager Nav
 
-<PageTitle>Encuesta Documental - Admin TRD - DokTrino</PageTitle>
+<PageTitle>Transacciones documentales - DokTrino</PageTitle>
 
-<div class="ase-head">
-    <div>
-        <div class="ase-eyebrow">Gestion Documental - 2.D1</div>
-        <h1 class="ase-title">Encuesta Documental (Admin TRD)</h1>
-    </div>
-    <div>@if (_trds.Count == 0) { <button class="btn btn-outline-primary btn-sm" @onclick="SeedDemo">Sembrar TRD demo</button> }</div>
-</div>
+<div class="trx">
+    <div class="trx-breadcrumb">Inicio &middot; Configuracion &middot; Tablas documentales</div>
 
-@if (_error is not null) { <div class="ase-alert">@_error</div> }
-@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
-
-<div class="ase-card">
-    <div class="ase-card-h">Tablas de Retencion Documental (@_trds.Count)</div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead><tr><th>Consecutivo</th><th>Titulo</th><th>Segmento</th><th>Estado</th><th class="text-center">Dependencias</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var t in _trds)
-                {
-                    <tr class="@(t.Id == _sel?.Id ? "trd-sel" : "")">
-                        <td><span class="mono">@t.Consecutivo</span></td><td>@t.Titulo</td><td>@(t.Segmento ?? "-")</td>
-                        <td><span class="trd-badge trd-@t.Estado">@t.Estado</span></td>
-                        <td class="text-center">@t.Dependencias</td>
-                        <td class="ase-row-actions">
-                            <button class="btn btn-outline-primary btn-sm" @onclick="() => Seleccionar(t)">Organigrama</button>
-                            @if (t.Estado == "DESARROLLO") { <button class="btn btn-outline-success btn-sm" @onclick='() => Estado(t.Id, "ACTIVO")'>Activar</button> }
-                            else if (t.Estado == "ACTIVO") { <button class="btn btn-outline-secondary btn-sm" @onclick='() => Estado(t.Id, "CERRADO")'>Cerrar</button> }
-                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Eliminar(t.Id)">&times;</button>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        @if (_trds.Count == 0) { <div class="ase-empty">Sin TRD. Crea una o siembra el demo.</div> }
-    </div>
-    <div class="trd-form">
-        <div class="trd-f trd-grow"><label>Titulo de la TRD</label><input class="form-control form-control-sm" @bind="_nt.Titulo" placeholder="TRD Institucional 2026" /></div>
-        <div class="trd-f"><label>Segmento</label>
-            <select class="form-select form-select-sm" @bind="_ntSeg">
-                <option value="">(sin segmento)</option>
-                @foreach (var s in _segmentos) { <option value="@s.Id">@s.Codigo - @s.Nombre</option> }
-            </select>
+    <div class="trx-head">
+        <div>
+            <div class="trx-title">Transacciones documentales</div>
+            <div class="trx-sub">Configuraciones de Tablas de Retencion &middot; @_filtradas.Count registros</div>
         </div>
-        <div class="trd-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="CrearTrd">Crear TRD</button></div>
-    </div>
-</div>
-
-@if (_sel is not null)
-{
-    <div class="ase-card">
-        <div class="ase-card-h">Organigrama de dependencias - @_sel.Consecutivo (@_deps.Count)</div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle">
-                <thead><tr><th>Codigo</th><th>Dependencia (cargo/area)</th><th class="text-center">Nivel</th><th>Estado</th><th>Token colaborador</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var d in _deps)
-                    {
-                        <tr>
-                            <td><span class="mono">@d.Codigo</span></td>
-                            <td><span style="padding-left:@(d.Nivel * 18)px">@(d.Nivel > 0 ? "└ " : "")@d.NombreCargo</span></td>
-                            <td class="text-center">@d.Nivel</td>
-                            <td>@d.Estado</td>
-                            <td>@if (_tokenUrls.TryGetValue(d.Id, out var u)) { <a class="mono small" href="@u" target="_blank">@Trunc(u)</a> }</td>
-                            <td class="ase-row-actions">
-                                <button class="btn btn-outline-primary btn-sm" @onclick="() => Token(d.Id)">Generar token</button>
-                                <button class="btn btn-outline-danger btn-sm" @onclick="() => DelDep(d.Id)">&times;</button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            @if (_deps.Count == 0) { <div class="ase-empty">Sin dependencias. Agrega la raiz del organigrama.</div> }
+        <div class="trx-head-actions">
+            <div class="trx-toggle">
+                <a class="@(_vista == "cards" ? "on" : "")" @onclick='() => _vista = "cards"'>&#9638; Tarjetas</a>
+                <a class="@(_vista == "list" ? "on" : "")" @onclick='() => _vista = "list"'>&#9776; Lista</a>
+            </div>
+            @if (_trds.Count == 0)
+            {
+                <button class="trx-btn ghost" @onclick="SeedDemo">Sembrar TRD demo</button>
+            }
+            <button class="trx-btn" @onclick="() => _nuevaOpen = !_nuevaOpen">+ Nueva transaccion</button>
         </div>
-        <div class="trd-form">
-            <div class="trd-f"><label>Padre</label>
-                <select class="form-select form-select-sm" @bind="_ndPadre">
-                    <option value="">(raiz)</option>
-                    @foreach (var d in _deps) { <option value="@d.Id">@d.Codigo - @d.NombreCargo</option> }
+    </div>
+
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    @* --- Alta de transaccion --- *@
+    @if (_nuevaOpen)
+    {
+        <div class="trx-filtros" style="align-items: flex-end;">
+            <div class="trx-f grow">
+                <label>Titulo de la transaccion</label>
+                <input @bind="_nt.Titulo" placeholder="TRD Institucional 2026" />
+            </div>
+            <div class="trx-f">
+                <label>Segmento</label>
+                <select @bind="_ntSeg">
+                    <option value="">(sin segmento)</option>
+                    @foreach (var s in _segmentos) { <option value="@s.Id">@s.Nombre</option> }
                 </select>
             </div>
-            <div class="trd-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nd.Codigo" placeholder="110" /></div>
-            <div class="trd-f trd-grow"><label>Nombre cargo/area</label><input class="form-control form-control-sm" @bind="_nd.NombreCargo" placeholder="Secretaria General" /></div>
-            <div class="trd-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddDep">Agregar dependencia</button></div>
+            <div class="trx-f">
+                <label>Vigencia desde</label>
+                <input type="date" @bind="_ntIni" />
+            </div>
+            <div class="trx-f">
+                <label>Hasta</label>
+                <input type="date" @bind="_ntFin" />
+            </div>
+            <button class="trx-btn" @onclick="CrearTrd">Crear</button>
+            <button class="trx-btn ghost" @onclick="() => _nuevaOpen = false">Cancelar</button>
+        </div>
+    }
+
+    @* --- Filtros --- *@
+    <div class="trx-filtros">
+        <div class="trx-f grow">
+            <label>N.o transaccion / documento</label>
+            <input @bind="_fltNum" @bind:event="oninput" placeholder="Ej. TRD-0001" />
+        </div>
+        <div class="trx-f">
+            <label>Fecha inicio (desde)</label>
+            <input type="date" @bind="_fltFecha" />
+        </div>
+        <div class="trx-f">
+            <label>Estado</label>
+            <select @bind="_fltEstado">
+                <option value="TODOS">Todos</option>
+                <option value="DESARROLLO">Desarrollo</option>
+                <option value="ACTIVO">Activo</option>
+                <option value="CERRADO">Cerrado</option>
+            </select>
+        </div>
+        <button class="trx-btn ghost" @onclick="LimpiarFiltros">Limpiar</button>
+    </div>
+
+    @if (_filtradas.Count == 0)
+    {
+        <div class="trx-list"><div class="trx-empty">Sin transacciones que coincidan con el filtro.</div></div>
+    }
+    else if (_vista == "cards")
+    {
+        <div class="trx-cards">
+            @foreach (var t in _filtradas)
+            {
+                <div class="trx-card" @onclick="() => Abrir(t)">
+                    <div class="trx-card-top">
+                        <span class="trx-num">@t.Consecutivo</span>
+                        <span class="trx-est @t.Estado.ToLowerInvariant()">@t.Estado</span>
+                    </div>
+                    <div class="trx-dep">&#127963; @(t.Segmento ?? "Sin segmento")</div>
+                    <div class="trx-obs">@(string.IsNullOrWhiteSpace(t.Observaciones) ? t.Titulo : t.Observaciones)</div>
+                    <div class="trx-vig">
+                        <div><div class="k">Vigencia desde</div><div class="v">@Fecha(t.FechaInicio)</div></div>
+                        <div><div class="k">Hasta</div><div class="v">@Fecha(t.FechaFin)</div></div>
+                    </div>
+                    <div class="trx-card-foot">
+                        <span>@t.Dependencias dependencias &middot; @t.Documentos documentos</span>
+                        <span class="go">Abrir &rarr;</span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="trx-list">
+            <div class="trx-list-head">
+                <div>N.o Doc.</div><div>Estado</div><div>Observacion</div>
+                <div>Vigencia desde</div><div>Hasta</div><div>Depend.</div><div>Docs</div><div></div>
+            </div>
+            @foreach (var t in _filtradas)
+            {
+                <div class="trx-list-row" @onclick="() => Abrir(t)">
+                    <div class="num">@t.Consecutivo</div>
+                    <div><span class="trx-est @t.Estado.ToLowerInvariant()">@t.Estado</span></div>
+                    <div class="txt">@(string.IsNullOrWhiteSpace(t.Observaciones) ? t.Titulo : t.Observaciones)</div>
+                    <div class="mono">@Fecha(t.FechaInicio)</div>
+                    <div class="mono">@Fecha(t.FechaFin)</div>
+                    <div class="txt">@t.Dependencias</div>
+                    <div class="txt">@t.Documentos</div>
+                    <div class="go" style="color: var(--primary); font-weight: 700; font-size: 12px;">Abrir &rarr;</div>
+                </div>
+            }
+        </div>
+    }
+
+    @* --- Catalogo del tenant (pasa a Configuracion Documental en la Fase 2E) --- *@
+    <div class="trx-acc" style="margin-top: 18px;">
+        <div class="trx-acc-h" @onclick="() => _catOpen = !_catOpen" style="cursor: pointer;">
+            <span class="trx-acc-ico">&#128218;</span>
+            <span class="trx-acc-t">Catalogo: series, subseries y tipologias</span>
+            <span class="trx-acc-meta">@_series.Count series &middot; @_tipos.Count tipologias</span>
+            <span style="color: #9aa3bd;">@(_catOpen ? "-" : "+")</span>
+        </div>
+        @if (_catOpen)
+        {
+            <div class="trx-acc-b">
+                <div class="trd-cat" style="margin-top: 14px;">
+                    <div>
+                        <div class="trd-sub">Series (@_series.Count)</div>
+                        @foreach (var s in _series)
+                        {
+                            <div class="trd-row"><span class="mono">@s.Codigo</span> @s.Nombre <span class="trd-muted">(@s.Subseries subseries)</span></div>
+                        }
+                        <div class="trd-form" style="margin-top: 10px;">
+                            <input class="form-control form-control-sm" @bind="_nsCod" placeholder="100" />
+                            <input class="form-control form-control-sm" @bind="_nsNom" placeholder="Actas" />
+                            <button class="trx-btn" @onclick="AddSerie">+ Serie</button>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="trd-sub">Tipologias (@_tipos.Count)</div>
+                        @foreach (var ti in _tipos)
+                        {
+                            <div class="trd-row"><span class="mono">@ti.Codigo</span> @ti.Nombre <span class="trd-muted">@ti.Tipo</span></div>
+                        }
+                        <div class="trd-form" style="margin-top: 10px;">
+                            <select class="form-select form-select-sm" @bind="_ntSerie">
+                                <option value="">(serie)</option>
+                                @foreach (var s in _series) { <option value="@s.Id">@s.Codigo @s.Nombre</option> }
+                            </select>
+                            <input class="form-control form-control-sm" @bind="_ntiCod" placeholder="100-01" />
+                            <input class="form-control form-control-sm" @bind="_ntiNom" placeholder="Acta de comite" />
+                            <button class="trx-btn" @onclick="AddTipo">+ Tipologia</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@* ===================== Detalle de la transaccion ===================== *@
+@if (_sel is not null)
+{
+    <div class="doktrino-drawer-scrim" style="display: block;" @onclick="Cerrar"></div>
+    <div style="position: fixed; inset: 0; z-index: 1950; display: flex; align-items: flex-start; justify-content: center; padding: 34px 20px; overflow: auto; pointer-events: none;">
+        <div style="width: 1000px; max-width: 100%; background: #faf9f5; border-radius: 20px; box-shadow: 0 30px 80px rgba(0,0,0,.32); pointer-events: auto; padding: 20px;">
+
+            <div class="trx-detalle-hero">
+                <div class="row1">
+                    <span class="chip">@_sel.Consecutivo</span>
+                    <span class="est">@_sel.Estado</span>
+                    <span class="ttl">@(string.IsNullOrWhiteSpace(_sel.Observaciones) ? _sel.Titulo : _sel.Observaciones)</span>
+                    <span style="margin-left: auto; cursor: pointer; font-size: 22px; color: #cdd5f6;" @onclick="Cerrar">&#10005;</span>
+                </div>
+                <div class="sub">
+                    &#127963; @(_sel.Segmento ?? "Sin segmento") &middot; Vigencia @Fecha(_sel.FechaInicio) &rarr; @Fecha(_sel.FechaFin)
+                </div>
+            </div>
+
+            @* --- Datos de la transaccion --- *@
+            <div class="trx-acc">
+                <div class="trx-acc-h" @onclick="() => _cabOpen = !_cabOpen" style="cursor: pointer;">
+                    <span class="trx-acc-ico">&#128203;</span>
+                    <span class="trx-acc-t">Datos de la transaccion</span>
+                    <span class="trx-acc-meta">@_sel.Consecutivo &middot; @_sel.Estado</span>
+                    <span style="color: #9aa3bd;">@(_cabOpen ? "-" : "+")</span>
+                </div>
+                @if (_cabOpen)
+                {
+                    <div class="trx-acc-b">
+                        <div class="trx-grid5">
+                            <div><div class="trx-lbl">Estado</div><div class="trx-ro">@_sel.Estado</div></div>
+                            <div><div class="trx-lbl">#Id Tabla Documental</div><div class="trx-ro">@_sel.Consecutivo</div></div>
+                            <div><div class="trx-lbl">Fecha</div><div class="trx-ro">@(_sel.Fecha?.ToLocalTime().ToString("dd/MM/yyyy") ?? "-")</div></div>
+                            <div><div class="trx-lbl">Fecha inicial</div><div class="trx-ro">@Fecha(_sel.FechaInicio)</div></div>
+                            <div><div class="trx-lbl">Fecha final</div><div class="trx-ro">@Fecha(_sel.FechaFin)</div></div>
+                        </div>
+                        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap;">
+                            <a class="trx-btn ghost" href="@($"/api/doktrino/trd/{_sel.Id}/excel")" target="_blank">Exportar matriz (Excel AGN)</a>
+                            @if (_sel.Estado == "DESARROLLO")
+                            {
+                                <button class="trx-btn" @onclick='() => Estado(_sel!.Id, "ACTIVO")'>Activar</button>
+                            }
+                            else if (_sel.Estado == "ACTIVO")
+                            {
+                                <button class="trx-btn danger" @onclick='() => Estado(_sel!.Id, "CERRADO")'>Cerrar transaccion</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* --- Dependencias (organigrama + token) --- *@
+            <div class="trx-acc">
+                <div class="trx-acc-h" @onclick="() => _depOpen = !_depOpen" style="cursor: pointer;">
+                    <span class="trx-acc-ico">&#127963;</span>
+                    <span class="trx-acc-t">Dependencias</span>
+                    <span class="trx-acc-meta">@_deps.Count en el organigrama</span>
+                    <span style="color: #9aa3bd;">@(_depOpen ? "-" : "+")</span>
+                </div>
+                @if (_depOpen)
+                {
+                    <div class="trx-acc-b">
+                        @if (_deps.Count == 0)
+                        {
+                            <div class="trx-empty">Sin dependencias. Agrega la primera abajo.</div>
+                        }
+                        @foreach (var d in _deps)
+                        {
+                            <div class="trd-row" style="display: flex; align-items: center; gap: 10px;">
+                                <span style="padding-left: @(d.Nivel * 16)px;" class="mono">@d.Codigo</span>
+                                <span>@d.NombreCargo</span>
+                                <span class="trd-muted">nivel @d.Nivel &middot; @d.Estado</span>
+                                <span style="margin-left: auto; display: flex; gap: 6px;">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => Token(d.Id)">Token</button>
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DelDep(d.Id)">&times;</button>
+                                </span>
+                            </div>
+                            @if (_tokenUrls.TryGetValue(d.Id, out var url))
+                            {
+                                <div class="trd-muted" style="padding: 4px 0 8px;">
+                                    Enlace para el colaborador: <a href="@url" target="_blank">@Trunc(url)</a>
+                                </div>
+                            }
+                        }
+                        <div class="trd-form" style="margin-top: 12px;">
+                            <select class="form-select form-select-sm" @bind="_ndPadre">
+                                <option value="">(raiz)</option>
+                                @foreach (var d in _deps) { <option value="@d.Id">@d.Codigo @d.NombreCargo</option> }
+                            </select>
+                            <input class="form-control form-control-sm" @bind="_nd.Codigo" placeholder="110" />
+                            <input class="form-control form-control-sm" @bind="_nd.NombreCargo" placeholder="Secretaria General" />
+                            <button class="trx-btn" @onclick="AddDep">+ Dependencia</button>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 }
 
-<div class="ase-card">
-    <div class="ase-card-h">Catalogo: series, subseries y tipologias</div>
-    <div class="trd-cat">
-        <div>
-            <div class="trd-sub">Series (@_series.Count)</div>
-            @foreach (var s in _series) { <div class="trd-row"><span class="mono">@s.Codigo</span> @s.Nombre <span class="trd-muted">(@s.Subseries subseries)</span></div> }
-            <div class="trd-form">
-                <input class="form-control form-control-sm mono" style="max-width:90px" @bind="_nsCod" placeholder="100" />
-                <input class="form-control form-control-sm" @bind="_nsNom" placeholder="Actas" />
-                <button class="btn btn-primary btn-sm" @onclick="AddSerie">+ Serie</button>
-            </div>
-        </div>
-        <div>
-            <div class="trd-sub">Tipologias (@_tipos.Count)</div>
-            @foreach (var t in _tipos) { <div class="trd-row"><span class="mono">@t.Codigo</span> @t.Nombre <span class="trd-muted">@t.Tipo</span></div> }
-            <div class="trd-form">
-                <select class="form-select form-select-sm" @bind="_ntSerie" style="max-width:160px">
-                    <option value="">(serie)</option>
-                    @foreach (var s in _series) { <option value="@s.Id">@s.Codigo</option> }
-                </select>
-                <input class="form-control form-control-sm mono" style="max-width:110px" @bind="_ntiCod" placeholder="100-01" />
-                <input class="form-control form-control-sm" @bind="_ntiNom" placeholder="Acta de comite" />
-                <button class="btn btn-primary btn-sm" @onclick="AddTipo">+ Tipologia</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
-    .trd-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:8px; }
-    .trd-f { display:flex; flex-direction:column; gap:3px; }
-    .trd-f label { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
-    .trd-grow { flex:1; min-width:220px; }
-    .trd-sel { background:var(--primary-soft); }
-    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
-    .trd-badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; }
-    .trd-DESARROLLO { background:#fef9c3; color:#854d0e; }
-    .trd-ACTIVO { background:#dcfce7; color:#166534; }
-    .trd-CERRADO { background:#e2e8f0; color:#334155; }
+    .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .trd-form .form-control, .trd-form .form-select { max-width:220px; }
+    .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
     .trd-cat { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
     .trd-sub { font-weight:700; margin-bottom:6px; }
-    .trd-row { padding:3px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .trd-row { padding:5px 0; border-bottom:1px solid var(--chrome-border); font-size:13px; }
     .trd-muted { color:var(--muted-foreground); font-size:11px; }
+    @@media (max-width: 900px) { .trd-cat { grid-template-columns:1fr; } }
 </style>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private List<TrdDto> _trds = new();
     private List<SegmentoDto> _segmentos = new();
     private List<DependenciaDto> _deps = new();
@@ -150,12 +303,31 @@
     private Dictionary<Guid, string> _tokenUrls = new();
     private TrdDto? _sel;
 
+    // Vista y filtros de la cabecera.
+    private string _vista = "cards";
+    private string _fltNum = "";
+    private DateTime? _fltFecha;
+    private string _fltEstado = "TODOS";
+
+    private bool _nuevaOpen, _catOpen, _cabOpen = true, _depOpen = true;
+
     private CrearTrdRequest _nt = new();
     private string _ntSeg = "";
+    private DateTime? _ntIni, _ntFin;
     private CrearDependenciaRequest _nd = new();
     private string _ndPadre = "";
     private string _nsCod = "", _nsNom = "", _ntiCod = "", _ntiNom = "", _ntSerie = "";
     private string? _error, _ok;
+
+    /// <summary>Lo que se pinta: la lista filtrada por numero, fecha y estado.</summary>
+    private List<TrdDto> _filtradas => _trds
+        .Where(t => string.IsNullOrWhiteSpace(_fltNum)
+                    || t.Consecutivo.Contains(_fltNum.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || t.Titulo.Contains(_fltNum.Trim(), StringComparison.OrdinalIgnoreCase))
+        .Where(t => _fltEstado == "TODOS" || t.Estado == _fltEstado)
+        .Where(t => _fltFecha is null
+                    || (t.FechaInicio is DateOnly fi && fi >= DateOnly.FromDateTime(_fltFecha.Value)))
+        .ToList();
 
     protected override async Task OnInitializedAsync() => await LoadAll();
 
@@ -165,8 +337,31 @@
         _segmentos = (await Trd.ListSegmentosAsync()).ToList();
         _series = (await Trd.ListSeriesAsync()).ToList();
         _tipos = (await Trd.ListTipologiasAsync()).ToList();
-        if (_sel is not null) { _deps = (await Trd.ArbolDependenciasAsync(_sel.Id)).ToList(); }
+
+        if (_sel is not null)
+        {
+            // Refresca la seleccion contra la lista recien traida.
+            _sel = _trds.FirstOrDefault(t => t.Id == _sel.Id);
+            if (_sel is not null) { _deps = (await Trd.ArbolDependenciasAsync(_sel.Id)).ToList(); }
+        }
     }
+
+    private void LimpiarFiltros()
+    {
+        _fltNum = "";
+        _fltFecha = null;
+        _fltEstado = "TODOS";
+    }
+
+    private async Task Abrir(TrdDto t)
+    {
+        _sel = t;
+        _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList();
+    }
+
+    private void Cerrar() => _sel = null;
+
+    private static string Fecha(DateOnly? d) => d?.ToString("dd/MM/yyyy") ?? "-";
 
     private async Task<Guid> Actor()
     {
@@ -179,7 +374,16 @@
     {
         _error = _ok = null;
         _nt.SegmentoId = Guid.TryParse(_ntSeg, out var g) ? g : null;
-        try { var s = await Trd.CrearTrdAsync(_nt, await Actor()); if (s is null) { _error = "Sin tenant."; return; } _ok = $"TRD {s.Consecutivo} creada."; _nt = new(); _ntSeg = ""; await LoadAll(); }
+        _nt.FechaInicio = _ntIni is DateTime i ? DateOnly.FromDateTime(i) : null;
+        _nt.FechaFin = _ntFin is DateTime f ? DateOnly.FromDateTime(f) : null;
+        try
+        {
+            var s = await Trd.CrearTrdAsync(_nt, await Actor());
+            if (s is null) { _error = "Sin tenant."; return; }
+            _ok = $"Transaccion {s.Consecutivo} creada.";
+            _nt = new(); _ntSeg = ""; _ntIni = _ntFin = null; _nuevaOpen = false;
+            await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
@@ -189,10 +393,6 @@
         try { await Trd.CambiarEstadoAsync(id, e, await Actor()); _ok = $"Estado -> {e}."; await LoadAll(); }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
-
-    private async Task Eliminar(Guid id) { _error = _ok = null; if (_sel?.Id == id) { _sel = null; } await Trd.EliminarTrdAsync(id, await Actor()); await LoadAll(); }
-
-    private async Task Seleccionar(TrdDto t) { _sel = t; _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList(); }
 
     private async Task AddDep()
     {

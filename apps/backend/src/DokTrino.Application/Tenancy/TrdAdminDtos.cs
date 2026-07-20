@@ -1,6 +1,22 @@
 namespace DokTrino.Application.Tenancy;
 
-public sealed record TrdDto(Guid Id, string Consecutivo, string Titulo, string Estado, string? Segmento, DateOnly? FechaInicio, DateOnly? FechaFin, int Dependencias);
+/// <summary>
+/// Cabecera de una transaccion documental. <paramref name="Documentos"/> es el
+/// numero de registros diligenciados de la matriz (respuestas), que es lo que el
+/// prototipo muestra como "documentos" en la tarjeta.
+/// </summary>
+public sealed record TrdDto(
+    Guid Id,
+    string Consecutivo,
+    string Titulo,
+    string Estado,
+    string? Segmento,
+    DateOnly? FechaInicio,
+    DateOnly? FechaFin,
+    int Dependencias,
+    string? Observaciones = null,
+    int Documentos = 0,
+    DateTimeOffset? Fecha = null);
 public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado);
 public sealed record SerieDto(Guid Id, string Codigo, string Nombre, bool Activo, int Subseries);
 public sealed record SubserieDto(Guid Id, Guid SerieId, string Codigo, string Nombre);

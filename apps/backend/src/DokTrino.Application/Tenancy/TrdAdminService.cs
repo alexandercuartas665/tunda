@@ -25,7 +25,10 @@ public sealed class TrdAdminService : ITrdAdminService
             .Select(x => new TrdDto(x.Id, x.Consecutivo, x.Titulo, x.Estado,
                 x.SegmentoId == null ? null : _db.Segmentos.Where(s => s.Id == x.SegmentoId).Select(s => s.Nombre).FirstOrDefault(),
                 x.FechaInicio, x.FechaFin,
-                _db.Dependencias.Count(d => d.TrdId == x.Id)))
+                _db.Dependencias.Count(d => d.TrdId == x.Id),
+                x.Observaciones,
+                _db.RespuestasTablaDocumental.Count(r => r.TrdId == x.Id),
+                x.CreatedAt))
             .ToListAsync(ct);
 
     public async Task<TrdDto?> CrearTrdAsync(CrearTrdRequest req, Guid actor, CancellationToken ct = default)

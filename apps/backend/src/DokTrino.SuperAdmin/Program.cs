@@ -639,6 +639,23 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
 // Endpoint publico consumido por Power BI / conectores externos (spec 2.D5). El token ES la
 // autenticacion: se resuelve contra bi_token_uso, acota al tenant del token, ejecuta SOLO
 // SELECT con parametros nombrados y registra la ejecucion (duracion/error) en bi_log.
+// Descarga de la matriz de retencion en formato AGN. Requiere sesion: el
+// exportador va por el DbContext con filtro de tenant, asi que solo puede sacar
+// la TRD del tenant en sesion.
+app.MapGet("/api/doktrino/trd/{id:guid}/excel", async (
+    Guid id,
+    DokTrino.Application.Trd.ITrdExcelExporter exporter,
+    CancellationToken ct) =>
+{
+    var archivo = await exporter.ExportarAsync(id, ct);
+    return archivo is null
+        ? Results.NotFound()
+        : Results.File(
+            archivo.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            archivo.Value.FileName);
+}).RequireAuthorization();
+
 app.MapGet("/api/public/bi/{token}", async (
     string token,
     HttpRequest request,
