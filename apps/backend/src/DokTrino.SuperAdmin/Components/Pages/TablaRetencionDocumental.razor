@@ -192,7 +192,7 @@
                     <span class="chip">@_sel.Consecutivo</span>
                     <span class="est">@_sel.Estado</span>
                     <span class="ttl">@(string.IsNullOrWhiteSpace(_sel.Observaciones) ? _sel.Titulo : _sel.Observaciones)</span>
-                    <span style="margin-left: auto; cursor: pointer; font-size: 22px; color: #cdd5f6;" @onclick="Cerrar">&#10005;</span>
+                    <span style="margin-left: auto; cursor: pointer; font-size: 22px; color: oklch(0.88 0.05 237);" @onclick="Cerrar">&#10005;</span>
                 </div>
                 <div class="sub">
                     &#127963; @(_sel.Segmento ?? "Sin segmento") &middot; Vigencia @Fecha(_sel.FechaInicio) &rarr; @Fecha(_sel.FechaFin)
