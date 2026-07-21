@@ -245,22 +245,76 @@
                         </label>
                     }
 
-                    <div class="ed-fila">
-                        <div style="flex: 1;">
-                            <div class="ed-lbl">Tiempo en gestion (AG, anios)</div>
-                            <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="2"
-                                   value="@_carac.TiempoAg" @onchange="e => GuardarCarac(ag: e.Value?.ToString())" />
+                    @* --- Tiempo de retencion --- *@
+                    <div class="ed-bloque">
+                        <div class="ed-bloque-t">Tiempo</div>
+                        <div class="ed-fila">
+                            <div style="flex: 1;">
+                                <div class="ed-lbl">AG (anios)</div>
+                                <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="2"
+                                       value="@_carac.TiempoAg" @onchange="e => Guardar(r => r.TiempoAg = Decimal(e.Value?.ToString()))" />
+                            </div>
+                            <div style="flex: 1;">
+                                <div class="ed-lbl">AC (anios)</div>
+                                <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="8"
+                                       value="@_carac.TiempoAc" @onchange="e => Guardar(r => r.TiempoAc = Decimal(e.Value?.ToString()))" />
+                            </div>
                         </div>
-                        <div style="flex: 1;">
-                            <div class="ed-lbl">Tiempo en archivo (AC, anios)</div>
-                            <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="8"
-                                   value="@_carac.TiempoAc" @onchange="e => GuardarCarac(ac: e.Value?.ToString())" />
+                        <div class="ed-lbl">Descripcion</div>
+                        <textarea class="ed-input" rows="2" placeholder="Momento en que se gestiona el archivo"
+                                  @onchange="e => Guardar(r => r.DescripcionTiempo = e.Value?.ToString() ?? string.Empty)">@_carac.DescripcionTiempo</textarea>
+                    </div>
+
+                    @* --- Disposicion final --- *@
+                    <div class="ed-bloque verde">
+                        <div class="ed-bloque-t">Disposicion final</div>
+                        <div class="ed-casillas">
+                            @RenderCasilla("CT", "DispCt", _carac.DispCt)
+                            @RenderCasilla("S", "DispS", _carac.DispS)
+                            @RenderCasilla("E", "DispE", _carac.DispE)
+                        </div>
+                        <div class="ed-lbl">Descripcion</div>
+                        <textarea class="ed-input" rows="2" placeholder="Describe el proceso en caso que tenga eliminacion"
+                                  @onchange="e => Guardar(r => r.DescripcionDisposicion = e.Value?.ToString() ?? string.Empty)">@_carac.DescripcionDisposicion</textarea>
+                    </div>
+
+                    @* --- Valoraciones --- *@
+                    <div class="ed-bloque verde">
+                        <div class="ed-bloque-t">Valoracion primaria</div>
+                        <div class="ed-casillas">
+                            @RenderCasilla("Administrativo", "Val1Admin", _carac.Val1Admin)
+                            @RenderCasilla("Tecnico", "Val1Tecnica", _carac.Val1Tecnica)
+                            @RenderCasilla("Legal", "Val1Legal", _carac.Val1Legal)
+                            @RenderCasilla("Contable", "Val1Contable", _carac.Val1Contable)
+                            @RenderCasilla("Fiscal", "Val1Fiscal", _carac.Val1Fiscal)
                         </div>
                     </div>
 
-                    <div class="ed-lbl">Procedimiento</div>
-                    <textarea class="ed-input" rows="3" placeholder="Describe el procedimiento asociado..."
-                              @onchange="e => GuardarCarac(proc: e.Value?.ToString())">@_carac.Procedimiento</textarea>
+                    <div class="ed-bloque verde">
+                        <div class="ed-bloque-t">Valoracion secundaria</div>
+                        <div class="ed-casillas">
+                            @RenderCasilla("Historico", "Val2Historica", _carac.Val2Historica)
+                            @RenderCasilla("Cientifico", "Val2Cientifica", _carac.Val2Cientifica)
+                            @RenderCasilla("Cultural", "Val2Cultural", _carac.Val2Cultural)
+                        </div>
+                    </div>
+
+                    @* --- Marcas archivisticas --- *@
+                    <div class="ed-bloque">
+                        <div class="ed-bloque-t">Marcas</div>
+                        <div class="ed-casillas">
+                            @RenderCasilla("REP (reproduccion tecnica)", "Rep", _carac.Rep)
+                            @RenderCasilla("Serie DDHH / DIH", "Ddhh", _carac.Ddhh)
+                            @RenderCasilla("Relacion con el SIG", "Sig", _carac.Sig)
+                        </div>
+                    </div>
+
+                    @* --- Procedimiento --- *@
+                    <div class="ed-bloque azul">
+                        <div class="ed-bloque-t">Procedimiento</div>
+                        <textarea class="ed-input" rows="3" placeholder="Define todos los aspectos del procedimiento"
+                                  @onchange="e => Guardar(r => r.Procedimiento = e.Value?.ToString() ?? string.Empty)">@_carac.Procedimiento</textarea>
+                    </div>
 
                     @* --- Campos dinamicos --- *@
                     <div class="ed-campos-h">
@@ -450,6 +504,12 @@
 
 @* Los campos dinamicos se pintan igual en caracterizacion y en tipologia. *@
 @{
+    RenderFragment RenderCasilla(string etiqueta, string propiedad, bool marcada) =>
+    @<label class="ed-casilla @(marcada ? "on" : "")" @onclick="() => Alternar(propiedad)">
+        <span class="caja">@(marcada ? "✓" : "")</span>
+        <span>@etiqueta</span>
+    </label>;
+
     RenderFragment RenderCampos(IReadOnlyList<CampoDinamicoDto> campos) =>
     @<text>
         @if (campos.Count == 0)
@@ -543,6 +603,15 @@
     .ed-chk .s { font-size:11.5px; font-weight:500; color:#9aa3bd; margin-top:1px; }
     .ed-nota { margin-top:16px; background:oklch(0.97 0.015 237); border:1px solid oklch(0.90 0.05 237); border-radius:12px; padding:14px; font-size:12px; line-height:1.55; color:#5a6b90; }
     .ed-fila { display:flex; gap:12px; margin-bottom:12px; }
+    .ed-bloque { border:1px solid #e9ecf5; border-radius:12px; padding:13px 15px; margin-bottom:12px; background:#fff; }
+    .ed-bloque.verde { background:#f4faf6; border-color:#d8ebe0; }
+    .ed-bloque.azul { background:var(--primary-soft); border-color:oklch(0.90 0.05 237); }
+    .ed-bloque-t { font-size:12px; font-weight:700; color:#1f2433; text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
+    .ed-casillas { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .ed-casilla { display:inline-flex; align-items:center; gap:7px; background:#fff; border:1px solid #e3e7f2; border-radius:9px; padding:7px 12px; cursor:pointer; font-size:12px; font-weight:600; color:#5a6378; user-select:none; }
+    .ed-casilla .caja { width:16px; height:16px; border-radius:5px; border:1.5px solid #cdd5e6; display:inline-flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0; }
+    .ed-casilla.on { border-color:var(--primary); color:var(--primary); }
+    .ed-casilla.on .caja { background:var(--primary); border-color:var(--primary); color:#fff; }
     .ed-lbl { font-size:11px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
     .ed-input { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:9px 11px; font-size:12.5px; font-weight:500; color:#37415c; outline:none; }
     .ed-input.mono { font-family:'IBM Plex Mono',monospace; font-weight:600; }
@@ -823,13 +892,9 @@
 
     private async Task AgregarHijo(NodoArbolDto n) => await Ejecutar(async () =>
     {
-        var actor = await Actor();
-        _selId = n.Nivel switch
-        {
-            // Una serie sin subseries cuelga tipologias directo.
-            "SERIE" when !n.SinSubseries => await Editor.AgregarSubserieAsync(n.Id, actor),
-            _ => await Editor.AgregarTipologiaAsync(n.Id, n.Nivel, actor)
-        };
+        // El servicio decide que crear releyendo el padre: el DTO de la pantalla
+        // pudo quedar viejo si la serie cambio de modo mientras tanto.
+        _selId = await Editor.AgregarHijoAsync(n.Id, await Actor());
     });
 
     private async Task Renombrar(NodoArbolDto n, string nombre) => await Ejecutar(async () =>
@@ -847,18 +912,21 @@
         await Editor.AlternarSinSubseriesAsync(_sel.Id, await Actor());
     });
 
-    private async Task GuardarCarac(string? ag = null, string? ac = null, string? proc = null) => await Ejecutar(async () =>
+    /// <summary>
+    /// Solo viaja lo que cambio; el resto del request queda en null y el servicio
+    /// no lo toca. El nivel sale de la caracterizacion cargada, que ya es la serie
+    /// cuando esta marcada sin subseries.
+    /// </summary>
+    private async Task Guardar(Action<GuardarCaracterizacionRequest> cambio) => await Ejecutar(async () =>
     {
         if (_carac is null) { return; }
-
-        // Solo llega el campo que cambio; el resto conserva lo que ya tenia.
-        var nuevoAg = ag is null ? _carac.TiempoAg : Decimal(ag);
-        var nuevoAc = ac is null ? _carac.TiempoAc : Decimal(ac);
-        var nuevoProc = proc ?? _carac.Procedimiento;
-
-        await Editor.GuardarCaracterizacionAsync(
-            _carac.Nivel, _carac.Id, nuevoAg, nuevoAc, nuevoProc, await Actor());
+        var req = new GuardarCaracterizacionRequest();
+        cambio(req);
+        await Editor.GuardarCaracterizacionAsync(_carac.Nivel, _carac.Id, req, await Actor());
     });
+
+    private async Task Alternar(string propiedad) =>
+        await Guardar(r => r.Alternar = propiedad);
 
     private static decimal? Decimal(string? v) =>
         decimal.TryParse(v, System.Globalization.NumberStyles.Any,

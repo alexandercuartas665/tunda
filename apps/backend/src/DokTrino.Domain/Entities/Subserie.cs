@@ -31,4 +31,36 @@ public class Subserie : TenantEntity
 
     /// <summary>Procedimiento archivistico asociado a este nivel.</summary>
     public string? Procedimiento { get; set; }
+
+    /// <summary>Momento en que se gestiona el archivo (nota del bloque Tiempo).</summary>
+    public string? DescripcionTiempo { get; set; }
+
+    // --- Disposicion final ---
+    public bool DispCt { get; set; }
+    public bool DispS { get; set; }
+    public bool DispE { get; set; }
+
+    /// <summary>Proceso a seguir cuando la disposicion contempla eliminacion.</summary>
+    public string? DescripcionDisposicion { get; set; }
+
+    // --- Valoracion primaria ---
+    public bool Val1Admin { get; set; }
+    public bool Val1Tecnica { get; set; }
+    public bool Val1Legal { get; set; }
+    public bool Val1Contable { get; set; }
+    public bool Val1Fiscal { get; set; }
+
+    // --- Valoracion secundaria ---
+    public bool Val2Historica { get; set; }
+    public bool Val2Cientifica { get; set; }
+    public bool Val2Cultural { get; set; }
+
+    /// <summary>Reproduccion tecnica (REP).</summary>
+    public bool Rep { get; set; }
+
+    /// <summary>Serie con contenido de DDHH / DIH.</summary>
+    public bool Ddhh { get; set; }
+
+    /// <summary>Relacion con el Sistema Integrado de Gestion.</summary>
+    public bool Sig { get; set; }
 }

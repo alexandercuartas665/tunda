@@ -13,8 +13,26 @@ public sealed record NodoArbolDto(
 /// <summary>Caracterizacion archivistica de una subserie (o de una serie sin subseries).</summary>
 public sealed record CaracterizacionDto(
     Guid Id, string Nivel, string Nombre, bool SinSubseries,
-    decimal? TiempoAg, decimal? TiempoAc, string? Procedimiento,
+    decimal? TiempoAg, decimal? TiempoAc, string? DescripcionTiempo,
+    bool DispCt, bool DispS, bool DispE, string? DescripcionDisposicion,
+    bool Val1Admin, bool Val1Tecnica, bool Val1Legal, bool Val1Contable, bool Val1Fiscal,
+    bool Val2Historica, bool Val2Cientifica, bool Val2Cultural,
+    bool Rep, bool Ddhh, bool Sig,
+    string? Procedimiento,
     IReadOnlyList<CampoDinamicoDto> Campos);
+
+/// <summary>Cambios de la caracterizacion; lo que llega null no se toca.</summary>
+public sealed class GuardarCaracterizacionRequest
+{
+    public decimal? TiempoAg { get; set; }
+    public decimal? TiempoAc { get; set; }
+    public string? DescripcionTiempo { get; set; }
+    public string? DescripcionDisposicion { get; set; }
+    public string? Procedimiento { get; set; }
+
+    /// <summary>Nombre de la casilla a alternar (DispCt, Val1Admin, Sig...).</summary>
+    public string? Alternar { get; set; }
+}
 
 public sealed record CampoDinamicoDto(Guid Id, string Clave, string Tipo, string Valor, int Orden);
 
@@ -38,6 +56,9 @@ public interface IEditorSeriesService
     Task<IReadOnlyList<NodoArbolDto>> ArbolAsync(CancellationToken ct = default);
 
     Task<Guid> AgregarSerieAsync(Guid actor, CancellationToken ct = default);
+    /// <summary>Crea el hijo que corresponda releyendo el estado real del padre.</summary>
+    Task<Guid> AgregarHijoAsync(Guid padreId, Guid actor, CancellationToken ct = default);
+
     Task<Guid> AgregarSubserieAsync(Guid serieId, Guid actor, CancellationToken ct = default);
     Task<Guid> AgregarTipologiaAsync(Guid padreId, string nivelPadre, Guid actor, CancellationToken ct = default);
 
@@ -47,7 +68,7 @@ public interface IEditorSeriesService
 
     Task<CaracterizacionDto?> CaracterizacionAsync(string nivel, Guid id, CancellationToken ct = default);
     Task GuardarCaracterizacionAsync(
-        string nivel, Guid id, decimal? ag, decimal? ac, string? procedimiento, Guid actor, CancellationToken ct = default);
+        string nivel, Guid id, GuardarCaracterizacionRequest req, Guid actor, CancellationToken ct = default);
 
     Task<FormatosTipologiaDto?> FormatosAsync(Guid tipologiaId, CancellationToken ct = default);
     Task AlternarFormatoAsync(Guid tipologiaId, string formato, Guid actor, CancellationToken ct = default);
@@ -144,10 +165,38 @@ public sealed class EditorSeriesService : IEditorSeriesService
         return serie.Id;
     }
 
+    /// <summary>
+    /// Decide que crear leyendo el estado actual del padre, no el que traiga la
+    /// pantalla: entre que se dibujo el arbol y se pulso el boton, la serie pudo
+    /// cambiar de modo o desaparecer.
+    /// </summary>
+    public async Task<Guid> AgregarHijoAsync(Guid padreId, Guid actor, CancellationToken ct = default)
+    {
+        var serie = await _db.Series.AsNoTracking()
+            .Where(s => s.Id == padreId)
+            .Select(s => new { s.SinSubseries })
+            .FirstOrDefaultAsync(ct);
+
+        if (serie is not null)
+        {
+            return serie.SinSubseries
+                ? await AgregarTipologiaAsync(padreId, "SERIE", actor, ct)
+                : await AgregarSubserieAsync(padreId, actor, ct);
+        }
+
+        if (await _db.Subseries.AnyAsync(x => x.Id == padreId, ct))
+        {
+            return await AgregarTipologiaAsync(padreId, "SUBSERIE", actor, ct);
+        }
+
+        throw new InvalidOperationException("El elemento ya no existe; recarga el editor.");
+    }
+
     public async Task<Guid> AgregarSubserieAsync(Guid serieId, Guid actor, CancellationToken ct = default)
     {
         var serie = await _db.Series.FirstOrDefaultAsync(s => s.Id == serieId, ct)
-                    ?? throw new InvalidOperationException("La serie no existe.");
+                    ?? throw new InvalidOperationException(
+                        "No se pudo agregar la subserie: la serie ya no existe (recarga el editor).");
         if (serie.SinSubseries)
         {
             throw new InvalidOperationException($"\"{serie.Nombre}\" esta marcada como serie sin subseries.");
@@ -168,7 +217,8 @@ public sealed class EditorSeriesService : IEditorSeriesService
         if (esSerie)
         {
             var serie = await _db.Series.AsNoTracking().FirstOrDefaultAsync(s => s.Id == padreId, ct)
-                        ?? throw new InvalidOperationException("La serie no existe.");
+                        ?? throw new InvalidOperationException(
+                            "No se pudo agregar la tipologia: la serie ya no existe (recarga el editor).");
             if (!serie.SinSubseries)
             {
                 throw new InvalidOperationException($"\"{serie.Nombre}\" usa subseries: cuelga la tipologia de una de ellas.");
@@ -270,7 +320,8 @@ public sealed class EditorSeriesService : IEditorSeriesService
     public async Task AlternarSinSubseriesAsync(Guid serieId, Guid actor, CancellationToken ct = default)
     {
         var serie = await _db.Series.FirstOrDefaultAsync(s => s.Id == serieId, ct)
-                    ?? throw new InvalidOperationException("La serie no existe.");
+                    ?? throw new InvalidOperationException(
+                        "No se pudo cambiar el modo de la serie: ya no existe (recarga el editor).");
 
         if (!serie.SinSubseries && await _db.Subseries.AnyAsync(x => x.SerieId == serieId, ct))
         {
@@ -294,46 +345,108 @@ public sealed class EditorSeriesService : IEditorSeriesService
     {
         if (nivel.Equals("SERIE", StringComparison.OrdinalIgnoreCase))
         {
-            var s = await _db.Series.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (s is null) { return null; }
-            return new CaracterizacionDto(s.Id, "SERIE", s.Nombre, s.SinSubseries,
-                s.TiempoAg, s.TiempoAc, s.Procedimiento, await CamposAsync("serie", id, ct));
+            var e = await _db.Series.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (e is null) { return null; }
+            return new CaracterizacionDto(e.Id, "SERIE", e.Nombre, e.SinSubseries,
+                e.TiempoAg, e.TiempoAc, e.DescripcionTiempo,
+                e.DispCt, e.DispS, e.DispE, e.DescripcionDisposicion,
+                e.Val1Admin, e.Val1Tecnica, e.Val1Legal, e.Val1Contable, e.Val1Fiscal,
+                e.Val2Historica, e.Val2Cientifica, e.Val2Cultural,
+                e.Rep, e.Ddhh, e.Sig,
+                e.Procedimiento, await CamposAsync("serie", id, ct));
         }
 
         if (nivel.Equals("SUBSERIE", StringComparison.OrdinalIgnoreCase))
         {
-            var sb = await _db.Subseries.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (sb is null) { return null; }
-            return new CaracterizacionDto(sb.Id, "SUBSERIE", sb.Nombre, false,
-                sb.TiempoAg, sb.TiempoAc, sb.Procedimiento, await CamposAsync("subserie", id, ct));
+            var e = await _db.Subseries.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (e is null) { return null; }
+            return new CaracterizacionDto(e.Id, "SUBSERIE", e.Nombre, false,
+                e.TiempoAg, e.TiempoAc, e.DescripcionTiempo,
+                e.DispCt, e.DispS, e.DispE, e.DescripcionDisposicion,
+                e.Val1Admin, e.Val1Tecnica, e.Val1Legal, e.Val1Contable, e.Val1Fiscal,
+                e.Val2Historica, e.Val2Cientifica, e.Val2Cultural,
+                e.Rep, e.Ddhh, e.Sig,
+                e.Procedimiento, await CamposAsync("subserie", id, ct));
         }
 
         return null;
     }
 
     public async Task GuardarCaracterizacionAsync(
-        string nivel, Guid id, decimal? ag, decimal? ac, string? procedimiento, Guid actor, CancellationToken ct = default)
+        string nivel, Guid id, GuardarCaracterizacionRequest req, Guid actor, CancellationToken ct = default)
     {
-        if (ag is < 0 || ac is < 0) { throw new InvalidOperationException("Los tiempos de retencion no pueden ser negativos."); }
+        if (req.TiempoAg is < 0 || req.TiempoAc is < 0)
+        {
+            throw new InvalidOperationException("Los tiempos de retencion no pueden ser negativos.");
+        }
 
-        var proc = string.IsNullOrWhiteSpace(procedimiento) ? null : procedimiento.Trim();
-
+        // Serie y Subserie llevan el mismo juego de propiedades: la caracterizacion
+        // vive donde el arbol la termine, y el llamador ya resolvio ese nivel.
         if (nivel.Equals("SERIE", StringComparison.OrdinalIgnoreCase))
         {
-            var s = await _db.Series.FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (s is null) { return; }
-            s.TiempoAg = ag; s.TiempoAc = ac; s.Procedimiento = proc; s.UpdatedBy = actor;
+            var e = await _db.Series.FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (e is null) { return; }
+            Aplicar(req,
+                ag => e.TiempoAg = ag, ac => e.TiempoAc = ac,
+                dt => e.DescripcionTiempo = dt, dd => e.DescripcionDisposicion = dd,
+                pr => e.Procedimiento = pr, e);
+            e.UpdatedBy = actor;
         }
         else if (nivel.Equals("SUBSERIE", StringComparison.OrdinalIgnoreCase))
         {
-            var sb = await _db.Subseries.FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (sb is null) { return; }
-            sb.TiempoAg = ag; sb.TiempoAc = ac; sb.Procedimiento = proc; sb.UpdatedBy = actor;
+            var e = await _db.Subseries.FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (e is null) { return; }
+            Aplicar(req,
+                ag => e.TiempoAg = ag, ac => e.TiempoAc = ac,
+                dt => e.DescripcionTiempo = dt, dd => e.DescripcionDisposicion = dd,
+                pr => e.Procedimiento = pr, e);
+            e.UpdatedBy = actor;
         }
         else { return; }
 
         await _db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Vuelca los cambios sobre la entidad. Serie y Subserie no comparten un tipo
+    /// base con estas propiedades, asi que las escalares van por delegados y las
+    /// casillas por reflexion sobre el nombre que llega en Alternar.
+    /// </summary>
+    private static void Aplicar(
+        GuardarCaracterizacionRequest req,
+        Action<decimal?> setAg, Action<decimal?> setAc,
+        Action<string?> setDescTiempo, Action<string?> setDescDisp,
+        Action<string?> setProcedimiento, object entidad)
+    {
+        if (req.TiempoAg is not null) { setAg(req.TiempoAg); }
+        if (req.TiempoAc is not null) { setAc(req.TiempoAc); }
+        if (req.DescripcionTiempo is not null) { setDescTiempo(Limpiar(req.DescripcionTiempo)); }
+        if (req.DescripcionDisposicion is not null) { setDescDisp(Limpiar(req.DescripcionDisposicion)); }
+        if (req.Procedimiento is not null) { setProcedimiento(Limpiar(req.Procedimiento)); }
+
+        if (string.IsNullOrWhiteSpace(req.Alternar)) { return; }
+        if (!CasillasPermitidas.Contains(req.Alternar))
+        {
+            throw new InvalidOperationException($"Casilla desconocida: {req.Alternar}.");
+        }
+
+        var prop = entidad.GetType().GetProperty(req.Alternar);
+        if (prop?.PropertyType == typeof(bool))
+        {
+            prop.SetValue(entidad, !(bool)(prop.GetValue(entidad) ?? false));
+        }
+    }
+
+    /// <summary>Allowlist: la reflexion nunca toca una propiedad que no sea casilla.</summary>
+    private static readonly HashSet<string> CasillasPermitidas =
+    [
+        "DispCt", "DispS", "DispE",
+        "Val1Admin", "Val1Tecnica", "Val1Legal", "Val1Contable", "Val1Fiscal",
+        "Val2Historica", "Val2Cientifica", "Val2Cultural",
+        "Rep", "Ddhh", "Sig"
+    ];
+
+    private static string? Limpiar(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 
     // ---------------- Formatos de la tipologia ----------------
 

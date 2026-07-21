@@ -742,6 +742,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<Serie>(b =>
         {
+            b.Property(x => x.DescripcionTiempo).HasColumnType("text");
+            b.Property(x => x.DescripcionDisposicion).HasColumnType("text");
             b.Property(x => x.TiempoAg).HasPrecision(5, 2);
             b.Property(x => x.TiempoAc).HasPrecision(5, 2);
             b.Property(x => x.Procedimiento).HasColumnType("text");
@@ -754,6 +756,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<Subserie>(b =>
         {
+            b.Property(x => x.DescripcionTiempo).HasColumnType("text");
+            b.Property(x => x.DescripcionDisposicion).HasColumnType("text");
             b.Property(x => x.TiempoAg).HasPrecision(5, 2);
             b.Property(x => x.TiempoAc).HasPrecision(5, 2);
             b.Property(x => x.Procedimiento).HasColumnType("text");
