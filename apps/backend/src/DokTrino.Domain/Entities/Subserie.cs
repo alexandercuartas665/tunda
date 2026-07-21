@@ -22,4 +22,13 @@ public class Subserie : TenantEntity
 
     /// <summary>Dependencia que la sugirio; null cuando es del catalogo maestro.</summary>
     public Guid? SugeridaPorDependenciaId { get; set; }
+
+    /// <summary>Anios de retencion en Archivo de Gestion.</summary>
+    public decimal? TiempoAg { get; set; }
+
+    /// <summary>Anios de retencion en Archivo Central.</summary>
+    public decimal? TiempoAc { get; set; }
+
+    /// <summary>Procedimiento archivistico asociado a este nivel.</summary>
+    public string? Procedimiento { get; set; }
 }

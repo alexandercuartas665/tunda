@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @using DokTrino.Application.Tenancy
 @inject IConfiguracionDocumentalService Cfg
+@inject IEditorSeriesService Editor
 
 <PageTitle>Configuracion documental - DokTrino</PageTitle>
 
@@ -42,6 +43,7 @@
         {
             <div style="margin-left: auto; display: flex; gap: 9px;">
                 <button class="cfg-comp-btn" @onclick="() => _compOpen = true">&#129513; Complementos</button>
+                <button class="trx-btn" @onclick="AbrirEditor">&#65291; Editor de series</button>
             </div>
         }
         else if (_tab == "banco")
@@ -137,6 +139,146 @@
     }
 </div>
 
+@* ===================== Editor de series (arbol + paneles) ===================== *@
+@if (_editorOpen)
+{
+    <div class="doktrino-drawer-scrim" style="display: block;" @onclick="() => _editorOpen = false"></div>
+    <div class="ed-modal">
+        <div class="ed-head">
+            <div class="ico">&#128218;</div>
+            <div style="flex: 1;">
+                <div class="ttl">Configuracion de series</div>
+                <div class="sub">Construye el arbol: serie &rarr; subserie &rarr; tipologia. Selecciona un nivel para su caracterizacion o formatos.</div>
+            </div>
+            <span class="cls" @onclick="() => _editorOpen = false">&#10005;</span>
+        </div>
+
+        @if (_edError is not null) { <div class="ase-alert" style="margin: 12px 18px 0;">@_edError</div> }
+
+        <div class="ed-body">
+            @* --- Columna 1: arbol --- *@
+            <div class="ed-arbol">
+                <div class="ed-arbol-h">
+                    <span>Jerarquia documental</span>
+                    <button class="ed-add-serie" @onclick="AgregarSerie">&#65291; Serie</button>
+                </div>
+
+                @if (_arbol.Count == 0)
+                {
+                    <div class="dkd-empty">Sin series. Crea la primera con el boton de arriba.</div>
+                }
+
+                @foreach (var n in _arbol)
+                {
+                    <div class="ed-nodo @(_selId == n.Id ? "on" : "")"
+                         style="padding-left: @(n.Profundidad * 16 + 8)px"
+                         @onclick="() => Seleccionar(n)">
+                        <span class="ico">@IconoNivel(n.Nivel)</span>
+                        <input class="ed-nombre" value="@n.Nombre"
+                               @onclick:stopPropagation="true"
+                               @onchange="e => Renombrar(n, e.Value?.ToString() ?? string.Empty)" />
+
+                        @if (n.Nivel is "SERIE" or "SUBSERIE")
+                        {
+                            <span class="ed-mas" title="@(n.Nivel == "SERIE" && !n.SinSubseries ? "Agregar subserie" : "Agregar tipologia")"
+                                  @onclick:stopPropagation="true" @onclick="() => AgregarHijo(n)">&#65291;</span>
+                        }
+                        <span class="ed-quitar" @onclick:stopPropagation="true" @onclick="() => Eliminar(n)">&#10005;</span>
+                    </div>
+                }
+            </div>
+
+            @* --- Columna 2: panel contextual --- *@
+            <div class="ed-panel">
+                @if (_sel is null)
+                {
+                    <div class="ed-vacio">
+                        Selecciona un elemento del arbol.<br />
+                        Serie o subserie &rarr; caracterizacion &middot; Tipologia &rarr; formatos.
+                    </div>
+                }
+                else if (_sel.Nivel == "SERIE" && !_sel.SinSubseries)
+                {
+                    @* Serie que usa subseries: aqui no se caracteriza. *@
+                    <div class="ed-t">@_sel.Nombre</div>
+                    <div class="ed-s">Serie con subseries</div>
+
+                    <label class="ed-chk" @onclick="AlternarSinSubseries">
+                        <span class="caja"></span>
+                        <div>
+                            <div class="t">Esta serie no tiene subseries</div>
+                            <div class="s">Activalo para colgar tipologias directamente y definir aqui la caracterizacion.</div>
+                        </div>
+                    </label>
+
+                    <div class="ed-nota">
+                        La caracterizacion (tiempos de retencion, procedimiento, campos) se define en cada
+                        <b>subserie</b>. Selecciona una subserie en el arbol para editarla.
+                    </div>
+                }
+                else if (_carac is not null)
+                {
+                    @* Caracterizacion: subserie, o serie marcada sin subseries. *@
+                    <div class="ed-t">Caracterizacion <span class="ed-chip">@_carac.Nombre</span></div>
+                    <div class="ed-s">Tiempos de retencion, procedimiento y atributos de este nivel documental.</div>
+
+                    @if (_carac.Nivel == "SERIE")
+                    {
+                        <label class="ed-chk on" @onclick="AlternarSinSubseries">
+                            <span class="caja">&#10003;</span>
+                            <div><div class="t">Serie sin subseries: las tipologias cuelgan directo</div></div>
+                        </label>
+                    }
+
+                    <div class="ed-fila">
+                        <div style="flex: 1;">
+                            <div class="ed-lbl">Tiempo en gestion (AG, anios)</div>
+                            <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="2"
+                                   value="@_carac.TiempoAg" @onchange="e => GuardarCarac(ag: e.Value?.ToString())" />
+                        </div>
+                        <div style="flex: 1;">
+                            <div class="ed-lbl">Tiempo en archivo (AC, anios)</div>
+                            <input class="ed-input mono" type="number" min="0" step="0.5" placeholder="8"
+                                   value="@_carac.TiempoAc" @onchange="e => GuardarCarac(ac: e.Value?.ToString())" />
+                        </div>
+                    </div>
+
+                    <div class="ed-lbl">Procedimiento</div>
+                    <textarea class="ed-input" rows="3" placeholder="Describe el procedimiento asociado..."
+                              @onchange="e => GuardarCarac(proc: e.Value?.ToString())">@_carac.Procedimiento</textarea>
+
+                    @* --- Campos dinamicos --- *@
+                    <div class="ed-campos-h">
+                        <span>Campos dinamicos</span>
+                        <button class="ed-add-campo" @onclick="AgregarCampo">&#65291; Campo</button>
+                    </div>
+                    @RenderCampos(_carac.Campos)
+                }
+                else if (_formatos is not null)
+                {
+                    @* Tipologia: formatos aceptados. *@
+                    <div class="ed-t">Formatos de archivo <span class="ed-chip">@_formatos.Nombre</span></div>
+                    <div class="ed-s">Marca los soportes en los que puede llegar esta tipologia documental.</div>
+
+                    <div class="ed-formatos">
+                        @foreach (var f in EditorSeriesService.FormatosDisponibles)
+                        {
+                            <span class="ed-fmt @(_formatos.Formatos.Contains(f) ? "on" : "")"
+                                  @onclick="() => AlternarFormato(f)">@f</span>
+                        }
+                    </div>
+
+                    <div class="ed-campos-h">
+                        <span>Campos dinamicos</span>
+                        <button class="ed-add-campo" @onclick="AgregarCampo">&#65291; Campo</button>
+                    </div>
+                    @RenderCampos(_formatos.Campos)
+                }
+            </div>
+        </div>
+    </div>
+}
+
 @* ===================== Modal complementos ===================== *@
 @if (_compOpen)
 {
@@ -195,7 +337,86 @@
     </div>
 }
 
+@* Los campos dinamicos se pintan igual en caracterizacion y en tipologia. *@
+@{
+    RenderFragment RenderCampos(IReadOnlyList<CampoDinamicoDto> campos) =>
+    @<text>
+        @if (campos.Count == 0)
+        {
+            <div class="ed-sin-campos">Sin campos adicionales.</div>
+        }
+        <div class="ed-campos">
+            @foreach (var c in campos)
+            {
+                <div class="ed-campo">
+                    <input class="ed-input" style="flex: 1.1;" placeholder="Nombre del campo" value="@c.Clave"
+                           @onchange="e => GuardarCampo(c, clave: e.Value?.ToString())" />
+                    <select class="ed-input" style="width: 110px; flex-shrink: 0;" value="@c.Tipo"
+                            @onchange="e => GuardarCampo(c, tipo: e.Value?.ToString())">
+                        <option value="Texto">Texto</option>
+                        <option value="Numero">Numero</option>
+                        <option value="Fecha">Fecha</option>
+                        <option value="SiNo">Si / No</option>
+                        <option value="Lista">Lista</option>
+                    </select>
+                    <input class="ed-input" style="flex: 1;" placeholder="Valor / opciones" value="@c.Valor"
+                           @onchange="e => GuardarCampo(c, valor: e.Value?.ToString())" />
+                    <span class="ed-quitar" @onclick="() => EliminarCampo(c)">&#10005;</span>
+                </div>
+            }
+        </div>
+    </text>;
+}
+
 <style>
+    /* --- Editor de series --- */
+    .ed-modal { position:fixed; top:5vh; left:50%; transform:translateX(-50%); width:1180px; max-width:96vw; height:88vh; z-index:1950; background:#faf9f5; border-radius:20px; box-shadow:0 30px 80px rgba(0,0,0,.34); display:flex; flex-direction:column; overflow:hidden; }
+    .ed-head { background:linear-gradient(135deg,var(--primary-deep),var(--primary)); color:#fff; padding:16px 22px; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+    .ed-head .ico { width:38px; height:38px; border-radius:11px; background:rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .ed-head .ttl { font-size:17px; font-weight:800; letter-spacing:-.3px; }
+    .ed-head .sub { font-size:12px; font-weight:500; color:oklch(0.88 0.05 237); margin-top:2px; }
+    .ed-head .cls { cursor:pointer; font-size:20px; color:oklch(0.88 0.05 237); }
+    .ed-body { flex:1; display:flex; min-height:0; }
+    .ed-arbol { width:290px; flex-shrink:0; border-right:1px solid var(--chrome-border); padding:14px; overflow:auto; }
+    .ed-arbol-h { display:flex; align-items:center; margin-bottom:12px; font-size:12px; font-weight:700; color:#9aa3bd; text-transform:uppercase; letter-spacing:.5px; }
+    .ed-add-serie { margin-left:auto; border:0; cursor:pointer; background:var(--primary); color:#fff; border-radius:9px; padding:7px 13px; font-size:11.5px; font-weight:700; box-shadow:0 5px 14px var(--primary-shadow); }
+    .ed-nodo { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:9px; cursor:pointer; }
+    .ed-nodo:hover { background:#f6f8fc; }
+    .ed-nodo.on { background:var(--primary-soft); }
+    .ed-nodo .ico { font-size:13px; flex-shrink:0; }
+    .ed-nombre { flex:1; min-width:0; border:0; background:transparent; font-size:12.5px; font-weight:600; color:#37415c; outline:none; padding:2px 4px; border-radius:6px; }
+    .ed-nombre:focus { background:#fff; box-shadow:0 0 0 2px var(--primary-tint); }
+    .ed-mas { cursor:pointer; width:22px; height:22px; border-radius:6px; background:var(--primary-soft); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
+    .ed-quitar { cursor:pointer; color:#cdb4b4; font-size:13px; flex-shrink:0; }
+    .ed-quitar:hover { color:#e5484d; }
+    .ed-panel { flex:1; min-width:0; padding:18px 22px; overflow:auto; }
+    .ed-vacio { height:100%; display:flex; align-items:center; justify-content:center; text-align:center; color:#c2bca8; font-size:12.5px; line-height:1.6; }
+    .ed-t { font-size:14px; font-weight:700; color:#1f2433; display:flex; align-items:center; gap:9px; }
+    .ed-chip { font-size:11px; font-weight:600; color:#9aa3bd; }
+    .ed-s { font-size:11.5px; line-height:1.5; color:var(--chrome-label); margin:3px 0 14px; }
+    .ed-chk { display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #eef1f7; border-radius:12px; padding:13px 15px; cursor:pointer; }
+    .ed-chk .caja { width:20px; height:20px; border-radius:6px; border:1.5px solid #cdd5e6; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; font-size:12px; }
+    .ed-chk.on { background:var(--primary-soft); border-color:oklch(0.87 0.07 237); margin-bottom:14px; }
+    .ed-chk.on .caja { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .ed-chk .t { font-size:12.5px; font-weight:700; color:#37415c; }
+    .ed-chk .s { font-size:11.5px; font-weight:500; color:#9aa3bd; margin-top:1px; }
+    .ed-nota { margin-top:16px; background:oklch(0.97 0.015 237); border:1px solid oklch(0.90 0.05 237); border-radius:12px; padding:14px; font-size:12px; line-height:1.55; color:#5a6b90; }
+    .ed-fila { display:flex; gap:12px; margin-bottom:12px; }
+    .ed-lbl { font-size:11px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+    .ed-input { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:9px 11px; font-size:12.5px; font-weight:500; color:#37415c; outline:none; }
+    .ed-input.mono { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+    .ed-input:focus { border-color:var(--primary); }
+    .ed-campos-h { display:flex; align-items:center; margin:18px 0 10px; font-size:12.5px; font-weight:700; color:#1f2433; }
+    .ed-add-campo { margin-left:auto; border:1px solid #cdbdf0; cursor:pointer; background:#f4efff; color:#7c5cd0; border-radius:9px; padding:6px 12px; font-size:11.5px; font-weight:700; }
+    .ed-sin-campos { text-align:center; padding:18px; color:#c2bca8; font-size:12px; font-weight:500; border:1px dashed #e3ddcd; border-radius:11px; }
+    .ed-campos { display:flex; flex-direction:column; gap:8px; }
+    .ed-campo { display:flex; align-items:center; gap:7px; }
+    .ed-formatos { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:6px; }
+    .ed-fmt { cursor:pointer; border:1px solid #e3e7f2; background:#fff; color:#6b7488; border-radius:9px; padding:7px 14px; font-size:12px; font-weight:600; user-select:none; }
+    .ed-fmt:hover { border-color:var(--primary); }
+    .ed-fmt.on { background:var(--primary); border-color:var(--primary); color:#fff; }
+    @@media (max-width: 900px) { .ed-body { flex-direction:column; } .ed-arbol { width:100%; max-height:38%; border-right:0; border-bottom:1px solid var(--chrome-border); } }
+
     .cfg-grid { display:grid; grid-template-columns:120px 1fr 90px 90px 150px 110px; gap:12px; align-items:center; }
     .cfg-grid-banco { display:grid; grid-template-columns:130px 1.4fr 1.2fr 160px; gap:12px; align-items:center; }
     .cfg-grid-sug { display:grid; grid-template-columns:110px 130px 1fr 160px 170px; gap:12px; align-items:center; }
@@ -228,6 +449,15 @@
     private string _csv = "";
     private bool _compOpen, _importOpen;
     private string? _error, _ok;
+
+    // --- Editor de series ---
+    private bool _editorOpen;
+    private List<NodoArbolDto> _arbol = new();
+    private NodoArbolDto? _sel;
+    private Guid? _selId;
+    private CaracterizacionDto? _carac;
+    private FormatosTipologiaDto? _formatos;
+    private string? _edError;
 
     private List<SerieConfigDto> _series = new();
     private List<BancoItemDto> _banco = new();
@@ -306,4 +536,127 @@
             : $"\"{s.Nombre}\" quedo rechazada.";
         await Recargar();
     }
+
+    // ==================== Editor de series ====================
+
+    private static string IconoNivel(string nivel) => nivel switch
+    {
+        "SERIE" => "📁",
+        "SUBSERIE" => "🗂",
+        _ => "📄"
+    };
+
+    private async Task AbrirEditor()
+    {
+        _editorOpen = true;
+        _edError = null;
+        await RecargarArbol();
+    }
+
+    private async Task RecargarArbol()
+    {
+        _arbol = (await Editor.ArbolAsync()).ToList();
+
+        // Tras un alta o borrado, la seleccion puede haber dejado de existir.
+        var vigente = _selId is Guid id ? _arbol.FirstOrDefault(n => n.Id == id) : null;
+        if (vigente is null)
+        {
+            _sel = null; _selId = null; _carac = null; _formatos = null;
+            return;
+        }
+
+        await Seleccionar(vigente);
+    }
+
+    private async Task Seleccionar(NodoArbolDto n)
+    {
+        _sel = n;
+        _selId = n.Id;
+        _carac = null;
+        _formatos = null;
+
+        if (n.Nivel == "TIPOLOGIA")
+        {
+            _formatos = await Editor.FormatosAsync(n.Id);
+        }
+        else if (n.Nivel == "SUBSERIE" || n.SinSubseries)
+        {
+            // La serie solo se caracteriza cuando declara no tener subseries.
+            _carac = await Editor.CaracterizacionAsync(n.Nivel, n.Id);
+        }
+    }
+
+    private async Task Ejecutar(Func<Task> accion)
+    {
+        _edError = null;
+        try { await accion(); await RecargarArbol(); }
+        catch (InvalidOperationException ex) { _edError = ex.Message; }
+    }
+
+    private async Task AgregarSerie() => await Ejecutar(async () =>
+    {
+        _selId = await Editor.AgregarSerieAsync(await Actor());
+    });
+
+    private async Task AgregarHijo(NodoArbolDto n) => await Ejecutar(async () =>
+    {
+        var actor = await Actor();
+        _selId = n.Nivel switch
+        {
+            // Una serie sin subseries cuelga tipologias directo.
+            "SERIE" when !n.SinSubseries => await Editor.AgregarSubserieAsync(n.Id, actor),
+            _ => await Editor.AgregarTipologiaAsync(n.Id, n.Nivel, actor)
+        };
+    });
+
+    private async Task Renombrar(NodoArbolDto n, string nombre) => await Ejecutar(async () =>
+        await Editor.RenombrarAsync(n.Nivel, n.Id, nombre, await Actor()));
+
+    private async Task Eliminar(NodoArbolDto n) => await Ejecutar(async () =>
+    {
+        await Editor.EliminarAsync(n.Nivel, n.Id);
+        if (_selId == n.Id) { _selId = null; }
+    });
+
+    private async Task AlternarSinSubseries() => await Ejecutar(async () =>
+    {
+        if (_sel is null) { return; }
+        await Editor.AlternarSinSubseriesAsync(_sel.Id, await Actor());
+    });
+
+    private async Task GuardarCarac(string? ag = null, string? ac = null, string? proc = null) => await Ejecutar(async () =>
+    {
+        if (_carac is null) { return; }
+
+        // Solo llega el campo que cambio; el resto conserva lo que ya tenia.
+        var nuevoAg = ag is null ? _carac.TiempoAg : Decimal(ag);
+        var nuevoAc = ac is null ? _carac.TiempoAc : Decimal(ac);
+        var nuevoProc = proc ?? _carac.Procedimiento;
+
+        await Editor.GuardarCaracterizacionAsync(
+            _carac.Nivel, _carac.Id, nuevoAg, nuevoAc, nuevoProc, await Actor());
+    });
+
+    private static decimal? Decimal(string? v) =>
+        decimal.TryParse(v, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private async Task AlternarFormato(string formato) => await Ejecutar(async () =>
+    {
+        if (_formatos is null) { return; }
+        await Editor.AlternarFormatoAsync(_formatos.Id, formato, await Actor());
+    });
+
+    private async Task AgregarCampo() => await Ejecutar(async () =>
+    {
+        if (_sel is null) { return; }
+        await Editor.AgregarCampoAsync(_sel.Nivel, _sel.Id, await Actor());
+    });
+
+    private async Task GuardarCampo(CampoDinamicoDto c, string? clave = null, string? tipo = null, string? valor = null) =>
+        await Ejecutar(async () => await Editor.GuardarCampoAsync(
+            c.Id, clave ?? c.Clave, tipo ?? c.Tipo, valor ?? c.Valor, await Actor()));
+
+    private async Task EliminarCampo(CampoDinamicoDto c) => await Ejecutar(async () =>
+        await Editor.EliminarCampoAsync(c.Id));
 }

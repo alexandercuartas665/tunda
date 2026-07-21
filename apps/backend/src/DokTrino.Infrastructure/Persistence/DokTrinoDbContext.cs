@@ -739,6 +739,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<Serie>(b =>
         {
+            b.Property(x => x.TiempoAg).HasPrecision(5, 2);
+            b.Property(x => x.TiempoAc).HasPrecision(5, 2);
+            b.Property(x => x.Procedimiento).HasColumnType("text");
             b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
             b.Property(x => x.Estado).HasMaxLength(20).IsRequired().HasDefaultValue("MAESTRA");
@@ -748,6 +751,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<Subserie>(b =>
         {
+            b.Property(x => x.TiempoAg).HasPrecision(5, 2);
+            b.Property(x => x.TiempoAc).HasPrecision(5, 2);
+            b.Property(x => x.Procedimiento).HasColumnType("text");
             b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
             b.HasOne(x => x.Serie).WithMany(s => s.Subseries).HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
@@ -758,6 +764,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<TipologiaDocumental>(b =>
         {
+            b.Property(x => x.FormatosJson).HasColumnType("jsonb").IsRequired();
             b.Property(x => x.Codigo).HasMaxLength(30).IsRequired();
             b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
             b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
@@ -857,6 +864,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         {
             b.Property(x => x.EntidadTipo).HasMaxLength(20).IsRequired();
             b.Property(x => x.Clave).HasMaxLength(80).IsRequired();
+            b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
             b.Property(x => x.Valor).HasColumnType("text").IsRequired();
             b.HasIndex(x => new { x.EntidadTipo, x.EntidadId, x.Clave }).IsUnique();
         });

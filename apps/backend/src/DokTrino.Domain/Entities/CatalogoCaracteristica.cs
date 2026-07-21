@@ -15,4 +15,10 @@ public class CatalogoCaracteristica : TenantEntity
 
     public string Clave { get; set; } = null!;
     public string Valor { get; set; } = null!;
+
+    /// <summary>Texto | Numero | Fecha | SiNo | Lista.</summary>
+    public string Tipo { get; set; } = "Texto";
+
+    /// <summary>Orden de presentacion dentro de su entidad.</summary>
+    public int Orden { get; set; }
 }

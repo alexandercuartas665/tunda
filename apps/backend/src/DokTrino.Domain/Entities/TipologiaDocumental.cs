@@ -34,4 +34,7 @@ public class TipologiaDocumental : TenantEntity
 
     /// <summary>Dependencia que la sugirio; null cuando es del catalogo maestro.</summary>
     public Guid? SugeridaPorDependenciaId { get; set; }
+
+    /// <summary>jsonb con los formatos aceptados: ["PDF","Papel",...].</summary>
+    public string FormatosJson { get; set; } = "[]";
 }
