@@ -30,4 +30,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Banco terminologico de series y subseries del AGN, en ASCII escapado. -->
+    <Content Include="Datos\banco_agn_trd.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

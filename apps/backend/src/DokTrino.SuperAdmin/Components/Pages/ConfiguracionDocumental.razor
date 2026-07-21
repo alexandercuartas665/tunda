@@ -5,6 +5,8 @@
 @using DokTrino.Application.Tenancy
 @inject IConfiguracionDocumentalService Cfg
 @inject IEditorSeriesService Editor
+@inject IImportadorBancoAgnService Banco
+@inject IWebHostEnvironment Entorno
 
 <PageTitle>Configuracion documental - DokTrino</PageTitle>
 
@@ -40,6 +42,9 @@
         {
             <div style="margin-left: auto; display: flex; gap: 9px;">
                 <button class="cfgd-comp-btn" @onclick="() => _compOpen = true">&#129513; Complementos</button>
+                <button class="cfgd-import-btn" @onclick="CargarBancoAgn" disabled="@_cargandoBanco">
+                    @(_cargandoBanco ? "Cargando banco AGN..." : "⬇ Cargar banco AGN")
+                </button>
                 <button class="trx-btn" @onclick="AbrirEditor">&#65291; Editor de series</button>
             </div>
         }
@@ -737,6 +742,40 @@
     private CaracterizacionDto? _carac;
     private FormatosTipologiaDto? _formatos;
     private string? _edError;
+
+    private bool _cargandoBanco;
+
+    /// <summary>
+    /// Carga el banco terminologico del AGN que viaja con la aplicacion. Es
+    /// idempotente: si la serie o la tipologia ya existe, se actualiza en vez de
+    /// duplicarse, asi que se puede volver a ejecutar sin ensuciar el catalogo.
+    /// </summary>
+    private async Task CargarBancoAgn()
+    {
+        _error = _ok = null;
+        _cargandoBanco = true;
+
+        try
+        {
+            var ruta = Path.Combine(AppContext.BaseDirectory, "Datos", "banco_agn_trd.json");
+            if (!File.Exists(ruta))
+            {
+                _error = "No se encontro el archivo del banco AGN junto a la aplicacion.";
+                return;
+            }
+
+            var json = await File.ReadAllTextAsync(ruta);
+            var r = await Banco.ImportarAsync(json, await Actor());
+
+            _ok = $"Banco AGN cargado: {r.Series} series, {r.Subseries} subseries, "
+                + $"{r.Tipologias} tipologias y {r.Campos} campos dinamicos."
+                + (r.Omitidos > 0 ? $" {r.Omitidos} registros de introduccion omitidos." : "");
+
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _cargandoBanco = false; }
+    }
 
     // Filtros por columna de las tablas del modulo.
     private string _fCodigo = "", _fNombre = "", _fSerie = "", _fEstado = "", _fRetencion = "";

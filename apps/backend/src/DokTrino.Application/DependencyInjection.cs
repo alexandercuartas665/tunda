@@ -77,6 +77,7 @@ public static class DependencyInjection
         services.AddScoped<Trd.ITrdExcelExporter, Trd.TrdExcelExporter>();
         services.AddScoped<Tenancy.IConfiguracionDocumentalService, Tenancy.ConfiguracionDocumentalService>();
         services.AddScoped<Tenancy.IEditorSeriesService, Tenancy.EditorSeriesService>();
+        services.AddScoped<Tenancy.IImportadorBancoAgnService, Tenancy.ImportadorBancoAgnService>();
         services.AddScoped<Tenancy.IExpedienteService, Tenancy.ExpedienteService>();
         services.AddScoped<Tenancy.ITopografiaService, Tenancy.TopografiaService>();
         services.AddScoped<Bpmn.IBpmnEngine, Bpmn.BpmnEngine>();
