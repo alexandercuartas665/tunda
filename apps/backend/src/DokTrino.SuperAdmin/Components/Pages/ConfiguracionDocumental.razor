@@ -236,16 +236,26 @@
                 {
                     <div class="dkd-empty">Sin series. Crea la primera con el boton de arriba.</div>
                 }
-                else if (ArbolFiltrado.Count == 0)
+                else if (ArbolVisible.Count == 0)
                 {
                     <div class="dkd-empty">Nada coincide con "@_filtroArbol".</div>
                 }
 
-                @foreach (var n in ArbolFiltrado)
+                @foreach (var n in ArbolVisible)
                 {
                     <div class="ed-nodo @(_selId == n.Id ? "on" : "")"
                          style="padding-left: @(n.Profundidad * 16 + 8)px"
                          @onclick="() => Seleccionar(n)">
+                        @if (TieneHijos(n.Id))
+                        {
+                            <span class="ed-chevron" @onclick:stopPropagation="true" @onclick="() => Plegar(n.Id)">
+                                @(_expandidos.Contains(n.Id) ? "▾" : "▸")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="ed-chevron vacio"></span>
+                        }
                         <span class="ico">@IconoNivel(n.Nivel)</span>
                         <input class="ed-nombre" value="@n.Nombre"
                                @onclick:stopPropagation="true"
@@ -642,6 +652,8 @@
     .ed-nodo { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:9px; cursor:pointer; }
     .ed-nodo:hover { background:#f6f8fc; }
     .ed-nodo.on { background:var(--primary-soft); }
+    .ed-chevron { width:14px; flex-shrink:0; text-align:center; font-size:10px; color:var(--primary); cursor:pointer; user-select:none; }
+    .ed-chevron.vacio { cursor:default; }
     .ed-nodo .ico { font-size:13px; flex-shrink:0; }
     .ed-nombre { flex:1; min-width:0; border:0; background:transparent; font-size:12.5px; font-weight:600; color:#37415c; outline:none; padding:2px 4px; border-radius:6px; }
     .ed-nombre:focus { background:#fff; box-shadow:0 0 0 2px var(--primary-tint); }
@@ -673,6 +685,7 @@
     .ed-lbl { font-size:11px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
     .ed-input { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:9px 11px; font-size:12.5px; font-weight:500; color:#37415c; outline:none; }
     .ed-input.mono { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+    .ed-input::placeholder { color:#aab1c4; font-weight:400; font-style:italic; }
     .ed-input:focus { border-color:var(--primary); }
     .ed-campos-h { display:flex; align-items:center; margin:18px 0 10px; font-size:12.5px; font-weight:700; color:#1f2433; }
     .ed-add-campo { margin-left:auto; border:1px solid #cdbdf0; cursor:pointer; background:#f4efff; color:#7c5cd0; border-radius:9px; padding:6px 12px; font-size:11.5px; font-weight:700; }
@@ -884,6 +897,41 @@
 
     private string _filtroArbol = "";
 
+    /// <summary>Ramas abiertas. Con 2.000+ nodos, dibujar el arbol entero congela
+    /// el navegador: solo se pintan las series y lo que el usuario despliegue.</summary>
+    private readonly HashSet<Guid> _expandidos = new();
+
+    private bool TieneHijos(Guid id) => _arbol.Any(n => n.PadreId == id);
+
+    private void Plegar(Guid id)
+    {
+        if (!_expandidos.Remove(id)) { _expandidos.Add(id); }
+    }
+
+    /// <summary>Nodos realmente visibles: raices, mas lo que cuelgue de una rama abierta.</summary>
+    private List<NodoArbolDto> ArbolVisible
+    {
+        get
+        {
+            var candidatos = ArbolFiltrado;
+
+            // Con filtro activo la lista ya viene acotada: se muestra completa
+            // para que la rama de cada coincidencia se vea de una vez.
+            if (_filtroArbol.Trim().Length > 0) { return candidatos; }
+
+            var visibles = new List<NodoArbolDto>();
+            foreach (var n in candidatos)
+            {
+                if (n.PadreId is not Guid padre) { visibles.Add(n); continue; }
+                if (_expandidos.Contains(padre) && visibles.Any(v => v.Id == padre))
+                {
+                    visibles.Add(n);
+                }
+            }
+            return visibles;
+        }
+    }
+
     /// <summary>
     /// Filtra el arbol por los tres niveles conservando la rama completa de cada
     /// coincidencia: hacia arriba sus ancestros, para saber de que serie cuelga
@@ -982,6 +1030,9 @@
 
     private async Task Seleccionar(NodoArbolDto n)
     {
+        // Elegir un nodo con hijos abre su rama: es lo que espera quien navega.
+        if (TieneHijos(n.Id)) { _expandidos.Add(n.Id); }
+
         _sel = n;
         _selId = n.Id;
         _carac = null;
