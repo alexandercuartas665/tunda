@@ -3,7 +3,6 @@
 @attribute [AllowAnonymous]
 @inject DokTrino.Application.Admin.IPlatformBrandingService BrandingSvc
 @inject DokTrino.Application.Admin.IGoogleAuthConfigService GoogleCfg
-@inject DokTrino.Application.Tenancy.ISedeCatalogoPublicoService SedesSvc
 @inject DokTrino.Application.Tenancy.ITenantBrandingPublicoService TenantBrand
 
 <PageTitle>Ingresar - @_displayName</PageTitle>
@@ -91,17 +90,11 @@
                             <button type="button" class="auth-eye" onclick="doktrinoAuth.toggle('login-password', this)">MOSTRAR</button>
                         </div>
                     </div>
-                    <div class="auth-field">
-                        <label for="login-sede">Sede</label>
-                        <select id="login-sede" name="sede" required class="auth-select">
-                            <option value="" disabled selected>Selecciona SEDE</option>
-                            <option value="GLOBAL">GLOBAL</option>
-                            @foreach (var s in _sedes)
-                            {
-                                <option value="@s.Id">@s.Nombre</option>
-                            }
-                        </select>
-                    </div>
+                    @* La sede NO se elige aqui. Listarla antes de autenticar exponia
+                       los nombres de las sedes de todas las entidades a cualquier
+                       visitante. Se resuelve despues del login en /seleccionar-sede,
+                       que ya acota por el tenant del usuario. *@
+                    <input type="hidden" name="sede" value="" />
                     <button class="auth-submit" type="submit">
                         <span>Ingresar</span>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
@@ -222,7 +215,6 @@
 
     private DokTrino.Application.Admin.PlatformBrandingDto _brand = DokTrino.Application.Admin.PlatformBrandingDto.Default;
     private bool _googleEnabled;
-    private List<DokTrino.Application.Tenancy.SedePublicaDto> _sedes = new();
 
     // Logo y nombre que finalmente se renderizan en el panel de la izquierda.
     // Resueltos en OnInitializedAsync con la regla:
@@ -239,7 +231,6 @@
     {
         _brand = await BrandingSvc.GetAsync();
         _googleEnabled = (await GoogleCfg.GetAsync())?.IsEnabled == true;
-        _sedes = (await SedesSvc.ListAsync()).ToList();
 
         // Empezamos con lo que dijo el branding de plataforma.
         _displayName = _brand.PlatformName;

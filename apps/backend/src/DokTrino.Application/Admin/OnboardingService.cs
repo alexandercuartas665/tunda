@@ -77,6 +77,17 @@ public sealed class OnboardingService : IOnboardingService
             Status = PlatformUserStatus.Active
         });
 
+        // Sede principal: el login exige elegir una sede, asi que un tenant sin
+        // ninguna dejaba a su propio Owner bloqueado fuera de la cuenta apenas
+        // cerraba sesion. Toda entidad nace con al menos una.
+        _db.Sucursales.Add(new Sucursal
+        {
+            TenantId = tenant.Id,
+            Codigo = "PRINCIPAL",
+            Nombre = "Sede principal",
+            Activo = true
+        });
+
         Guid? subscriptionId = null;
         if (request.PlanId is Guid plan)
         {
