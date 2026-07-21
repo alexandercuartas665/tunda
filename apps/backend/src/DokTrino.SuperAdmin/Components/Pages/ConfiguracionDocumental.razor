@@ -164,8 +164,15 @@
                 </div>
 
                 @* Busca en los tres niveles; lo que encuentra viaja con su rama. *@
-                <input class="ed-buscar" @bind="_filtroArbol" @bind:event="oninput"
-                       placeholder="Buscar serie, subserie o tipologia..." />
+                <div class="ed-buscar-caja">
+                    <input class="ed-buscar" @bind="_filtroArbol" @bind:event="oninput"
+                           placeholder="Buscar serie, subserie o tipologia..." />
+                    @if (_filtroArbol.Length > 0)
+                    {
+                        <button type="button" class="ed-buscar-x" title="Limpiar busqueda"
+                                @onclick='() => _filtroArbol = ""'>&#10005;</button>
+                    }
+                </div>
 
                 @if (_arbol.Count == 0)
                 {
@@ -506,8 +513,12 @@
     .ed-head .cls { cursor:pointer; font-size:20px; color:oklch(0.88 0.05 237); }
     .ed-body { flex:1; display:flex; min-height:0; }
     .ed-arbol { width:290px; flex-shrink:0; border-right:1px solid var(--chrome-border); padding:14px; overflow:auto; }
-    .ed-buscar { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:8px 11px; font-size:12px; font-weight:500; color:#37415c; outline:none; margin-bottom:10px; }
+    .ed-buscar-caja { position:relative; margin-bottom:10px; }
+    /* Espacio a la derecha para que el texto no pase por debajo de la equis. */
+    .ed-buscar { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:8px 30px 8px 11px; font-size:12px; font-weight:500; color:#37415c; outline:none; }
     .ed-buscar:focus { border-color:var(--primary); }
+    .ed-buscar-x { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:20px; height:20px; border:0; background:transparent; color:#aab2c8; font-size:12px; line-height:1; cursor:pointer; border-radius:6px; display:flex; align-items:center; justify-content:center; padding:0; }
+    .ed-buscar-x:hover { background:var(--chrome-surface); color:#37415c; }
     .ed-arbol-h { display:flex; align-items:center; margin-bottom:12px; font-size:12px; font-weight:700; color:#9aa3bd; text-transform:uppercase; letter-spacing:.5px; }
     .ed-add-serie { margin-left:auto; border:0; cursor:pointer; background:var(--primary); color:#fff; border-radius:9px; padding:7px 13px; font-size:11.5px; font-weight:700; box-shadow:0 5px 14px var(--primary-shadow); }
     .ed-nodo { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:9px; cursor:pointer; }
