@@ -35,20 +35,17 @@
     @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
     @* --- Toolbar --- *@
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-        <input class="tcl-input" style="max-width: 360px; background: #fff;"
-               @bind="_filtro" @bind:event="oninput" placeholder="Buscar por codigo o nombre..." />
-
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; justify-content: flex-end;">
         @if (_tab == "series")
         {
             <div style="margin-left: auto; display: flex; gap: 9px;">
-                <button class="cfg-comp-btn" @onclick="() => _compOpen = true">&#129513; Complementos</button>
+                <button class="cfgd-comp-btn" @onclick="() => _compOpen = true">&#129513; Complementos</button>
                 <button class="trx-btn" @onclick="AbrirEditor">&#65291; Editor de series</button>
             </div>
         }
         else if (_tab == "banco")
         {
-            <button class="cfg-import-btn" style="margin-left: auto;" @onclick="() => _importOpen = true">
+            <button class="cfgd-import-btn" style="margin-left: auto;" @onclick="() => _importOpen = true">
                 &#11015; Importar del bunker (AGN)
             </button>
         }
@@ -56,83 +53,139 @@
 
     @if (_tab == "series")
     {
-        <div class="trx-list">
-            <div class="cfg-grid cfg-head">
-                <div>Codigo</div><div>Serie documental</div><div>Subseries</div>
-                <div>Tipologias</div><div>Retencion (AG/AC)</div><div>Estado</div>
-            </div>
-            @if (Filtradas(_series).Count == 0)
-            {
-                <div class="trx-empty">Sin series en el catalogo. Aplica un complemento o importa el cuadro del AGN.</div>
-            }
-            @foreach (var s in Filtradas(_series))
-            {
-                <div class="cfg-grid cfg-row">
-                    <div class="num">@s.Codigo</div>
-                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@s.Nombre</div>
-                    <div class="txt">@s.Subseries</div>
-                    <div class="txt">@s.Tipologias</div>
-                    <div class="mono">@s.Retencion</div>
-                    <div><span class="trx-est @(s.Estado == "MAESTRA" ? "activo" : "desarrollo")">@s.Estado</span></div>
+        <div class="cfgd-tabla">
+            <div class="cfgd-scroll">
+                <div class="cfgd-grid cfgd-head">
+                    <div>Codigo</div><div>Serie documental</div><div>Subseries</div>
+                    <div>Tipologias</div><div>Retencion (AG/AC)</div><div>Estado</div>
                 </div>
-            }
+
+                @* Filtros por columna, fijos junto a la cabecera. *@
+                <div class="cfgd-grid cfgd-filtros">
+                    <input class="cfgd-f" placeholder="Codigo" @bind="_fCodigo" @bind:event="oninput" />
+                    <input class="cfgd-f" placeholder="Nombre de la serie" @bind="_fNombre" @bind:event="oninput" />
+                    <div></div><div></div>
+                    <select class="cfgd-f" @bind="_fRetencion">
+                        <option value="">Retencion: todas</option>
+                        <option value="si">Declarada</option>
+                        <option value="no">Sin declarar</option>
+                    </select>
+                    <select class="cfgd-f" @bind="_fEstado">
+                        <option value="">Estado: todos</option>
+                        <option value="MAESTRA">Maestra</option>
+                        <option value="SUGERIDA">Sugerida</option>
+                    </select>
+                </div>
+
+                @if (SeriesFiltradas.Count == 0)
+                {
+                    <div class="cfgd-vacio">
+                        @(_series.Count == 0
+                            ? "Sin series en el catalogo. Aplica un complemento o importa el cuadro del AGN."
+                            : "Ninguna serie coincide con los filtros.")
+                    </div>
+                }
+                @foreach (var s in SeriesFiltradas)
+                {
+                    <div class="cfgd-grid cfgd-row">
+                        <div class="num">@s.Codigo</div>
+                        <div class="nom">@s.Nombre</div>
+                        <div class="txt">@s.Subseries</div>
+                        <div class="txt">@s.Tipologias</div>
+                        <div class="mono">@s.Retencion</div>
+                        <div><span class="trx-est @(s.Estado == "MAESTRA" ? "activo" : "desarrollo")">@s.Estado</span></div>
+                    </div>
+                }
+            </div>
+
+            <div class="cfgd-pie">
+                <span>@SeriesFiltradas.Count de @_series.Count series</span>
+                @if (HayFiltroSeries)
+                {
+                    <button class="cfgd-limpiar" @onclick="LimpiarFiltrosSeries">Limpiar filtros</button>
+                }
+            </div>
         </div>
-        <div class="cfg-nota">
-            AG = Archivo de Gestion &middot; AC = Archivo Central (anios de retencion, tomados de lo que declararon las dependencias).
-            Las series maestras quedan disponibles para el Cliente Encuesta.
+        <div class="cfgd-nota">
+            AG = Archivo de Gestion &middot; AC = Archivo Central. Las series maestras quedan disponibles para el Cliente Encuesta.
         </div>
     }
     else if (_tab == "banco")
     {
-        <div class="trx-list">
-            <div class="cfg-grid-banco cfg-head">
-                <div>Codigo</div><div>Registro documental</div><div>Serie</div><div>Fuente</div>
-            </div>
-            @if (FiltradasBanco().Count == 0)
-            {
-                <div class="trx-empty">El banco documental esta vacio.</div>
-            }
-            @foreach (var b in FiltradasBanco())
-            {
-                <div class="cfg-grid-banco cfg-row">
-                    <div class="num">@b.Codigo</div>
-                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@b.Nombre</div>
-                    <div class="txt">@b.Serie</div>
-                    <div><span class="trx-est @(b.Estado == "MAESTRA" ? "activo" : "desarrollo")">@b.Fuente</span></div>
+        <div class="cfgd-tabla">
+            <div class="cfgd-scroll">
+                <div class="cfgd-grid-banco cfgd-head">
+                    <div>Codigo</div><div>Registro documental</div><div>Serie</div><div>Fuente</div>
                 </div>
-            }
+
+                <div class="cfgd-grid-banco cfgd-filtros">
+                    <input class="cfgd-f" placeholder="Codigo" @bind="_fCodigo" @bind:event="oninput" />
+                    <input class="cfgd-f" placeholder="Registro" @bind="_fNombre" @bind:event="oninput" />
+                    <input class="cfgd-f" placeholder="Serie" @bind="_fSerie" @bind:event="oninput" />
+                    <select class="cfgd-f" @bind="_fEstado">
+                        <option value="">Fuente: todas</option>
+                        <option value="MAESTRA">Catalogo maestro</option>
+                        <option value="SUGERIDA">Propuesta</option>
+                    </select>
+                </div>
+
+                @if (BancoFiltrado.Count == 0)
+                {
+                    <div class="cfgd-vacio">
+                        @(_banco.Count == 0 ? "El banco documental esta vacio." : "Ningun registro coincide con los filtros.")
+                    </div>
+                }
+                @foreach (var b in BancoFiltrado)
+                {
+                    <div class="cfgd-grid-banco cfgd-row">
+                        <div class="num">@b.Codigo</div>
+                        <div class="nom">@b.Nombre</div>
+                        <div class="txt">@b.Serie</div>
+                        <div><span class="trx-est @(b.Estado == "MAESTRA" ? "activo" : "desarrollo")">@b.Fuente</span></div>
+                    </div>
+                }
+            </div>
+
+            <div class="cfgd-pie">
+                <span>@BancoFiltrado.Count de @_banco.Count registros</span>
+                @if (HayFiltroSeries)
+                {
+                    <button class="cfgd-limpiar" @onclick="LimpiarFiltrosSeries">Limpiar filtros</button>
+                }
+            </div>
         </div>
-        <div class="cfg-nota">
+        <div class="cfgd-nota">
             El banco documental es el catalogo maestro (bunker del AGN mas los registros propios) del que las dependencias
             seleccionan sus subseries y tipologias.
         </div>
     }
     else
     {
-        @* --- Bandeja de sugerencias del colaborador --- *@
-        <div class="trx-list">
-            <div class="cfg-grid-sug cfg-head">
-                <div>Nivel</div><div>Codigo</div><div>Nombre propuesto</div><div>Dependencia</div><div>Accion</div>
-            </div>
-            @if (_sugerencias.Count == 0)
-            {
-                <div class="trx-empty">No hay propuestas de catalogo pendientes.</div>
-            }
-            @foreach (var s in _sugerencias)
-            {
-                <div class="cfg-grid-sug cfg-row">
-                    <div><span class="tcl-propia">@s.Nivel</span></div>
-                    <div class="num">@s.Codigo</div>
-                    <div style="font-weight: 700; font-size: 12.5px; color: #1f2433;">@s.Nombre</div>
-                    <div class="txt">@s.Dependencia</div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="btn btn-outline-success btn-sm" @onclick="() => Resolver(s, true)">Aprobar</button>
-                        <button class="btn btn-outline-danger btn-sm" @onclick="() => Resolver(s, false)">Rechazar</button>
-                    </div>
+        <div class="cfgd-tabla">
+            <div class="cfgd-scroll">
+                <div class="cfgd-grid-sug cfgd-head">
+                    <div>Nivel</div><div>Codigo</div><div>Nombre propuesto</div><div>Dependencia</div><div>Accion</div>
                 </div>
-            }
+                @if (_sugerencias.Count == 0)
+                {
+                    <div class="cfgd-vacio">No hay propuestas de catalogo pendientes.</div>
+                }
+                @foreach (var s in _sugerencias)
+                {
+                    <div class="cfgd-grid-sug cfgd-row">
+                        <div><span class="tcl-propia">@s.Nivel</span></div>
+                        <div class="num">@s.Codigo</div>
+                        <div class="nom">@s.Nombre</div>
+                        <div class="txt">@s.Dependencia</div>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn btn-outline-success btn-sm" @onclick="() => Resolver(s, true)">Aprobar</button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="() => Resolver(s, false)">Rechazar</button>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
-        <div class="cfg-nota">
+        <div class="cfgd-nota">
             Al aprobar, la entrada pasa al catalogo maestro y la ven todas las dependencias.
             Al rechazar queda archivada y desaparece de la encuesta del colaborador.
         </div>
@@ -448,22 +501,22 @@
 @if (_compOpen)
 {
     <div class="doktrino-drawer-scrim" style="display: block;" @onclick="() => _compOpen = false"></div>
-    <div class="cfg-modal">
-        <div class="cfg-modal-head" style="background: linear-gradient(135deg, #5b3fa8, #7c5cd0);">
+    <div class="cfgd-modal">
+        <div class="cfgd-modal-head" style="background: linear-gradient(135deg, #5b3fa8, #7c5cd0);">
             <div style="flex: 1;">
                 <div class="ttl">Complementos</div>
                 <div class="sub">Paquetes de catalogo listos para aplicar sobre tu banco documental.</div>
             </div>
             <span class="cls" @onclick="() => _compOpen = false">&#10005;</span>
         </div>
-        <div class="cfg-modal-body">
+        <div class="cfgd-modal-body">
             @if (_complementos.Count == 0)
             {
                 <div class="trx-empty">No hay complementos publicados en la plataforma.</div>
             }
             @foreach (var c in _complementos)
             {
-                <div class="cfg-comp-item">
+                <div class="cfgd-comp-item">
                     <div style="flex: 1;">
                         <div style="font-weight: 700; font-size: 13px; color: #1f2433;">@c.Nombre</div>
                         <div style="font-size: 11.5px; color: #8a93a8; margin-top: 2px;">@c.Descripcion</div>
@@ -480,16 +533,16 @@
 @if (_importOpen)
 {
     <div class="doktrino-drawer-scrim" style="display: block;" @onclick="() => _importOpen = false"></div>
-    <div class="cfg-modal">
-        <div class="cfg-modal-head">
+    <div class="cfgd-modal">
+        <div class="cfgd-modal-head">
             <div style="flex: 1;">
                 <div class="ttl">Importar del bunker (AGN)</div>
                 <div class="sub">Pega el cuadro de clasificacion en CSV separado por punto y coma.</div>
             </div>
             <span class="cls" @onclick="() => _importOpen = false">&#10005;</span>
         </div>
-        <div class="cfg-modal-body">
-            <div class="cfg-nota" style="margin: 0 0 10px;">
+        <div class="cfgd-modal-body">
+            <div class="cfgd-nota" style="margin: 0 0 10px;">
                 Columnas: <code>codigo_serie;nombre_serie;codigo_subserie;nombre_subserie;codigo_tipologia;nombre_tipologia</code>
             </div>
             <textarea class="tcl-input" rows="10" style="font-family: 'IBM Plex Mono', monospace; font-size: 12px;"
@@ -627,27 +680,44 @@
     .ed-fmt.on { background:var(--primary); border-color:var(--primary); color:#fff; }
     @@media (max-width: 900px) { .ed-body { flex-direction:column; } .ed-arbol { width:100%; max-height:38%; border-right:0; border-bottom:1px solid var(--chrome-border); } }
 
-    .cfg-grid { display:grid; grid-template-columns:120px 1fr 90px 90px 150px 110px; gap:12px; align-items:center; }
-    .cfg-grid-banco { display:grid; grid-template-columns:130px 1.4fr 1.2fr 160px; gap:12px; align-items:center; }
-    .cfg-grid-sug { display:grid; grid-template-columns:110px 130px 1fr 160px 170px; gap:12px; align-items:center; }
-    .cfg-head { padding:12px 18px; background:#161c2e; font-size:10.5px; font-weight:600; color:#cdd5ea; text-transform:uppercase; letter-spacing:.4px; }
-    .cfg-row { padding:13px 18px; border-bottom:1px solid #f4f6fb; }
-    .cfg-row:hover { background:#f8faff; }
-    .cfg-row .num { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--primary); font-weight:600; }
-    .cfg-row .txt { font-size:12px; font-weight:600; color:#6b7488; }
-    .cfg-row .mono { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8a93a8; }
-    .cfg-nota { font-size:11.5px; line-height:1.5; color:var(--chrome-label); margin-top:12px; }
-    .cfg-comp-btn { border:1px solid #cdbdf0; cursor:pointer; background:#f4efff; color:#7c5cd0; border-radius:10px; padding:10px 15px; font-size:12.5px; font-weight:700; }
-    .cfg-import-btn { border:1px solid oklch(0.87 0.07 237); cursor:pointer; background:var(--primary-soft); color:var(--primary); border-radius:10px; padding:10px 17px; font-size:12.5px; font-weight:700; }
-    .cfg-modal { position:fixed; top:6vh; left:50%; transform:translateX(-50%); width:720px; max-width:94vw; max-height:85vh; overflow:auto; z-index:1950; background:#faf9f5; border-radius:20px; box-shadow:0 30px 80px rgba(0,0,0,.32); }
-    .cfg-modal-head { background:linear-gradient(135deg,var(--primary-deep),var(--primary)); color:#fff; padding:18px 22px; display:flex; align-items:center; gap:12px; }
-    .cfg-modal-head .ttl { font-size:17px; font-weight:800; letter-spacing:-.3px; }
-    .cfg-modal-head .sub { font-size:12px; font-weight:500; color:oklch(0.92 0.035 237); margin-top:2px; }
-    .cfg-modal-head .cls { cursor:pointer; font-size:20px; color:oklch(0.88 0.05 237); }
-    .cfg-modal-body { padding:18px 22px; }
-    .cfg-comp-item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e9ecf5; border-radius:13px; padding:13px 15px; margin-bottom:10px; }
+    /* Tabla del modulo: cabecera fija, filas limpias separadas solo por una linea. */
+    .cfgd-tabla { background:#fff; border:1px solid var(--chrome-border); border-radius:16px; overflow:hidden; box-shadow:0 1px 3px oklch(0.35 0.06 237 / .05); }
+    .cfgd-scroll { max-height:min(58vh, 620px); overflow:auto; }
+    .cfgd-grid { display:grid; grid-template-columns:110px minmax(220px,1fr) 90px 95px 140px 110px; gap:12px; align-items:center; }
+    .cfgd-grid-banco { display:grid; grid-template-columns:130px minmax(200px,1.4fr) minmax(160px,1.2fr) 170px; gap:12px; align-items:center; }
+    .cfgd-grid-sug { display:grid; grid-template-columns:110px 120px minmax(180px,1fr) 160px 170px; gap:12px; align-items:center; }
+
+    /* La cabecera y la fila de filtros quedan fijas al hacer scroll. */
+    .cfgd-head { position:sticky; top:0; z-index:2; padding:12px 18px; background:#161c2e; font-size:10.5px; font-weight:600; color:#cdd5ea; text-transform:uppercase; letter-spacing:.4px; }
+    .cfgd-filtros { position:sticky; top:41px; z-index:2; padding:9px 18px; background:#fbfaf7; border-bottom:1px solid var(--chrome-border); }
+    .cfgd-f { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:7px; padding:5px 9px; font-size:11.5px; font-weight:500; color:#37415c; outline:none; }
+    .cfgd-f:focus { border-color:var(--primary); }
+
+    /* Filas limpias: sin caja, sin margen; solo separador y realce al pasar. */
+    .cfgd-row { padding:12px 18px; border-bottom:1px solid #f4f6fb; }
+    .cfgd-row:last-child { border-bottom:0; }
+    .cfgd-row:hover { background:#f8faff; }
+    .cfgd-row .num { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--primary); font-weight:600; }
+    .cfgd-row .nom { font-size:12.5px; font-weight:700; color:#1f2433; }
+    .cfgd-row .txt { font-size:12px; font-weight:600; color:#6b7488; }
+    .cfgd-row .mono { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#8a93a8; }
+    .cfgd-vacio { padding:26px 18px; text-align:center; font-size:12.5px; color:var(--chrome-label); }
+    .cfgd-limpiar { margin-left:auto; border:1px solid #e3e7f2; background:#fff; color:var(--primary); border-radius:8px; padding:5px 12px; font-size:11.5px; font-weight:700; cursor:pointer; }
+    .cfgd-limpiar:hover { background:var(--primary-soft); }
+    .cfgd-pie { display:flex; align-items:center; gap:10px; padding:10px 18px; border-top:1px solid var(--chrome-border); background:#fbfaf7; font-size:11.5px; color:var(--chrome-label); }
+
+    .cfgd-nota { font-size:11.5px; line-height:1.5; color:var(--chrome-label); margin-top:12px; }
+    .cfgd-comp-btn { border:1px solid #cdbdf0; cursor:pointer; background:#f4efff; color:#7c5cd0; border-radius:10px; padding:10px 15px; font-size:12.5px; font-weight:700; }
+    .cfgd-import-btn { border:1px solid oklch(0.87 0.07 237); cursor:pointer; background:var(--primary-soft); color:var(--primary); border-radius:10px; padding:10px 17px; font-size:12.5px; font-weight:700; }
+    .cfgd-modal { position:fixed; top:6vh; left:50%; transform:translateX(-50%); width:720px; max-width:94vw; max-height:85vh; overflow:auto; z-index:1950; background:#faf9f5; border-radius:20px; box-shadow:0 30px 80px rgba(0,0,0,.32); }
+    .cfgd-modal-head { background:linear-gradient(135deg,var(--primary-deep),var(--primary)); color:#fff; padding:18px 22px; display:flex; align-items:center; gap:12px; }
+    .cfgd-modal-head .ttl { font-size:17px; font-weight:800; letter-spacing:-.3px; }
+    .cfgd-modal-head .sub { font-size:12px; font-weight:500; color:oklch(0.92 0.035 237); margin-top:2px; }
+    .cfgd-modal-head .cls { cursor:pointer; font-size:20px; color:oklch(0.88 0.05 237); }
+    .cfgd-modal-body { padding:18px 22px; }
+    .cfgd-comp-item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e9ecf5; border-radius:13px; padding:13px 15px; margin-bottom:10px; }
     @@media (max-width: 1000px) {
-        .cfg-grid, .cfg-grid-banco, .cfg-grid-sug { grid-template-columns:1fr; gap:4px; }
+        .cfgd-grid, .cfgd-grid-banco, .cfgd-grid-sug { grid-template-columns:1fr; gap:4px; }
     }
 </style>
 
@@ -655,7 +725,6 @@
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private string _tab = "series";
-    private string _filtro = "";
     private string _csv = "";
     private bool _compOpen, _importOpen;
     private string? _error, _ok;
@@ -668,6 +737,36 @@
     private CaracterizacionDto? _carac;
     private FormatosTipologiaDto? _formatos;
     private string? _edError;
+
+    // Filtros por columna de las tablas del modulo.
+    private string _fCodigo = "", _fNombre = "", _fSerie = "", _fEstado = "", _fRetencion = "";
+
+    private bool HayFiltroSeries =>
+        (_fCodigo + _fNombre + _fSerie + _fEstado + _fRetencion).Length > 0;
+
+    private void LimpiarFiltrosSeries()
+    {
+        _fCodigo = _fNombre = _fSerie = _fEstado = _fRetencion = "";
+    }
+
+    private List<SerieConfigDto> SeriesFiltradas => _series
+        .Where(s => Coincide(s.Codigo, _fCodigo)
+                    && Coincide(s.Nombre, _fNombre)
+                    && (_fEstado.Length == 0 || s.Estado == _fEstado)
+                    && (_fRetencion.Length == 0
+                        || (_fRetencion == "si") == (s.Retencion != "sin declarar")))
+        .ToList();
+
+    private List<BancoItemDto> BancoFiltrado => _banco
+        .Where(b => Coincide(b.Codigo, _fCodigo)
+                    && Coincide(b.Nombre, _fNombre)
+                    && Coincide(b.Serie, _fSerie)
+                    && (_fEstado.Length == 0 || b.Estado == _fEstado))
+        .ToList();
+
+    /// <summary>Contiene, sin distinguir mayusculas ni acentos.</summary>
+    private static bool Coincide(string valor, string filtro) =>
+        filtro.Length == 0 || Normalizar(valor).Contains(Normalizar(filtro));
 
     private List<SerieConfigDto> _series = new();
     private List<BancoItemDto> _banco = new();
@@ -684,20 +783,8 @@
         _sugerencias = (await Cfg.ListarSugerenciasAsync()).ToList();
     }
 
-    private void Cambiar(string tab) { _tab = tab; _filtro = ""; }
+    private void Cambiar(string tab) { _tab = tab; LimpiarFiltrosSeries(); }
 
-    // El filtro se aplica en memoria: las listas ya vienen acotadas al tenant.
-    private List<SerieConfigDto> Filtradas(List<SerieConfigDto> origen) =>
-        string.IsNullOrWhiteSpace(_filtro)
-            ? origen
-            : origen.Where(s => s.Codigo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)
-                                || s.Nombre.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
-
-    private List<BancoItemDto> FiltradasBanco() =>
-        string.IsNullOrWhiteSpace(_filtro)
-            ? _banco
-            : _banco.Where(b => b.Codigo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)
-                                || b.Nombre.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
 
     private async Task<Guid> Actor()
     {
