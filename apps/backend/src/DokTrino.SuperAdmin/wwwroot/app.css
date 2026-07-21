@@ -507,6 +507,19 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .auth-alert-error { background: oklch(0.95 0.04 25); color: oklch(0.5 0.2 25); border: 1px solid oklch(0.85 0.08 25); }
 .auth-alert-ok { background: oklch(0.95 0.05 150); color: oklch(0.45 0.13 150); border: 1px solid oklch(0.85 0.09 150); }
 .auth-label-row { display: flex; justify-content: space-between; align-items: center; }
+/* Casilla "recordar usuario" del login. */
+.auth-remember {
+  display: flex; align-items: center; gap: 9px;
+  margin-top: 14px; cursor: pointer;
+  font-size: .82rem; font-weight: 500; color: var(--muted-foreground);
+  user-select: none;
+}
+.auth-remember input {
+  width: 17px; height: 17px; flex-shrink: 0;
+  accent-color: var(--primary); cursor: pointer; margin: 0;
+}
+.auth-remember:hover span { color: var(--foreground); }
+
 .auth-forgot { font-size: .72rem; font-weight: 700; color: var(--primary); text-decoration: none; }
 .auth-forgot:hover { text-decoration: underline; }
 .auth-legal { font-size: .76rem; line-height: 1.5; color: var(--muted-foreground); margin: 2px 0 0; }

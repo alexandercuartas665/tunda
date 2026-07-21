@@ -95,6 +95,14 @@
                        visitante. Se resuelve despues del login en /seleccionar-sede,
                        que ya acota por el tenant del usuario. *@
                     <input type="hidden" name="sede" value="" />
+
+                    @* Solo recuerda el usuario, nunca la contrasena. El navegador
+                       lo guarda en este dispositivo; no viaja al servidor. *@
+                    <label class="auth-remember">
+                        <input id="login-recordar" type="checkbox" />
+                        <span>Recordar mi usuario en este dispositivo</span>
+                    </label>
+
                     <button class="auth-submit" type="submit">
                         <span>Ingresar</span>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
@@ -202,8 +210,43 @@
             }
             if (hint) hint.hidden = true;
             window.location = '/connect/google?mode=signup&agency=' + encodeURIComponent(agency);
+        },
+
+        // Recordar usuario: guarda SOLO el identificador en este dispositivo.
+        // La contrasena nunca se persiste, y nada de esto viaja al servidor.
+        CLAVE: 'doktrino.usuario',
+
+        iniciarRecordar: function () {
+            var usuario = document.getElementById('login-usuario');
+            var check = document.getElementById('login-recordar');
+            var form = usuario ? usuario.closest('form') : null;
+            if (!usuario || !check || !form) return;
+
+            var guardado = null;
+            try { guardado = localStorage.getItem(this.CLAVE); } catch (e) { return; }
+
+            if (guardado) {
+                usuario.value = guardado;
+                check.checked = true;
+                // Con el usuario ya puesto, el foco util es la contrasena.
+                var pass = document.getElementById('login-password');
+                if (pass) pass.focus();
+            }
+
+            var self = this;
+            form.addEventListener('submit', function () {
+                try {
+                    if (check.checked && usuario.value.trim()) {
+                        localStorage.setItem(self.CLAVE, usuario.value.trim());
+                    } else {
+                        localStorage.removeItem(self.CLAVE);
+                    }
+                } catch (e) { /* modo privado o storage bloqueado: se ignora */ }
+            });
         }
     };
+
+    doktrinoAuth.iniciarRecordar();
 </script>
 
 @code {
