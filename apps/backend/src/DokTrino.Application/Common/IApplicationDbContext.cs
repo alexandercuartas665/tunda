@@ -57,6 +57,9 @@ public interface IApplicationDbContext
     DbSet<TokenDependencia> TokensDependencia { get; }
     DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental { get; }
     DbSet<FormatoSerie> FormatosSerie { get; }
+    DbSet<CargoSerie> CargosSerie { get; }
+    DbSet<FuncionarioCargo> FuncionariosCargo { get; }
+    DbSet<DirectorioSerie> DirectoriosSerie { get; }
     DbSet<Expediente> Expedientes { get; }
     DbSet<CuestionarioCapacitacion> Cuestionarios { get; }
     DbSet<CuestionarioPregunta> CuestionarioPreguntas { get; }

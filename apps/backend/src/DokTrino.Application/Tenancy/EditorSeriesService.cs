@@ -22,6 +22,17 @@ public sealed record CampoDinamicoDto(Guid Id, string Clave, string Tipo, string
 public sealed record FormatosTipologiaDto(
     Guid Id, string Nombre, IReadOnlyList<string> Formatos, IReadOnlyList<CampoDinamicoDto> Campos);
 
+/// <summary>Cargo con permisos sobre la serie, con sus funcionarios asignados.</summary>
+public sealed record CargoSerieDto(
+    Guid Id, string Nombre,
+    bool PuedeSubir, bool PuedeEditar, bool PuedeEliminar, bool PuedeArchivoCentral,
+    IReadOnlyList<FuncionarioDto> Funcionarios);
+
+public sealed record FuncionarioDto(Guid Id, string Nombre);
+
+/// <summary>Nodo de la plantilla de carpetas de la serie.</summary>
+public sealed record DirectorioSerieDto(Guid Id, Guid? PadreId, string Nombre, int Profundidad);
+
 public interface IEditorSeriesService
 {
     Task<IReadOnlyList<NodoArbolDto>> ArbolAsync(CancellationToken ct = default);
@@ -44,6 +55,20 @@ public interface IEditorSeriesService
     Task<Guid> AgregarCampoAsync(string nivel, Guid id, Guid actor, CancellationToken ct = default);
     Task GuardarCampoAsync(Guid campoId, string clave, string tipo, string valor, Guid actor, CancellationToken ct = default);
     Task EliminarCampoAsync(Guid campoId, CancellationToken ct = default);
+
+    // --- Complementos de la serie: cargos y directorios ---
+
+    Task<IReadOnlyList<CargoSerieDto>> CargosAsync(Guid serieId, CancellationToken ct = default);
+    Task<Guid> AgregarCargoAsync(Guid serieId, string nombre, Guid actor, CancellationToken ct = default);
+    Task AlternarPermisoAsync(Guid cargoId, string permiso, Guid actor, CancellationToken ct = default);
+    Task EliminarCargoAsync(Guid cargoId, CancellationToken ct = default);
+
+    Task AgregarFuncionarioAsync(Guid cargoId, string nombre, Guid actor, CancellationToken ct = default);
+    Task EliminarFuncionarioAsync(Guid funcionarioId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<DirectorioSerieDto>> DirectoriosAsync(Guid serieId, CancellationToken ct = default);
+    Task<Guid> AgregarDirectorioAsync(Guid serieId, Guid? padreId, string nombre, Guid actor, CancellationToken ct = default);
+    Task EliminarDirectorioAsync(Guid directorioId, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -386,6 +411,147 @@ public sealed class EditorSeriesService : IEditorSeriesService
         var campo = await _db.CatalogoCaracteristicas.FirstOrDefaultAsync(c => c.Id == campoId, ct);
         if (campo is null) { return; }
         _db.CatalogoCaracteristicas.Remove(campo);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    // ---------------- Complementos: cargos ----------------
+
+    public async Task<IReadOnlyList<CargoSerieDto>> CargosAsync(Guid serieId, CancellationToken ct = default) =>
+        await _db.CargosSerie.AsNoTracking()
+            .Where(c => c.SerieId == serieId)
+            .OrderBy(c => c.Nombre)
+            .Select(c => new CargoSerieDto(
+                c.Id, c.Nombre, c.PuedeSubir, c.PuedeEditar, c.PuedeEliminar, c.PuedeArchivoCentral,
+                c.Funcionarios.OrderBy(f => f.Nombre).Select(f => new FuncionarioDto(f.Id, f.Nombre)).ToList()))
+            .ToListAsync(ct);
+
+    public async Task<Guid> AgregarCargoAsync(Guid serieId, string nombre, Guid actor, CancellationToken ct = default)
+    {
+        var limpio = (nombre ?? "").Trim();
+        if (limpio.Length == 0) { throw new InvalidOperationException("Escribe el nombre del cargo."); }
+
+        if (await _db.CargosSerie.AnyAsync(c => c.SerieId == serieId && c.Nombre == limpio, ct))
+        {
+            throw new InvalidOperationException($"La serie ya tiene un cargo llamado \"{limpio}\".");
+        }
+
+        // Nace pudiendo subir: es el permiso minimo para que el cargo sirva de algo.
+        var cargo = new CargoSerie
+        {
+            SerieId = serieId, Nombre = limpio,
+            PuedeSubir = true, CreatedBy = actor
+        };
+        _db.CargosSerie.Add(cargo);
+        await _db.SaveChangesAsync(ct);
+        return cargo.Id;
+    }
+
+    public async Task AlternarPermisoAsync(Guid cargoId, string permiso, Guid actor, CancellationToken ct = default)
+    {
+        var cargo = await _db.CargosSerie.FirstOrDefaultAsync(c => c.Id == cargoId, ct);
+        if (cargo is null) { return; }
+
+        switch (permiso.ToLowerInvariant())
+        {
+            case "subir": cargo.PuedeSubir = !cargo.PuedeSubir; break;
+            case "editar": cargo.PuedeEditar = !cargo.PuedeEditar; break;
+            case "eliminar": cargo.PuedeEliminar = !cargo.PuedeEliminar; break;
+            case "central": cargo.PuedeArchivoCentral = !cargo.PuedeArchivoCentral; break;
+            default: return;
+        }
+
+        cargo.UpdatedBy = actor;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task EliminarCargoAsync(Guid cargoId, CancellationToken ct = default)
+    {
+        var cargo = await _db.CargosSerie.FirstOrDefaultAsync(c => c.Id == cargoId, ct);
+        if (cargo is null) { return; }
+        _db.CargosSerie.Remove(cargo);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task AgregarFuncionarioAsync(Guid cargoId, string nombre, Guid actor, CancellationToken ct = default)
+    {
+        var limpio = (nombre ?? "").Trim();
+        if (limpio.Length == 0) { throw new InvalidOperationException("Escribe el nombre del funcionario."); }
+
+        if (await _db.FuncionariosCargo.AnyAsync(f => f.CargoSerieId == cargoId && f.Nombre == limpio, ct))
+        {
+            throw new InvalidOperationException($"\"{limpio}\" ya esta en este cargo.");
+        }
+
+        _db.FuncionariosCargo.Add(new FuncionarioCargo { CargoSerieId = cargoId, Nombre = limpio, CreatedBy = actor });
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task EliminarFuncionarioAsync(Guid funcionarioId, CancellationToken ct = default)
+    {
+        var f = await _db.FuncionariosCargo.FirstOrDefaultAsync(x => x.Id == funcionarioId, ct);
+        if (f is null) { return; }
+        _db.FuncionariosCargo.Remove(f);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    // ---------------- Complementos: directorios ----------------
+
+    public async Task<IReadOnlyList<DirectorioSerieDto>> DirectoriosAsync(Guid serieId, CancellationToken ct = default)
+    {
+        var todos = await _db.DirectoriosSerie.AsNoTracking()
+            .Where(d => d.SerieId == serieId)
+            .OrderBy(d => d.Orden).ThenBy(d => d.Nombre)
+            .Select(d => new { d.Id, d.PadreId, d.Nombre })
+            .ToListAsync(ct);
+
+        // Se aplana en orden de dibujo, con la profundidad para indentar.
+        var filas = new List<DirectorioSerieDto>();
+
+        void Recorrer(Guid? padre, int nivel)
+        {
+            foreach (var d in todos.Where(x => x.PadreId == padre))
+            {
+                filas.Add(new DirectorioSerieDto(d.Id, d.PadreId, d.Nombre, nivel));
+                Recorrer(d.Id, nivel + 1);
+            }
+        }
+
+        Recorrer(null, 0);
+        return filas;
+    }
+
+    public async Task<Guid> AgregarDirectorioAsync(
+        Guid serieId, Guid? padreId, string nombre, Guid actor, CancellationToken ct = default)
+    {
+        var limpio = (nombre ?? "").Trim();
+        if (limpio.Length == 0) { throw new InvalidOperationException("Escribe el nombre del directorio."); }
+
+        if (await _db.DirectoriosSerie.AnyAsync(
+                d => d.SerieId == serieId && d.PadreId == padreId && d.Nombre == limpio, ct))
+        {
+            throw new InvalidOperationException($"Ya existe un directorio \"{limpio}\" en ese nivel.");
+        }
+
+        var orden = await _db.DirectoriosSerie
+            .Where(d => d.SerieId == serieId && d.PadreId == padreId)
+            .MaxAsync(d => (int?)d.Orden, ct) ?? 0;
+
+        var dir = new DirectorioSerie
+        {
+            SerieId = serieId, PadreId = padreId, Nombre = limpio,
+            Orden = orden + 1, CreatedBy = actor
+        };
+        _db.DirectoriosSerie.Add(dir);
+        await _db.SaveChangesAsync(ct);
+        return dir.Id;
+    }
+
+    public async Task EliminarDirectorioAsync(Guid directorioId, CancellationToken ct = default)
+    {
+        // La cascada del modelo se lleva los subdirectorios.
+        var dir = await _db.DirectoriosSerie.FirstOrDefaultAsync(d => d.Id == directorioId, ct);
+        if (dir is null) { return; }
+        _db.DirectoriosSerie.Remove(dir);
         await _db.SaveChangesAsync(ct);
     }
 

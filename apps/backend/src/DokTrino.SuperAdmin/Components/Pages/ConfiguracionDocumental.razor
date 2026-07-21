@@ -275,6 +275,102 @@
                     @RenderCampos(_formatos.Campos)
                 }
             </div>
+
+            @* --- Columna 3: complementos, solo con una serie seleccionada --- *@
+            @if (_sel is not null && _sel.Nivel == "SERIE")
+            {
+                <div class="ed-comp">
+                    <div class="ed-comp-t">&#129513; Complementos de la serie</div>
+                    <div class="ed-comp-s">Configuracion con permiso elevado. La aplica el modulo Archivo Central.</div>
+
+                    <div class="ed-subtabs">
+                        <button class="ed-subtab @(_compTab == "cargos" ? "on" : "")" @onclick='() => _compTab = "cargos"'>&#128274; Cargos</button>
+                        <button class="ed-subtab @(_compTab == "dirs" ? "on" : "")" @onclick='() => _compTab = "dirs"'>&#128450; Directorios</button>
+                    </div>
+
+                    @if (_compTab == "cargos")
+                    {
+                        <div class="ed-alta">
+                            <input class="ed-input" placeholder="Nuevo cargo..." @bind="_cargoNuevo" />
+                            <button class="ed-alta-btn" @onclick="AgregarCargo">&#65291;</button>
+                        </div>
+
+                        @if (_cargos.Count == 0)
+                        {
+                            <div class="ed-sin-campos">Sin cargos definidos para esta serie.</div>
+                        }
+
+                        @foreach (var c in _cargos)
+                        {
+                            <div class="ed-cargo">
+                                <div class="ed-cargo-h">
+                                    <span>&#128084;</span>
+                                    <span class="nm">@c.Nombre</span>
+                                    <span class="ed-quitar" @onclick="() => EliminarCargo(c)">&#10005;</span>
+                                </div>
+
+                                <div class="ed-perms">
+                                    @foreach (var p in Permisos)
+                                    {
+                                        <span class="ed-perm @(TienePermiso(c, p.Clave) ? "on" : "")"
+                                              @onclick="() => AlternarPermiso(c, p.Clave)">@p.Etiqueta</span>
+                                    }
+                                </div>
+
+                                @if (c.Funcionarios.Count > 0)
+                                {
+                                    <div class="ed-funcs">
+                                        @foreach (var f in c.Funcionarios)
+                                        {
+                                            <span class="ed-func">
+                                                @f.Nombre
+                                                <span class="x" @onclick="() => EliminarFuncionario(f)">&#10005;</span>
+                                            </span>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="ed-alta">
+                                    <input class="ed-input" style="font-size: 11.5px;" placeholder="Agregar funcionario..."
+                                           value="@(_funcNuevo.TryGetValue(c.Id, out var v) ? v : "")"
+                                           @onchange="e => _funcNuevo[c.Id] = e.Value?.ToString() ?? string.Empty" />
+                                    <button class="ed-alta-btn ghost" @onclick="() => AgregarFuncionario(c)">&#65291;</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="ed-alta">
+                            <input class="ed-input" placeholder="Directorio raiz..." @bind="_dirNuevo" />
+                            <button class="ed-alta-btn" @onclick="() => AgregarDirectorio(null)">&#65291;</button>
+                        </div>
+
+                        @if (_directorios.Count == 0)
+                        {
+                            <div class="ed-sin-campos">Sin plantilla de carpetas para esta serie.</div>
+                        }
+
+                        @foreach (var d in _directorios)
+                        {
+                            <div class="ed-dir" style="padding-left: @(d.Profundidad * 16 + 10)px">
+                                <span>&#128450;</span>
+                                <span class="nm">@d.Nombre</span>
+                                <input class="ed-sub" placeholder="+ sub"
+                                       value="@(_subdirNuevo.TryGetValue(d.Id, out var sv) ? sv : "")"
+                                       @onchange="e => _subdirNuevo[d.Id] = e.Value?.ToString() ?? string.Empty" />
+                                <span class="ed-mas" @onclick="() => AgregarDirectorio(d.Id)">&#65291;</span>
+                                <span class="ed-quitar" @onclick="() => EliminarDirectorio(d)">&#10005;</span>
+                            </div>
+                        }
+
+                        <div class="ed-comp-nota">
+                            Al abrir un expediente de esta serie, el Archivo Central puede materializar
+                            esta estructura como carpetas reales.
+                        </div>
+                    }
+                </div>
+            }
         </div>
     </div>
 }
@@ -369,6 +465,30 @@
 }
 
 <style>
+    /* --- Complementos de la serie (3a columna) --- */
+    .ed-comp { flex:1; min-width:330px; max-width:400px; border-left:1px solid var(--chrome-border); padding:16px 18px; overflow:auto; background:#fbfaf6; }
+    .ed-comp-t { font-size:13px; font-weight:700; color:#1f2433; margin-bottom:4px; }
+    .ed-comp-s { font-size:11px; line-height:1.45; color:var(--chrome-label); margin-bottom:12px; }
+    .ed-subtabs { display:flex; gap:6px; margin-bottom:14px; }
+    .ed-subtab { cursor:pointer; border:1px solid #e6e2d6; background:#fff; color:#6b7488; border-radius:9px; padding:7px 12px; font-size:11.5px; font-weight:700; }
+    .ed-subtab.on { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .ed-alta { display:flex; gap:6px; margin-bottom:11px; }
+    .ed-alta-btn { border:0; cursor:pointer; background:var(--primary); color:#fff; border-radius:9px; padding:8px 13px; font-size:12px; font-weight:700; flex-shrink:0; }
+    .ed-alta-btn.ghost { border:1px solid oklch(0.87 0.07 237); background:var(--primary-soft); color:var(--primary); padding:6px 11px; font-size:11px; }
+    .ed-cargo { background:#fff; border:1px solid #eef1f7; border-radius:12px; padding:12px; margin-bottom:10px; }
+    .ed-cargo-h { display:flex; align-items:center; gap:7px; margin-bottom:9px; }
+    .ed-cargo-h .nm { font-size:12.5px; font-weight:700; color:#1f2433; flex:1; }
+    .ed-perms { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+    .ed-perm { cursor:pointer; border:1px solid #e3e7f2; background:#fff; color:#8a93a8; border-radius:8px; padding:4px 10px; font-size:11px; font-weight:600; user-select:none; }
+    .ed-perm.on { background:var(--primary-soft); border-color:oklch(0.87 0.07 237); color:var(--primary-deep); }
+    .ed-funcs { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+    .ed-func { display:inline-flex; align-items:center; gap:5px; background:var(--primary-soft); color:var(--primary-deep); font-size:11px; font-weight:600; padding:4px 9px; border-radius:8px; }
+    .ed-func .x { cursor:pointer; color:oklch(0.78 0.11 237); }
+    .ed-dir { display:flex; align-items:center; gap:7px; padding:7px 8px; border-bottom:1px solid #f4f6fb; }
+    .ed-dir .nm { font-size:12px; font-weight:600; color:#37415c; flex:1; min-width:0; }
+    .ed-sub { width:88px; flex-shrink:0; border:1px dashed #cdd5e6; background:#fff; border-radius:7px; padding:4px 7px; font-size:10.5px; color:#37415c; outline:none; }
+    .ed-comp-nota { margin-top:14px; font-size:11px; line-height:1.5; color:var(--chrome-label); }
+
     /* --- Editor de series --- */
     .ed-modal { position:fixed; top:5vh; left:50%; transform:translateX(-50%); width:1180px; max-width:96vw; height:88vh; z-index:1950; background:#faf9f5; border-radius:20px; box-shadow:0 30px 80px rgba(0,0,0,.34); display:flex; flex-direction:column; overflow:hidden; }
     .ed-head { background:linear-gradient(135deg,var(--primary-deep),var(--primary)); color:#fff; padding:16px 22px; display:flex; align-items:center; gap:12px; flex-shrink:0; }
@@ -575,6 +695,12 @@
         _carac = null;
         _formatos = null;
 
+        if (n.Nivel == "SERIE")
+        {
+            _compTab = "cargos";
+            await CargarComplementos(n.Id);
+        }
+
         if (n.Nivel == "TIPOLOGIA")
         {
             _formatos = await Editor.FormatosAsync(n.Id);
@@ -659,4 +785,84 @@
 
     private async Task EliminarCampo(CampoDinamicoDto c) => await Ejecutar(async () =>
         await Editor.EliminarCampoAsync(c.Id));
+
+    // ---- Complementos de la serie ----
+
+    private static readonly (string Clave, string Etiqueta)[] Permisos =
+    [
+        ("subir", "Subir"), ("editar", "Editar"),
+        ("eliminar", "Eliminar"), ("central", "Archivo Central")
+    ];
+
+    private string _compTab = "cargos";
+    private List<CargoSerieDto> _cargos = new();
+    private List<DirectorioSerieDto> _directorios = new();
+    private string _cargoNuevo = "", _dirNuevo = "";
+    private readonly Dictionary<Guid, string> _funcNuevo = new();
+    private readonly Dictionary<Guid, string> _subdirNuevo = new();
+
+    private static bool TienePermiso(CargoSerieDto c, string clave) => clave switch
+    {
+        "subir" => c.PuedeSubir,
+        "editar" => c.PuedeEditar,
+        "eliminar" => c.PuedeEliminar,
+        "central" => c.PuedeArchivoCentral,
+        _ => false
+    };
+
+    private async Task CargarComplementos(Guid serieId)
+    {
+        _cargos = (await Editor.CargosAsync(serieId)).ToList();
+        _directorios = (await Editor.DirectoriosAsync(serieId)).ToList();
+    }
+
+    /// <summary>Ejecuta y refresca solo los complementos, sin recargar el arbol.</summary>
+    private async Task EjecutarComp(Func<Task> accion)
+    {
+        _edError = null;
+        try
+        {
+            await accion();
+            if (_sel is not null) { await CargarComplementos(_sel.Id); }
+        }
+        catch (InvalidOperationException ex) { _edError = ex.Message; }
+    }
+
+    private async Task AgregarCargo() => await EjecutarComp(async () =>
+    {
+        if (_sel is null) { return; }
+        await Editor.AgregarCargoAsync(_sel.Id, _cargoNuevo, await Actor());
+        _cargoNuevo = "";
+    });
+
+    private async Task AlternarPermiso(CargoSerieDto c, string permiso) => await EjecutarComp(async () =>
+        await Editor.AlternarPermisoAsync(c.Id, permiso, await Actor()));
+
+    private async Task EliminarCargo(CargoSerieDto c) => await EjecutarComp(async () =>
+        await Editor.EliminarCargoAsync(c.Id));
+
+    private async Task AgregarFuncionario(CargoSerieDto c) => await EjecutarComp(async () =>
+    {
+        var nombre = _funcNuevo.TryGetValue(c.Id, out var v) ? v : "";
+        await Editor.AgregarFuncionarioAsync(c.Id, nombre, await Actor());
+        _funcNuevo[c.Id] = "";
+    });
+
+    private async Task EliminarFuncionario(FuncionarioDto f) => await EjecutarComp(async () =>
+        await Editor.EliminarFuncionarioAsync(f.Id));
+
+    private async Task AgregarDirectorio(Guid? padreId) => await EjecutarComp(async () =>
+    {
+        if (_sel is null) { return; }
+        var nombre = padreId is Guid p
+            ? (_subdirNuevo.TryGetValue(p, out var sv) ? sv : "")
+            : _dirNuevo;
+
+        await Editor.AgregarDirectorioAsync(_sel.Id, padreId, nombre, await Actor());
+
+        if (padreId is Guid pid) { _subdirNuevo[pid] = ""; } else { _dirNuevo = ""; }
+    });
+
+    private async Task EliminarDirectorio(DirectorioSerieDto d) => await EjecutarComp(async () =>
+        await Editor.EliminarDirectorioAsync(d.Id));
 }

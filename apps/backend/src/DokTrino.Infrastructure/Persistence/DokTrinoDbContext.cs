@@ -90,6 +90,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TokenDependencia> TokensDependencia => Set<TokenDependencia>();
     public DbSet<RespuestaTablaDocumental> RespuestasTablaDocumental => Set<RespuestaTablaDocumental>();
     public DbSet<FormatoSerie> FormatosSerie => Set<FormatoSerie>();
+    public DbSet<CargoSerie> CargosSerie => Set<CargoSerie>();
+    public DbSet<FuncionarioCargo> FuncionariosCargo => Set<FuncionarioCargo>();
+    public DbSet<DirectorioSerie> DirectoriosSerie => Set<DirectorioSerie>();
     public DbSet<Expediente> Expedientes => Set<Expediente>();
     public DbSet<CuestionarioCapacitacion> Cuestionarios => Set<CuestionarioCapacitacion>();
     public DbSet<CuestionarioPregunta> CuestionarioPreguntas => Set<CuestionarioPregunta>();
@@ -837,6 +840,28 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Padre).WithMany(p => p.Hijos).HasForeignKey(x => x.PadreId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.CodigoTopografico }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.PadreId });
+        });
+
+        modelBuilder.Entity<CargoSerie>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(160).IsRequired();
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.SerieId, x.Nombre }).IsUnique();
+        });
+
+        modelBuilder.Entity<FuncionarioCargo>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.HasOne(x => x.CargoSerie).WithMany(c => c.Funcionarios).HasForeignKey(x => x.CargoSerieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.CargoSerieId, x.Nombre }).IsUnique();
+        });
+
+        modelBuilder.Entity<DirectorioSerie>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            b.HasOne(x => x.Serie).WithMany().HasForeignKey(x => x.SerieId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Padre).WithMany(p => p.Hijos).HasForeignKey(x => x.PadreId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.SerieId, x.PadreId, x.Nombre }).IsUnique();
         });
 
         modelBuilder.Entity<Expediente>(b =>
