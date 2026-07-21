@@ -163,12 +163,20 @@
                     <button class="ed-add-serie" @onclick="AgregarSerie">&#65291; Serie</button>
                 </div>
 
+                @* Busca en los tres niveles; lo que encuentra viaja con su rama. *@
+                <input class="ed-buscar" @bind="_filtroArbol" @bind:event="oninput"
+                       placeholder="Buscar serie, subserie o tipologia..." />
+
                 @if (_arbol.Count == 0)
                 {
                     <div class="dkd-empty">Sin series. Crea la primera con el boton de arriba.</div>
                 }
+                else if (ArbolFiltrado.Count == 0)
+                {
+                    <div class="dkd-empty">Nada coincide con "@_filtroArbol".</div>
+                }
 
-                @foreach (var n in _arbol)
+                @foreach (var n in ArbolFiltrado)
                 {
                     <div class="ed-nodo @(_selId == n.Id ? "on" : "")"
                          style="padding-left: @(n.Profundidad * 16 + 8)px"
@@ -498,6 +506,8 @@
     .ed-head .cls { cursor:pointer; font-size:20px; color:oklch(0.88 0.05 237); }
     .ed-body { flex:1; display:flex; min-height:0; }
     .ed-arbol { width:290px; flex-shrink:0; border-right:1px solid var(--chrome-border); padding:14px; overflow:auto; }
+    .ed-buscar { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:8px 11px; font-size:12px; font-weight:500; color:#37415c; outline:none; margin-bottom:10px; }
+    .ed-buscar:focus { border-color:var(--primary); }
     .ed-arbol-h { display:flex; align-items:center; margin-bottom:12px; font-size:12px; font-weight:700; color:#9aa3bd; text-transform:uppercase; letter-spacing:.5px; }
     .ed-add-serie { margin-left:auto; border:0; cursor:pointer; background:var(--primary); color:#fff; border-radius:9px; padding:7px 13px; font-size:11.5px; font-weight:700; box-shadow:0 5px 14px var(--primary-shadow); }
     .ed-nodo { display:flex; align-items:center; gap:7px; padding:6px 8px; border-radius:9px; cursor:pointer; }
@@ -666,10 +676,86 @@
         _ => "📄"
     };
 
+    private string _filtroArbol = "";
+
+    /// <summary>
+    /// Filtra el arbol por los tres niveles conservando la rama completa de cada
+    /// coincidencia: hacia arriba sus ancestros, para saber de que serie cuelga
+    /// una tipologia; y hacia abajo sus descendientes, para ver que contiene una
+    /// serie encontrada. Sin los ancestros, una tipologia suelta no dice nada.
+    /// </summary>
+    private List<NodoArbolDto> ArbolFiltrado
+    {
+        get
+        {
+            var q = Normalizar(_filtroArbol);
+            if (q.Length == 0) { return _arbol; }
+
+            var coincide = _arbol
+                .Where(n => Normalizar(n.Nombre).Contains(q) || Normalizar(n.Codigo).Contains(q))
+                .ToList();
+            if (coincide.Count == 0) { return new(); }
+
+            var visibles = new HashSet<Guid>();
+            var porId = _arbol.ToDictionary(n => n.Id);
+
+            foreach (var n in coincide)
+            {
+                visibles.Add(n.Id);
+
+                // Ancestros: la ruta hasta la serie raiz.
+                var padre = n.PadreId;
+                while (padre is Guid p && porId.TryGetValue(p, out var nodo))
+                {
+                    if (!visibles.Add(p)) { break; }   // rama ya recorrida
+                    padre = nodo.PadreId;
+                }
+
+                // Descendientes: lo que cuelga de la coincidencia.
+                AgregarDescendientes(n.Id, visibles);
+            }
+
+            // Se respeta el orden original de dibujo del arbol.
+            return _arbol.Where(n => visibles.Contains(n.Id)).ToList();
+        }
+    }
+
+    private void AgregarDescendientes(Guid padreId, HashSet<Guid> destino)
+    {
+        foreach (var hijo in _arbol.Where(x => x.PadreId == padreId))
+        {
+            if (destino.Add(hijo.Id))
+            {
+                AgregarDescendientes(hijo.Id, destino);
+            }
+        }
+    }
+
+    /// <summary>Compara sin distinguir mayusculas ni acentos (Narino / Nariño).</summary>
+    private static string Normalizar(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) { return ""; }
+
+        var descompuesto = texto.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(descompuesto.Length);
+
+        foreach (var c in descompuesto)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+
     private async Task AbrirEditor()
     {
         _editorOpen = true;
         _edError = null;
+        _filtroArbol = "";
         await RecargarArbol();
     }
 
