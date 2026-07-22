@@ -18,6 +18,12 @@ public interface ITrdAdminService
     Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default);
 
+    // Personas asignadas a una dependencia. Varias por dependencia: es lo normal
+    // que una oficina tenga responsable, revisor y apoyo diligenciando la TRD.
+    Task<IReadOnlyList<ColaboradorDto>> ColaboradoresAsync(Guid dependenciaId, CancellationToken ct = default);
+    Task<ColaboradorDto?> AgregarColaboradorAsync(CrearColaboradorRequest req, Guid actor, CancellationToken ct = default);
+    Task<bool> EliminarColaboradorAsync(Guid id, Guid actor, CancellationToken ct = default);
+
     // Invitacion por token (lo consume el visor cliente 2.D2)
     Task<TokenGeneradoDto?> GenerarTokenAsync(Guid dependenciaId, string? email, string baseUrl, Guid actor, CancellationToken ct = default);
 

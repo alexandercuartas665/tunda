@@ -82,7 +82,8 @@ public sealed class TrdAdminService : ITrdAdminService
     public async Task<IReadOnlyList<DependenciaDto>> ArbolDependenciasAsync(Guid trdId, CancellationToken ct = default) =>
         await _db.Dependencias.AsNoTracking().Where(d => d.TrdId == trdId)
             .OrderBy(d => d.Nivel).ThenBy(d => d.Orden)
-            .Select(d => new DependenciaDto(d.Id, d.PadreId, d.Nivel, d.Orden, d.NombreCargo, d.Codigo, d.Estado))
+            .Select(d => new DependenciaDto(d.Id, d.PadreId, d.Nivel, d.Orden, d.NombreCargo, d.Codigo, d.Estado,
+                _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id)))
             .ToListAsync(ct);
 
     public async Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default)
@@ -117,6 +118,53 @@ public sealed class TrdAdminService : ITrdAdminService
         var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (dep is null) { return false; }
         _db.Dependencias.Remove(dep);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<ColaboradorDto>> ColaboradoresAsync(Guid dependenciaId, CancellationToken ct = default) =>
+        await _db.ColaboradoresDependencia.AsNoTracking()
+            .Where(c => c.DependenciaId == dependenciaId)
+            .OrderBy(c => c.Nombre)
+            .Select(c => new ColaboradorDto(c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol))
+            .ToListAsync(ct);
+
+    public async Task<ColaboradorDto?> AgregarColaboradorAsync(CrearColaboradorRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var nombre = (req.Nombre ?? "").Trim();
+        var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        var rol = string.IsNullOrWhiteSpace(req.Rol) ? "RESPONSABLE" : req.Rol.Trim();
+        if (nombre.Length == 0 || email.Length == 0)
+        {
+            throw new InvalidOperationException("Nombre y correo de la persona son obligatorios.");
+        }
+        if (!await _db.Dependencias.AnyAsync(d => d.Id == req.DependenciaId, ct))
+        {
+            throw new InvalidOperationException("La dependencia no existe.");
+        }
+        // El indice unico (dependencia, email) ya lo impide; avisamos antes para
+        // no devolver un error de base de datos a la pantalla.
+        if (await _db.ColaboradoresDependencia.AnyAsync(c => c.DependenciaId == req.DependenciaId && c.Email == email, ct))
+        {
+            throw new InvalidOperationException("Esa persona ya esta asignada a la dependencia.");
+        }
+
+        var col = new ColaboradorDependencia
+        {
+            TenantId = tenantId, DependenciaId = req.DependenciaId,
+            Nombre = nombre, Email = email, Rol = rol
+        };
+        _db.ColaboradoresDependencia.Add(col);
+        await _db.SaveChangesAsync(ct);
+        return new ColaboradorDto(col.Id, col.DependenciaId, col.Nombre, col.Email, col.Rol);
+    }
+
+    public async Task<bool> EliminarColaboradorAsync(Guid id, Guid actor, CancellationToken ct = default)
+    {
+        var col = await _db.ColaboradoresDependencia.FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (col is null) { return false; }
+        _db.ColaboradoresDependencia.Remove(col);
         await _db.SaveChangesAsync(ct);
         return true;
     }

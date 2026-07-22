@@ -184,8 +184,8 @@
 @if (_sel is not null)
 {
     <div class="doktrino-drawer-scrim" style="display: block;" @onclick="Cerrar"></div>
-    <div style="position: fixed; inset: 0; z-index: 1950; display: flex; align-items: flex-start; justify-content: center; padding: 34px 20px; overflow: auto; pointer-events: none;">
-        <div style="width: 1000px; max-width: 100%; background: #faf9f5; border-radius: 20px; box-shadow: 0 30px 80px rgba(0,0,0,.32); pointer-events: auto; padding: 20px;">
+    <div style="position: fixed; inset: 0; z-index: 1950; display: flex; align-items: center; justify-content: center; padding: 18px; pointer-events: none;">
+        <div class="trx-modal-xl">
 
             <div class="trx-detalle-hero">
                 <div class="row1">
@@ -210,12 +210,19 @@
                 @if (_cabOpen)
                 {
                     <div class="trx-acc-b">
-                        <div class="trx-grid5">
+                        <div class="trx-grid8">
                             <div><div class="trx-lbl">Estado</div><div class="trx-ro">@_sel.Estado</div></div>
                             <div><div class="trx-lbl">#Id Tabla Documental</div><div class="trx-ro">@_sel.Consecutivo</div></div>
                             <div><div class="trx-lbl">Fecha</div><div class="trx-ro">@(_sel.Fecha?.ToLocalTime().ToString("dd/MM/yyyy") ?? "-")</div></div>
                             <div><div class="trx-lbl">Fecha inicial</div><div class="trx-ro">@Fecha(_sel.FechaInicio)</div></div>
                             <div><div class="trx-lbl">Fecha final</div><div class="trx-ro">@Fecha(_sel.FechaFin)</div></div>
+                            <div><div class="trx-lbl">Segmento</div><div class="trx-ro">@(_sel.Segmento ?? "-")</div></div>
+                            <div><div class="trx-lbl">Dependencias</div><div class="trx-ro">@_sel.Dependencias</div></div>
+                            <div><div class="trx-lbl">Documentos</div><div class="trx-ro">@_sel.Documentos</div></div>
+                            <div style="grid-column: 1 / -1;">
+                                <div class="trx-lbl">Observacion</div>
+                                <div class="trx-ro">@(string.IsNullOrWhiteSpace(_sel.Observaciones) ? "-" : _sel.Observaciones)</div>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap;">
                             <a class="trx-btn ghost" href="@($"/api/doktrino/trd/{_sel.Id}/excel")" target="_blank">Exportar matriz (Excel AGN)</a>
@@ -243,36 +250,113 @@
                 @if (_depOpen)
                 {
                     <div class="trx-acc-b">
-                        @if (_deps.Count == 0)
+                        @if (_depError is not null)
                         {
-                            <div class="trx-empty">Sin dependencias. Agrega la primera abajo.</div>
+                            <div class="trx-error">@_depError</div>
                         }
-                        @foreach (var d in _deps)
-                        {
-                            <div class="trd-row" style="display: flex; align-items: center; gap: 10px;">
-                                <span style="padding-left: @(d.Nivel * 16)px;" class="mono">@d.Codigo</span>
-                                <span>@d.NombreCargo</span>
-                                <span class="trd-muted">nivel @d.Nivel &middot; @d.Estado</span>
-                                <span style="margin-left: auto; display: flex; gap: 6px;">
-                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => Token(d.Id)">Token</button>
-                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => DelDep(d.Id)">&times;</button>
-                                </span>
-                            </div>
-                            @if (_tokenUrls.TryGetValue(d.Id, out var url))
-                            {
-                                <div class="trd-muted" style="padding: 4px 0 8px;">
-                                    Enlace para el colaborador: <a href="@url" target="_blank">@Trunc(url)</a>
+                        <div class="dep-split">
+
+                            @* --- Columna 4/12: jerarquia con scroll --- *@
+                            <div class="dep-arbol">
+                                <div class="dep-col-h">
+                                    <span>Organigrama</span>
+                                    <button class="trx-btn mini" @onclick="() => AbrirAlta(null)">&#43; Raiz</button>
                                 </div>
-                            }
-                        }
-                        <div class="trd-form" style="margin-top: 12px;">
-                            <select class="form-select form-select-sm" @bind="_ndPadre">
-                                <option value="">(raiz)</option>
-                                @foreach (var d in _deps) { <option value="@d.Id">@d.Codigo @d.NombreCargo</option> }
-                            </select>
-                            <input class="form-control form-control-sm" @bind="_nd.Codigo" placeholder="110" />
-                            <input class="form-control form-control-sm" @bind="_nd.NombreCargo" placeholder="Secretaria General" />
-                            <button class="trx-btn" @onclick="AddDep">+ Dependencia</button>
+                                <div class="dep-arbol-scroll">
+                                    @if (_deps.Count == 0)
+                                    {
+                                        <div class="trx-empty">Sin dependencias todavia.</div>
+                                    }
+                                    @foreach (var d in Jerarquia())
+                                    {
+                                        <div class="dep-nodo @(_depSel?.Id == d.Id ? "on" : "")"
+                                             style="padding-left: @(d.Nivel * 14 + 8)px"
+                                             @onclick="() => SeleccionarDep(d)">
+                                            <span class="cod mono">@d.Codigo</span>
+                                            <span class="nom">@d.NombreCargo</span>
+                                            @if (d.Personas > 0)
+                                            {
+                                                <span class="pers">&#128101; @d.Personas</span>
+                                            }
+                                            <span class="mas" title="Agregar sub-dependencia"
+                                                  @onclick:stopPropagation="true" @onclick="() => AbrirAlta(d.Id)">&#43;</span>
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (_altaAbierta)
+                                {
+                                    <div class="dep-alta">
+                                        <div class="dep-alta-t">
+                                            @if (_ndPadreNombre is null)
+                                            {
+                                                <span>Nueva dependencia raiz</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Bajo <b>@_ndPadreNombre</b></span>
+                                            }
+                                        </div>
+                                        <input class="dep-in cod" @bind="_nd.Codigo" placeholder="Cod." />
+                                        <input class="dep-in" @bind="_nd.NombreCargo" placeholder="Nombre de la dependencia" />
+                                        <div class="dep-alta-btns">
+                                            <button class="trx-btn mini" @onclick="AddDep">Agregar</button>
+                                            <button class="trx-btn ghost mini" @onclick="CerrarAlta">Cancelar</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            @* --- Columna 8/12: tabla de todas las dependencias --- *@
+                            <div class="dep-tabla">
+                                <div class="dep-col-h">
+                                    <span>Dependencias &middot; @_deps.Count</span>
+                                    <span class="dep-hint">Abre una para asignar personas</span>
+                                </div>
+                                <div class="dep-tabla-scroll">
+                                    <table class="dep-tb">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 90px;">Codigo</th>
+                                                <th>Dependencia</th>
+                                                <th style="width: 70px;">Nivel</th>
+                                                <th style="width: 90px;">Personas</th>
+                                                <th style="width: 90px;">Estado</th>
+                                                <th style="width: 170px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @if (_deps.Count == 0)
+                                            {
+                                                <tr><td colspan="6" class="vacio">Sin dependencias. Crea la raiz del organigrama.</td></tr>
+                                            }
+                                            @foreach (var d in Jerarquia())
+                                            {
+                                                <tr class="@(_depSel?.Id == d.Id ? "on" : "")" @onclick="() => AbrirPersonas(d)">
+                                                    <td class="mono">@d.Codigo</td>
+                                                    <td><span style="padding-left: @(d.Nivel * 12)px;">@d.NombreCargo</span></td>
+                                                    <td>@d.Nivel</td>
+                                                    <td>@d.Personas</td>
+                                                    <td><span class="dep-badge">@d.Estado</span></td>
+                                                    <td class="acc" @onclick:stopPropagation="true">
+                                                        <button class="trx-btn ghost mini" @onclick="() => AbrirPersonas(d)">Personas</button>
+                                                        <button class="trx-btn ghost mini" @onclick="() => Token(d.Id)">Token</button>
+                                                        <button class="trx-btn danger mini" @onclick="() => DelDep(d.Id)">&times;</button>
+                                                    </td>
+                                                </tr>
+                                                @if (_tokenUrls.TryGetValue(d.Id, out var url))
+                                                {
+                                                    <tr class="tok">
+                                                        <td colspan="6">
+                                                            Enlace del colaborador: <a href="@url" target="_blank">@Trunc(url)</a>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 }
@@ -281,7 +365,147 @@
     </div>
 }
 
+@* ===================== Personas de una dependencia ===================== *@
+@if (_personasDe is not null)
+{
+    <div class="doktrino-drawer-scrim" style="display: block; z-index: 1990;" @onclick="CerrarPersonas"></div>
+    <div style="position: fixed; inset: 0; z-index: 1995; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+        <div class="per-modal">
+            <div class="per-h">
+                <div>
+                    <div class="per-t">Personas de la dependencia</div>
+                    <div class="per-sub"><span class="mono">@_personasDe.Codigo</span> &middot; @_personasDe.NombreCargo</div>
+                </div>
+                <span class="per-x" @onclick="CerrarPersonas">&#10005;</span>
+            </div>
+
+            <div class="per-b">
+                @if (_perError is not null)
+                {
+                    <div class="trx-error">@_perError</div>
+                }
+                <div class="per-nota">
+                    Puedes asignar varias personas a la misma dependencia. Cada una recibe su propio
+                    enlace de trabajo cuando se emite el token.
+                </div>
+
+                @if (_personas.Count == 0)
+                {
+                    <div class="trx-empty">Nadie asignado todavia.</div>
+                }
+                @foreach (var p in _personas)
+                {
+                    <div class="per-row">
+                        <span class="per-ini">@Iniciales(p.Nombre)</span>
+                        <div class="per-datos">
+                            <div class="per-nom">@p.Nombre</div>
+                            <div class="per-mail">@p.Email</div>
+                        </div>
+                        <span class="per-rol">@p.Rol</span>
+                        <button class="trx-btn danger mini" @onclick="() => DelPersona(p.Id)">&times;</button>
+                    </div>
+                }
+
+                <div class="per-alta">
+                    <input class="dep-in" @bind="_np.Nombre" placeholder="Nombre de la persona" />
+                    <input class="dep-in" @bind="_np.Email" placeholder="Correo electronico" />
+                    <select class="dep-in" @bind="_np.Rol">
+                        <option value="RESPONSABLE">Responsable</option>
+                        <option value="REVISOR">Revisor</option>
+                        <option value="APOYO">Apoyo</option>
+                    </select>
+                    <button class="trx-btn" @onclick="AddPersona">&#43; Asignar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
+    /* Modal de la transaccion: casi pantalla completa. */
+    .trx-modal-xl { width:97vw; height:94vh; background:#faf9f5; border-radius:18px;
+                    box-shadow:0 30px 80px rgba(0,0,0,.32); pointer-events:auto;
+                    padding:18px; overflow:auto; }
+
+    /* Cabecera identificatoria en 8 columnas. */
+    .trx-grid8 { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:14px 18px; }
+    @@media (max-width: 1500px) { .trx-grid8 { grid-template-columns:repeat(4, minmax(0,1fr)); } }
+    @@media (max-width: 800px)  { .trx-grid8 { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+
+    /* Dependencias: 4 columnas de arbol + 8 de tabla. */
+    .dep-split { display:grid; grid-template-columns:4fr 8fr; gap:16px; align-items:start; }
+    @@media (max-width: 1100px) { .dep-split { grid-template-columns:1fr; } }
+
+    .dep-col-h { display:flex; align-items:center; justify-content:space-between; gap:10px;
+                 padding:0 2px 8px; font-size:11px; font-weight:800; letter-spacing:.4px;
+                 text-transform:uppercase; color:#8a93ad; }
+    .dep-hint { font-weight:600; text-transform:none; letter-spacing:0; color:#a8b0c4; }
+
+    .dep-arbol, .dep-tabla { background:#fff; border:1px solid #e6e9f2; border-radius:12px; padding:12px; }
+    .dep-arbol-scroll { max-height:46vh; overflow:auto; }
+    .dep-tabla-scroll { max-height:56vh; overflow:auto; }
+
+    .dep-nodo { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
+                cursor:pointer; font-size:12.5px; }
+    .dep-nodo:hover { background:#f6f8fc; }
+    .dep-nodo.on { background:var(--primary-soft); }
+    .dep-nodo .cod { font-size:11px; font-weight:700; color:var(--primary); flex-shrink:0; }
+    .dep-nodo .nom { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .dep-nodo .pers { font-size:10.5px; color:#8a93ad; flex-shrink:0; }
+    .dep-nodo .mas { margin-left:auto; flex-shrink:0; width:20px; height:20px; border-radius:6px;
+                     display:grid; place-items:center; background:var(--primary-soft);
+                     color:var(--primary); font-weight:800; }
+
+    .dep-alta { margin-top:10px; padding-top:10px; border-top:1px dashed #e0e4ee;
+                display:flex; flex-direction:column; gap:6px; }
+    .dep-alta-t { font-size:11px; color:#8a93ad; }
+    .dep-alta-btns { display:flex; gap:6px; }
+    .dep-in { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:8px;
+              padding:7px 9px; font-size:12.5px; color:#37415c; outline:none; }
+    .dep-in:focus { border-color:var(--primary); }
+    .dep-in.cod { font-family:'IBM Plex Mono',monospace; }
+
+    .dep-tb { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .dep-tb th { position:sticky; top:0; background:#1e2436; color:#fff; text-align:left;
+                 font-size:10.5px; letter-spacing:.4px; text-transform:uppercase;
+                 padding:9px 10px; z-index:1; }
+    .dep-tb td { padding:9px 10px; border-bottom:1px solid #eef1f7; }
+    .dep-tb tbody tr { cursor:pointer; }
+    .dep-tb tbody tr:hover { background:#f6f8fc; }
+    .dep-tb tbody tr.on { background:var(--primary-soft); }
+    .dep-tb tr.tok td { font-size:11px; color:#8a93ad; background:#fbfcfe; cursor:default; }
+    .dep-tb td.acc { display:flex; gap:5px; justify-content:flex-end; }
+    .dep-tb td.vacio { text-align:center; color:#a8b0c4; padding:22px; }
+    .dep-badge { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 7px;
+                 border-radius:20px; background:#e8f5ee; color:#2f7d54; }
+
+    .trx-btn.mini { padding:5px 9px; font-size:11px; }
+    .trx-error { background:#fdecec; border:1px solid #f5c6c6; color:#a33; border-radius:8px;
+                 padding:8px 11px; font-size:12px; margin-bottom:10px; }
+
+    /* Modal de personas. */
+    .per-modal { width:640px; max-width:100%; max-height:86vh; overflow:auto; background:#faf9f5;
+                 border-radius:16px; box-shadow:0 30px 80px rgba(0,0,0,.35); pointer-events:auto; }
+    .per-h { display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+             padding:18px 20px; background:linear-gradient(135deg, var(--primary), var(--primary-deep));
+             color:#fff; border-radius:16px 16px 0 0; }
+    .per-t { font-size:16px; font-weight:800; }
+    .per-sub { font-size:12px; opacity:.9; margin-top:2px; }
+    .per-x { cursor:pointer; font-size:18px; opacity:.9; }
+    .per-b { padding:16px 20px 20px; }
+    .per-nota { font-size:11.5px; color:#8a93ad; margin-bottom:12px; }
+    .per-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #eef1f7; }
+    .per-ini { width:30px; height:30px; border-radius:50%; flex-shrink:0; display:grid; place-items:center;
+               background:var(--primary-soft); color:var(--primary); font-size:11px; font-weight:800; }
+    .per-datos { min-width:0; flex:1; }
+    .per-nom { font-size:13px; font-weight:700; }
+    .per-mail { font-size:11px; color:#8a93ad; }
+    .per-rol { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 8px;
+               border-radius:20px; background:#eef2fb; color:#4a5878; }
+    .per-alta { margin-top:14px; padding-top:14px; border-top:1px dashed #e0e4ee;
+                display:grid; grid-template-columns:1fr 1fr auto auto; gap:8px; align-items:center; }
+    @@media (max-width: 620px) { .per-alta { grid-template-columns:1fr; } }
+
     .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .trd-form .form-control, .trd-form .form-select { max-width:220px; }
     .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
@@ -309,13 +533,25 @@
     private DateTime? _fltFecha;
     private string _fltEstado = "TODOS";
 
-    private bool _nuevaOpen, _catOpen, _cabOpen = true, _depOpen = true;
+    // La cabecera arranca plegada: identifica la transaccion pero no es lo que se
+    // viene a trabajar. El organigrama si abre de una.
+    private bool _nuevaOpen, _catOpen, _cabOpen = false, _depOpen = true;
 
     private CrearTrdRequest _nt = new();
     private string _ntSeg = "";
     private DateTime? _ntIni, _ntFin;
     private CrearDependenciaRequest _nd = new();
     private string _ndPadre = "";
+    private string? _ndPadreNombre;
+    private bool _altaAbierta;
+    private string? _depError;
+    private DependenciaDto? _depSel;
+
+    // Modal de personas de una dependencia.
+    private DependenciaDto? _personasDe;
+    private List<ColaboradorDto> _personas = new();
+    private CrearColaboradorRequest _np = new();
+    private string? _perError;
     private string _nsCod = "", _nsNom = "", _ntiCod = "", _ntiNom = "", _ntSerie = "";
     private string? _error, _ok;
 
@@ -394,17 +630,113 @@
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
+    // ---------- Organigrama ----------
+
+    /// <summary>
+    /// Aplana el arbol en preorden (cada padre seguido de sus hijos) para que la
+    /// sangria del arbol y de la tabla lean igual. El servicio devuelve por nivel,
+    /// que agrupa a todos los hermanos lejos de su padre.
+    /// </summary>
+    private List<DependenciaDto> Jerarquia()
+    {
+        // ToLookup y no ToDictionary: las raices tienen PadreId nulo y un
+        // Dictionary no admite clave nula.
+        var porPadre = _deps.ToLookup(d => d.PadreId);
+        var salida = new List<DependenciaDto>();
+
+        void Bajar(Guid? padre)
+        {
+            foreach (var h in porPadre[padre].OrderBy(d => d.Orden))
+            {
+                salida.Add(h);
+                Bajar(h.Id);
+            }
+        }
+        Bajar(null);
+
+        // Si algun nodo quedo huerfano (padre borrado), no lo escondemos.
+        foreach (var d in _deps.Where(d => !salida.Any(s => s.Id == d.Id))) { salida.Add(d); }
+        return salida;
+    }
+
+    private void SeleccionarDep(DependenciaDto d) => _depSel = d;
+
+    private void AbrirAlta(Guid? padreId)
+    {
+        _depError = null;
+        _altaAbierta = true;
+        _nd = new CrearDependenciaRequest();
+        _ndPadre = padreId?.ToString() ?? "";
+        _ndPadreNombre = padreId is Guid p ? _deps.FirstOrDefault(x => x.Id == p)?.NombreCargo : null;
+    }
+
+    private void CerrarAlta() { _altaAbierta = false; _depError = null; _nd = new(); _ndPadre = ""; _ndPadreNombre = null; }
+
     private async Task AddDep()
     {
-        _error = _ok = null;
+        _error = _ok = _depError = null;
         if (_sel is null) { return; }
         _nd.TrdId = _sel.Id;
         _nd.PadreId = Guid.TryParse(_ndPadre, out var g) ? g : null;
-        try { await Trd.AgregarDependenciaAsync(_nd, await Actor()); _nd = new(); _ndPadre = ""; await LoadAll(); }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
+        try { await Trd.AgregarDependenciaAsync(_nd, await Actor()); CerrarAlta(); await LoadAll(); }
+        catch (InvalidOperationException ex) { _depError = ex.Message; }
     }
 
-    private async Task DelDep(Guid id) { _error = _ok = null; await Trd.EliminarDependenciaAsync(id, await Actor()); await LoadAll(); }
+    private async Task DelDep(Guid id)
+    {
+        _error = _ok = _depError = null;
+        await Trd.EliminarDependenciaAsync(id, await Actor());
+        if (_depSel?.Id == id) { _depSel = null; }
+        if (_personasDe?.Id == id) { CerrarPersonas(); }
+        await LoadAll();
+    }
+
+    // ---------- Personas de una dependencia ----------
+
+    private async Task AbrirPersonas(DependenciaDto d)
+    {
+        _depSel = d;
+        _personasDe = d;
+        _perError = null;
+        _np = new CrearColaboradorRequest();
+        _personas = (await Trd.ColaboradoresAsync(d.Id)).ToList();
+    }
+
+    private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = null; }
+
+    private async Task AddPersona()
+    {
+        _perError = null;
+        if (_personasDe is null) { return; }
+        _np.DependenciaId = _personasDe.Id;
+        try
+        {
+            await Trd.AgregarColaboradorAsync(_np, await Actor());
+            _np = new CrearColaboradorRequest();
+            _personas = (await Trd.ColaboradoresAsync(_personasDe.Id)).ToList();
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _perError = ex.Message; }
+    }
+
+    private async Task DelPersona(Guid id)
+    {
+        _perError = null;
+        if (_personasDe is null) { return; }
+        await Trd.EliminarColaboradorAsync(id, await Actor());
+        _personas = (await Trd.ColaboradoresAsync(_personasDe.Id)).ToList();
+        await LoadAll();
+    }
+
+    /// <summary>Iniciales para el avatar; una sola palabra devuelve una sola letra.</summary>
+    private static string Iniciales(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 0) { return "?"; }
+        return partes.Length == 1
+            ? partes[0][..1].ToUpperInvariant()
+            : (partes[0][..1] + partes[1][..1]).ToUpperInvariant();
+    }
 
     private async Task Token(Guid depId)
     {

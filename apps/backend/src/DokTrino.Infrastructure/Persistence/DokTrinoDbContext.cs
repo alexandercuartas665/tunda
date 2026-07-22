@@ -938,6 +938,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         {
             b.Property(x => x.Email).HasMaxLength(160).IsRequired();
             b.Property(x => x.Rol).HasMaxLength(40).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(160).IsRequired().HasDefaultValue("");
             b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.DependenciaId, x.Email }).IsUnique();
         });

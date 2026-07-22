@@ -891,9 +891,9 @@
     private static string IconoNivel(string nivel) => nivel switch
     {
         "SERIE" => "📁",
-        // Carpeta abierta: la 🗂 no tiene glifo a color en Windows y sale como
-        // un borron oscuro. Ademas encaja con la cerrada de la serie.
-        "SUBSERIE" => "📂",
+        // Pestanas: se distingue de la carpeta de la serie de un vistazo y
+        // tiene glifo a color en Windows (la 🗂 salia como un borron oscuro).
+        "SUBSERIE" => "📑",
         _ => "📄"
     };
 
