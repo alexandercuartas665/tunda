@@ -654,7 +654,7 @@
     .ed-nodo.on { background:var(--primary-soft); }
     .ed-chevron { width:14px; flex-shrink:0; text-align:center; font-size:10px; color:var(--primary); cursor:pointer; user-select:none; }
     .ed-chevron.vacio { cursor:default; }
-    .ed-nodo .ico { font-size:13px; flex-shrink:0; }
+    .ed-nodo .ico { font-size:14.5px; flex-shrink:0; }
     .ed-nombre { flex:1; min-width:0; border:0; background:transparent; font-size:12.5px; font-weight:600; color:#37415c; outline:none; padding:2px 4px; border-radius:6px; }
     .ed-nombre:focus { background:#fff; box-shadow:0 0 0 2px var(--primary-tint); }
     .ed-mas { cursor:pointer; width:22px; height:22px; border-radius:6px; background:var(--primary-soft); color:var(--primary); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
@@ -891,7 +891,9 @@
     private static string IconoNivel(string nivel) => nivel switch
     {
         "SERIE" => "📁",
-        "SUBSERIE" => "🗂",
+        // Carpeta abierta: la 🗂 no tiene glifo a color en Windows y sale como
+        // un borron oscuro. Ademas encaja con la cerrada de la serie.
+        "SUBSERIE" => "📂",
         _ => "📄"
     };
 
