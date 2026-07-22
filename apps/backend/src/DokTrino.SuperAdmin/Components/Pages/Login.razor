@@ -30,6 +30,10 @@
             }
         </div>
 
+        @* La mascota llena el vacio entre el logotipo y el mensaje. Decorativa:
+           el alt va vacio para que el lector de pantalla no la anuncie. *@
+        <img class="auth-mascota" src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" />
+
         <div class="auth-aside-body">
             <h2>@(_brand.LoginHeadline ?? "Gestion documental, agil y trazable")</h2>
             <p>@(_brand.LoginSubtext ?? "Coordina tu archivo: TRD, radicacion, expedientes y retencion documental en una sola plataforma.")</p>

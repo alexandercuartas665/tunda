@@ -458,7 +458,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .auth-shell { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; background: #fff; }
 @media (max-width: 900px) { .auth-shell { grid-template-columns: 1fr; } .auth-aside { display: none !important; } }
 
-/* Panel izquierdo azul DokTrino */
+/* Panel izquierdo azul de la marca */
 .auth-aside { position: relative; overflow: hidden; color: #fff; padding: 48px; display: flex; flex-direction: column; justify-content: space-between;
   background: linear-gradient(-45deg, #0277bd, #0288d1, #039be5, #01579b); background-size: 300% 300%; animation: authGradient 14s ease infinite; }
 @keyframes authGradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
@@ -473,6 +473,13 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .auth-aside-body { position: relative; z-index: 1; max-width: 420px; }
 .auth-aside-body h2 { font-size: 2.1rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 14px; }
 .auth-aside-body p { font-size: 1rem; line-height: 1.6; color: rgba(255,255,255,.9); margin: 0 0 22px; }
+/* Mascota del login: ocupa el centro del panel azul, entre el logotipo y el
+   mensaje. Se esconde en pantallas bajas para no empujar el texto. */
+.auth-mascota { position: relative; z-index: 1; display: block; margin: 0 auto;
+                width: min(72%, 320px); height: auto;
+                filter: drop-shadow(0 18px 40px rgba(0,0,0,.28)); }
+@media (max-height: 720px) { .auth-mascota { display: none; } }
+
 .auth-dots { display: flex; gap: 8px; }
 .auth-dots span { width: 8px; height: 8px; border-radius: 99px; background: rgba(255,255,255,.45); }
 .auth-dots span:first-child { width: 22px; background: #fff; }
