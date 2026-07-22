@@ -6,7 +6,7 @@
 @inject ICuestionarioService Cuestionarios
 @inject ITrdClienteService Cliente
 
-<PageTitle>Formacion documental - Archimente</PageTitle>
+<PageTitle>Formacion Archimente</PageTitle>
 
 @if (_sesion is null)
 {
@@ -17,15 +17,17 @@ else
     <div class="tcl">
         <div class="tcl-breadcrumb">Inicio &middot; Documental &middot; Formacion</div>
 
-        @* Banner de la guia de formacion *@
+        @* Banner de la guia de formacion: la mascota de la marca es quien
+           acompania la capacitacion, de ahi que la formacion lleve su nombre. *@
         <div class="form-banner">
-            <div class="form-banner-mark">
-                <span class="ico">&#129504;</span>
-                <span class="nm">Formacion</span>
-            </div>
+            <img class="form-banner-mascota" src="/img/marca/mascota-saludo.png"
+                 alt="Archimente, tu guia documental" />
             <div>
-                <div class="t">Tu guia para la clasificacion documental</div>
-                <div class="s">Completa la formacion para habilitar el diligenciamiento de tu TRD.</div>
+                <div class="t">Formacion Archimente</div>
+                <div class="s">
+                    Soy Archimente y te acompano en la clasificacion documental.
+                    Completa la formacion para habilitar el diligenciamiento de tu TRD.
+                </div>
             </div>
         </div>
 
@@ -120,9 +122,8 @@ else
 
 <style>
     .form-banner { background:linear-gradient(135deg,var(--primary-deep),var(--primary)); border-radius:18px; padding:26px 30px; display:flex; align-items:center; gap:22px; box-shadow:0 14px 36px oklch(0.45 0.24 241 / .26); margin-bottom:18px; flex-wrap:wrap; }
-    .form-banner-mark { background:#fff; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px; }
-    .form-banner-mark .ico { font-size:28px; }
-    .form-banner-mark .nm { font-size:24px; font-weight:800; letter-spacing:-.6px; color:var(--primary-deep); }
+    .form-banner-mascota { height:96px; width:auto; flex-shrink:0; filter:drop-shadow(0 6px 14px rgba(0,0,0,.22)); }
+    @@media (max-width: 620px) { .form-banner-mascota { height:70px; } }
     .form-banner .t { font-size:19px; font-weight:800; color:#fff; letter-spacing:-.3px; }
     .form-banner .s { font-size:13px; color:oklch(0.88 0.05 237); margin-top:4px; }
     .form-preg { padding:14px 0; border-bottom:1px solid #f4f6fb; }
