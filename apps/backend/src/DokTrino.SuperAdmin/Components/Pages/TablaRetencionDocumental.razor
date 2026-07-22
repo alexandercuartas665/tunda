@@ -311,7 +311,16 @@
                             <div class="dep-tabla">
                                 <div class="dep-col-h">
                                     <span>Dependencias &middot; @_deps.Count</span>
-                                    <span class="dep-hint">Abre una para asignar personas</span>
+                                    @if (_sinCuenta > 0)
+                                    {
+                                        <button class="trx-btn ghost mini" @onclick="CrearCuentasPendientes">
+                                            Crear @_sinCuenta cuenta(s) faltante(s)
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="dep-hint">Abre una para asignar personas</span>
+                                    }
                                 </div>
                                 <div class="dep-tabla-scroll">
                                     <table class="dep-tb">
@@ -574,6 +583,7 @@
     private bool _altaAbierta;
     private string? _depError;
     private DependenciaDto? _depSel;
+    private int _sinCuenta;
 
     // Modal de personas de una dependencia.
     private DependenciaDto? _personasDe;
@@ -606,7 +616,11 @@
         {
             // Refresca la seleccion contra la lista recien traida.
             _sel = _trds.FirstOrDefault(t => t.Id == _sel.Id);
-            if (_sel is not null) { _deps = (await Trd.ArbolDependenciasAsync(_sel.Id)).ToList(); }
+            if (_sel is not null)
+            {
+                _deps = (await Trd.ArbolDependenciasAsync(_sel.Id)).ToList();
+                _sinCuenta = await Trd.ColaboradoresSinCuentaAsync(_sel.Id);
+            }
         }
     }
 
@@ -621,6 +635,20 @@
     {
         _sel = t;
         _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList();
+        _sinCuenta = await Trd.ColaboradoresSinCuentaAsync(t.Id);
+    }
+
+    private async Task CrearCuentasPendientes()
+    {
+        _depError = null;
+        if (_sel is null) { return; }
+        try
+        {
+            var n = await Trd.CrearCuentasPendientesAsync(_sel.Id, await Actor());
+            _ok = $"{n} cuenta(s) creada(s) con la clave por defecto.";
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _depError = ex.Message; }
     }
 
     private void Cerrar() => _sel = null;

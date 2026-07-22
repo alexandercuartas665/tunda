@@ -29,6 +29,15 @@ public interface ITrdAdminService
     /// <summary>Emite (o reemite) el enlace de trabajo de una persona concreta.</summary>
     Task<TokenGeneradoDto?> GenerarTokenColaboradorAsync(Guid colaboradorId, string baseUrl, Guid actor, CancellationToken ct = default);
 
+    /// <summary>
+    /// Cuantas personas de la TRD siguen sin cuenta de acceso. Son las que se
+    /// asignaron antes de que el alta provisionara la cuenta.
+    /// </summary>
+    Task<int> ColaboradoresSinCuentaAsync(Guid trdId, CancellationToken ct = default);
+
+    /// <summary>Crea las cuentas que faltan. Idempotente: repetirlo no cambia nada.</summary>
+    Task<int> CrearCuentasPendientesAsync(Guid trdId, Guid actor, CancellationToken ct = default);
+
     // Invitacion por token (lo consume el visor cliente 2.D2)
     Task<TokenGeneradoDto?> GenerarTokenAsync(Guid dependenciaId, string? email, string baseUrl, Guid actor, CancellationToken ct = default);
 

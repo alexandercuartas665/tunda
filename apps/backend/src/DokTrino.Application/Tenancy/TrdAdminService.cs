@@ -256,6 +256,28 @@ public sealed class TrdAdminService : ITrdAdminService
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Personas de la TRD que aun no tienen cuenta de acceso.</summary>
+    private IQueryable<ColaboradorDependencia> SinCuenta(Guid trdId) =>
+        from c in _db.ColaboradoresDependencia
+        join d in _db.Dependencias on c.DependenciaId equals d.Id
+        where d.TrdId == trdId && c.UsuarioId == null
+        select c;
+
+    public async Task<int> ColaboradoresSinCuentaAsync(Guid trdId, CancellationToken ct = default) =>
+        await SinCuenta(trdId).CountAsync(ct);
+
+    public async Task<int> CrearCuentasPendientesAsync(Guid trdId, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return 0; }
+
+        var pendientes = await SinCuenta(trdId).ToListAsync(ct);
+        foreach (var col in pendientes)
+        {
+            await AsegurarCuentaAsync(col, tenantId, ct);
+        }
+        return pendientes.Count;
+    }
+
     public async Task<bool> ActualizarColaboradorAsync(EditarColaboradorRequest req, Guid actor, CancellationToken ct = default)
     {
         var col = await _db.ColaboradoresDependencia.FirstOrDefaultAsync(c => c.Id == req.Id, ct);
