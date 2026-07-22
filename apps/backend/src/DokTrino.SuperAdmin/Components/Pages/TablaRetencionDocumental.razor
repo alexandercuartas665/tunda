@@ -134,50 +134,6 @@
         </div>
     }
 
-    @* --- Catalogo del tenant (pasa a Configuracion Documental en la Fase 2E) --- *@
-    <div class="trx-acc" style="margin-top: 18px;">
-        <div class="trx-acc-h" @onclick="() => _catOpen = !_catOpen" style="cursor: pointer;">
-            <span class="trx-acc-ico">&#128218;</span>
-            <span class="trx-acc-t">Catalogo: series, subseries y tipologias</span>
-            <span class="trx-acc-meta">@_series.Count series &middot; @_tipos.Count tipologias</span>
-            <span style="color: #9aa3bd;">@(_catOpen ? "-" : "+")</span>
-        </div>
-        @if (_catOpen)
-        {
-            <div class="trx-acc-b">
-                <div class="trd-cat" style="margin-top: 14px;">
-                    <div>
-                        <div class="trd-sub">Series (@_series.Count)</div>
-                        @foreach (var s in _series)
-                        {
-                            <div class="trd-row"><span class="mono">@s.Codigo</span> @s.Nombre <span class="trd-muted">(@s.Subseries subseries)</span></div>
-                        }
-                        <div class="trd-form" style="margin-top: 10px;">
-                            <input class="form-control form-control-sm" @bind="_nsCod" placeholder="100" />
-                            <input class="form-control form-control-sm" @bind="_nsNom" placeholder="Actas" />
-                            <button class="trx-btn" @onclick="AddSerie">+ Serie</button>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="trd-sub">Tipologias (@_tipos.Count)</div>
-                        @foreach (var ti in _tipos)
-                        {
-                            <div class="trd-row"><span class="mono">@ti.Codigo</span> @ti.Nombre <span class="trd-muted">@ti.Tipo</span></div>
-                        }
-                        <div class="trd-form" style="margin-top: 10px;">
-                            <select class="form-select form-select-sm" @bind="_ntSerie">
-                                <option value="">(serie)</option>
-                                @foreach (var s in _series) { <option value="@s.Id">@s.Codigo @s.Nombre</option> }
-                            </select>
-                            <input class="form-control form-control-sm" @bind="_ntiCod" placeholder="100-01" />
-                            <input class="form-control form-control-sm" @bind="_ntiNom" placeholder="Acta de comite" />
-                            <button class="trx-btn" @onclick="AddTipo">+ Tipologia</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-    </div>
 </div>
 
 @* ===================== Detalle de la transaccion ===================== *@
@@ -546,11 +502,8 @@
     .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .trd-form .form-control, .trd-form .form-select { max-width:220px; }
     .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
-    .trd-cat { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-    .trd-sub { font-weight:700; margin-bottom:6px; }
     .trd-row { padding:5px 0; border-bottom:1px solid var(--chrome-border); font-size:13px; }
     .trd-muted { color:var(--muted-foreground); font-size:11px; }
-    @@media (max-width: 900px) { .trd-cat { grid-template-columns:1fr; } }
 </style>
 
 @code {
@@ -559,8 +512,6 @@
     private List<TrdDto> _trds = new();
     private List<SegmentoDto> _segmentos = new();
     private List<DependenciaDto> _deps = new();
-    private List<SerieDto> _series = new();
-    private List<TipologiaDocDto> _tipos = new();
     private Dictionary<Guid, string> _tokenUrls = new();
     private TrdDto? _sel;
 
@@ -572,7 +523,7 @@
 
     // La cabecera arranca plegada: identifica la transaccion pero no es lo que se
     // viene a trabajar. El organigrama si abre de una.
-    private bool _nuevaOpen, _catOpen, _cabOpen = false, _depOpen = true;
+    private bool _nuevaOpen, _cabOpen = false, _depOpen = true;
 
     private CrearTrdRequest _nt = new();
     private string _ntSeg = "";
@@ -590,7 +541,6 @@
     private List<ColaboradorDto> _personas = new();
     private CrearColaboradorRequest _np = new();
     private string? _perError;
-    private string _nsCod = "", _nsNom = "", _ntiCod = "", _ntiNom = "", _ntSerie = "";
     private string? _error, _ok;
 
     /// <summary>Lo que se pinta: la lista filtrada por numero, fecha y estado.</summary>
@@ -609,8 +559,6 @@
     {
         _trds = (await Trd.ListarTrdAsync()).ToList();
         _segmentos = (await Trd.ListSegmentosAsync()).ToList();
-        _series = (await Trd.ListSeriesAsync()).ToList();
-        _tipos = (await Trd.ListTipologiasAsync()).ToList();
 
         if (_sel is not null)
         {
@@ -855,20 +803,7 @@
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
-    private async Task AddSerie()
-    {
-        _error = _ok = null;
-        try { await Trd.CrearSerieAsync(_nsCod, _nsNom, await Actor()); _nsCod = ""; _nsNom = ""; await LoadAll(); }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
-    }
 
-    private async Task AddTipo()
-    {
-        _error = _ok = null;
-        Guid? serie = Guid.TryParse(_ntSerie, out var g) ? g : null;
-        try { await Trd.CrearTipologiaAsync(serie, null, _ntiCod, _ntiNom, "GENERAL", await Actor()); _ntiCod = ""; _ntiNom = ""; _ntSerie = ""; await LoadAll(); }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
-    }
 
     private async Task SeedDemo()
     {
