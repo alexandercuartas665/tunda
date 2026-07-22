@@ -352,6 +352,123 @@ public sealed class TrdAdminService : ITrdAdminService
         return true;
     }
 
+    public async Task<IReadOnlyList<DocumentoTrdDto>> DocumentosTrdAsync(
+        Guid trdId, Guid? dependenciaId = null, string? texto = null, CancellationToken ct = default)
+    {
+        var q = _db.RespuestasTablaDocumental.AsNoTracking().Where(r => r.TrdId == trdId);
+        if (dependenciaId is Guid dep) { q = q.Where(r => r.DependenciaId == dep); }
+
+        var filas = await q
+            .OrderBy(r => r.DependenciaId).ThenByDescending(r => r.FechaReg)
+            .Select(r => new
+            {
+                r.Id, r.DependenciaId,
+                DepCodigo = _db.Dependencias.Where(d => d.Id == r.DependenciaId).Select(d => d.Codigo).FirstOrDefault(),
+                DepNombre = _db.Dependencias.Where(d => d.Id == r.DependenciaId).Select(d => d.NombreCargo).FirstOrDefault(),
+                r.SerieId,
+                SerieNombre = _db.Series.Where(s => s.Id == r.SerieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefault(),
+                r.SubserieId,
+                SubserieNombre = r.SubserieId == null ? null
+                    : _db.Subseries.Where(s => s.Id == r.SubserieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefault(),
+                r.TipologiaId,
+                TipologiaNombre = r.TipologiaId == null ? null
+                    : _db.TipologiasDocumentales.Where(t => t.Id == r.TipologiaId).Select(t => t.Nombre).FirstOrDefault(),
+                r.TiempoAg, r.TiempoAc,
+                r.DispCt, r.DispS, r.DispE, r.DispD,
+                r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
+                r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
+                Formatos = _db.FormatosSerie.Where(f => f.RespuestaId == r.Id).Select(f => f.Formato).ToList(),
+                r.FechaReg
+            })
+            .ToListAsync(ct);
+
+        var busca = (texto ?? "").Trim();
+        var resultado = filas.Select(r => new DocumentoTrdDto(
+            r.Id, r.DependenciaId, r.DepCodigo ?? "", r.DepNombre ?? "",
+            r.SerieId, r.SerieNombre ?? "", r.SubserieId, r.SubserieNombre,
+            r.TipologiaId, r.TipologiaNombre,
+            r.TiempoAg, r.TiempoAc,
+            r.DispCt, r.DispS, r.DispE, r.DispD,
+            r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
+            r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
+            string.Join(", ", r.Formatos), r.FechaReg));
+
+        if (busca.Length > 0)
+        {
+            resultado = resultado.Where(d =>
+                Contiene(d.SerieNombre, busca) || Contiene(d.SubserieNombre, busca)
+                || Contiene(d.TipologiaNombre, busca) || Contiene(d.DependenciaNombre, busca));
+        }
+        return resultado.ToList();
+    }
+
+    private static bool Contiene(string? campo, string busca) =>
+        campo is not null && campo.Contains(busca, StringComparison.OrdinalIgnoreCase);
+
+    public async Task<Guid?> GuardarDocumentoTrdAsync(GuardarDocumentoTrdRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+
+        var trd = await _db.TablasRetencionDocumental.AsNoTracking().FirstOrDefaultAsync(t => t.Id == req.TrdId, ct);
+        if (trd is null) { throw new InvalidOperationException("La TRD no existe."); }
+        // Misma regla que el lado cliente: una TRD cerrada no se toca.
+        if (trd.Estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+
+        if (!await _db.Dependencias.AnyAsync(d => d.Id == req.DependenciaId && d.TrdId == req.TrdId, ct))
+        { throw new InvalidOperationException("Elige una dependencia del organigrama."); }
+        if (!await _db.Series.AnyAsync(s => s.Id == req.SerieId, ct))
+        { throw new InvalidOperationException("Elige una serie."); }
+
+        // El unique (trd, dependencia, serie, subserie, tipologia) impide repetir.
+        var duplicado = await _db.RespuestasTablaDocumental.AnyAsync(
+            r => r.TrdId == req.TrdId && r.DependenciaId == req.DependenciaId
+                 && r.SerieId == req.SerieId && r.SubserieId == req.SubserieId
+                 && r.TipologiaId == req.TipologiaId && r.Id != req.Id, ct);
+        if (duplicado) { throw new InvalidOperationException("Esa dependencia ya declaro ese documento."); }
+
+        RespuestaTablaDocumental fila;
+        if (req.Id is Guid id)
+        {
+            fila = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(r => r.Id == id, ct)
+                   ?? throw new InvalidOperationException("El documento ya no existe; recarga la tabla.");
+        }
+        else
+        {
+            fila = new RespuestaTablaDocumental
+            {
+                TenantId = tenantId, TrdId = req.TrdId,
+                Extension = "{}", FechaReg = _clock.GetUtcNow(), CreadoPor = actor
+            };
+            _db.RespuestasTablaDocumental.Add(fila);
+        }
+
+        fila.DependenciaId = req.DependenciaId;
+        fila.SerieId = req.SerieId;
+        fila.SubserieId = req.SubserieId;
+        fila.TipologiaId = req.TipologiaId;
+        fila.SinSubserie = req.SubserieId is null;
+        fila.TiempoAg = req.TiempoAg;
+        fila.TiempoAc = req.TiempoAc;
+        fila.TiempoObserv = req.TiempoObserv;
+        fila.DispCt = req.DispCt; fila.DispS = req.DispS; fila.DispE = req.DispE; fila.DispD = req.DispD;
+        fila.DispObserv = req.DispObserv;
+        fila.Val1Admin = req.Val1Admin; fila.Val1Tecnica = req.Val1Tecnica; fila.Val1Legal = req.Val1Legal;
+        fila.Val1Contable = req.Val1Contable; fila.Val1Fiscal = req.Val1Fiscal;
+        fila.Val2Historica = req.Val2Historica; fila.Val2Cientifica = req.Val2Cientifica; fila.Val2Cultural = req.Val2Cultural;
+
+        await _db.SaveChangesAsync(ct);
+        return fila.Id;
+    }
+
+    public async Task<bool> EliminarDocumentoTrdAsync(Guid id, Guid actor, CancellationToken ct = default)
+    {
+        var fila = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (fila is null) { return false; }
+        _db.RespuestasTablaDocumental.Remove(fila);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<TokenGeneradoDto?> GenerarTokenAsync(Guid dependenciaId, string? email, string baseUrl, Guid actor, CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tenantId) { return null; }

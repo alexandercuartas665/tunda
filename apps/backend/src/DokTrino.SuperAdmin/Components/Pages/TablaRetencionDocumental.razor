@@ -323,6 +323,199 @@
                     </div>
                 }
             </div>
+
+            @* --- Tabla de Retencion Documental (lo que llenan las dependencias) --- *@
+            <div class="trx-acc">
+                <div class="trx-acc-h" @onclick="AlternarTrd" style="cursor: pointer;">
+                    <span class="trx-acc-ico">&#128220;</span>
+                    <span class="trx-acc-t">Tabla de Retencion Documental</span>
+                    <span class="trx-acc-meta">@_docs.Count documentos declarados</span>
+                    <span style="color: #9aa3bd;">@(_trdOpen ? "-" : "+")</span>
+                </div>
+                @if (_trdOpen)
+                {
+                    <div class="trx-acc-b">
+                        @if (_docError is not null) { <div class="trx-error">@_docError</div> }
+
+                        <div class="doc-barra">
+                            <select class="dep-in" style="max-width: 260px;" value="@_fltDep"
+                                    @onchange="e => FiltrarDocs(e.Value?.ToString(), null)">
+                                <option value="">Todas las dependencias</option>
+                                @foreach (var d in Jerarquia())
+                                {
+                                    <option value="@d.Id">@d.Codigo @d.NombreCargo</option>
+                                }
+                            </select>
+                            <input class="dep-in" style="max-width: 280px;" placeholder="Buscar serie, subserie o tipologia..."
+                                   value="@_fltDoc" @onchange="e => FiltrarDocs(null, e.Value?.ToString())" />
+                            <button class="trx-btn ghost mini" @onclick="RecargarDocs">&#8635; Actualizar</button>
+                            <a class="trx-btn ghost mini" href="@($"/api/doktrino/trd/{_sel.Id}/excel")" target="_blank">Excel AGN</a>
+                            <button class="trx-btn mini" style="margin-left: auto;" @onclick="() => AbrirDoc(null)">&#43; Agregar documento</button>
+                        </div>
+
+                        <div class="doc-scroll">
+                            <table class="dep-tb">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 150px;">Dependencia</th>
+                                        <th>Serie / Subserie</th>
+                                        <th style="width: 170px;">Tipologia</th>
+                                        <th style="width: 46px;">AG</th>
+                                        <th style="width: 46px;">AC</th>
+                                        <th style="width: 96px;">Disposicion</th>
+                                        <th style="width: 120px;">Formatos</th>
+                                        <th style="width: 92px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (_docs.Count == 0)
+                                    {
+                                        <tr><td colspan="8" class="vacio">
+                                            Todavia no hay documentos declarados. Los llenan las dependencias
+                                            desde su enlace, o puedes agregarlos aqui.
+                                        </td></tr>
+                                    }
+                                    @foreach (var d in _docs)
+                                    {
+                                        <tr @onclick="() => AbrirDoc(d)">
+                                            <td><span class="mono">@d.DependenciaCodigo</span> @d.DependenciaNombre</td>
+                                            <td>
+                                                @d.SerieNombre
+                                                @if (d.SubserieNombre is not null)
+                                                {
+                                                    <div class="doc-sub">@d.SubserieNombre</div>
+                                                }
+                                            </td>
+                                            <td>@(d.TipologiaNombre ?? "-")</td>
+                                            <td class="mono">@(d.TiempoAg?.ToString() ?? "-")</td>
+                                            <td class="mono">@(d.TiempoAc?.ToString() ?? "-")</td>
+                                            <td><span class="mono">@Disposicion(d)</span></td>
+                                            <td>@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
+                                            <td class="acc" @onclick:stopPropagation="true">
+                                                <button class="trx-btn ghost mini" @onclick="() => AbrirDoc(d)">Editar</button>
+                                                <button class="trx-btn danger mini" @onclick="() => BorrarDoc(d.Id)">&times;</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@* ===================== Documento de la TRD ===================== *@
+@if (_docAbierto)
+{
+    <div class="doktrino-drawer-scrim" style="display: block; z-index: 1990;" @onclick="CerrarDoc"></div>
+    <div style="position: fixed; inset: 0; z-index: 1995; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+        <div class="per-modal" style="width: 780px;">
+            <div class="per-h">
+                <div>
+                    <div class="per-t">@(_doc.Id is null ? "Agregar documento a la TRD" : "Propiedades del documento")</div>
+                    <div class="per-sub">Retencion, disposicion final y valoracion (Ley 594/2000, AGN)</div>
+                </div>
+                <span class="per-x" @onclick="CerrarDoc">&#10005;</span>
+            </div>
+
+            <div class="per-b">
+                @if (_docError is not null) { <div class="trx-error">@_docError</div> }
+
+                <div class="doc-grid">
+                    <div>
+                        <div class="ed-lbl">Dependencia productora</div>
+                        <select class="dep-in" @bind="_docDep">
+                            <option value="">(elige una)</option>
+                            @foreach (var d in Jerarquia())
+                            {
+                                <option value="@d.Id">@d.Codigo @d.NombreCargo</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <div class="ed-lbl">Serie documental</div>
+                        <select class="dep-in" @onchange="CambiarSerieDoc" value="@_docSerie">
+                            <option value="">(elige una)</option>
+                            @foreach (var s in _seriesDoc)
+                            {
+                                <option value="@s.Id">@s.Codigo - @s.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <div class="ed-lbl">Subserie</div>
+                        <select class="dep-in" @onchange="CambiarSubserieDoc" value="@_docSub">
+                            <option value="">(sin subserie)</option>
+                            @foreach (var s in _subseriesDoc)
+                            {
+                                <option value="@s.Id">@s.Codigo - @s.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <div class="ed-lbl">Tipologia</div>
+                        <select class="dep-in" @bind="_docTipo">
+                            <option value="">(toda la subserie)</option>
+                            @foreach (var t in _tiposDoc)
+                            {
+                                <option value="@t.Id">@t.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 14px;">
+                    <div class="ed-bloque-t">Tiempo de retencion</div>
+                    <div class="doc-grid">
+                        <div>
+                            <div class="ed-lbl">AG (anios)</div>
+                            <input class="dep-in cod" type="number" min="0" step="0.5" placeholder="2" @bind="_doc.TiempoAg" />
+                        </div>
+                        <div>
+                            <div class="ed-lbl">AC (anios)</div>
+                            <input class="dep-in cod" type="number" min="0" step="0.5" placeholder="8" @bind="_doc.TiempoAc" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ed-bloque verde" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Disposicion final</div>
+                    <div class="doc-chks">
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.DispCt" /> CT conservacion total</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.DispS" /> S seleccion</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.DispE" /> E eliminacion</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.DispD" /> D digitalizacion</label>
+                    </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Valoracion primaria</div>
+                    <div class="doc-chks">
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val1Admin" /> Administrativa</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val1Tecnica" /> Tecnica</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val1Legal" /> Legal</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val1Contable" /> Contable</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val1Fiscal" /> Fiscal</label>
+                    </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Valoracion secundaria</div>
+                    <div class="doc-chks">
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val2Historica" /> Historica</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val2Cientifica" /> Cientifica</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Val2Cultural" /> Cultural</label>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                    <button class="trx-btn ghost" @onclick="CerrarDoc">Cancelar</button>
+                    <button class="trx-btn" @onclick="GuardarDoc">Guardar documento</button>
+                </div>
+            </div>
         </div>
     </div>
 }
@@ -469,6 +662,13 @@
                  border-radius:20px; background:#e8f5ee; color:#2f7d54; }
 
     .trx-btn.mini { padding:5px 9px; font-size:11px; }
+    .doc-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .doc-scroll { max-height:52vh; overflow:auto; border:1px solid #e6e9f2; border-radius:12px; }
+    .doc-sub { font-size:11px; color:#8a93ad; margin-top:2px; }
+    .doc-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+    @@media (max-width: 700px) { .doc-grid { grid-template-columns:1fr; } }
+    .doc-chks { display:flex; flex-wrap:wrap; gap:10px 18px; }
+    .doc-chk { display:flex; align-items:center; gap:6px; font-size:12px; color:#37415c; }
     .trx-error { background:#fdecec; border:1px solid #f5c6c6; color:#a33; border-radius:8px;
                  padding:8px 11px; font-size:12px; margin-bottom:10px; }
 
@@ -536,6 +736,19 @@
     private DependenciaDto? _depSel;
     private int _sinCuenta;
 
+    // --- Tabla de Retencion Documental ---
+    private bool _trdOpen;
+    private List<DocumentoTrdDto> _docs = new();
+    private string _fltDep = "", _fltDoc = "";
+    private string? _docError;
+
+    private bool _docAbierto;
+    private GuardarDocumentoTrdRequest _doc = new();
+    private string _docDep = "", _docSerie = "", _docSub = "", _docTipo = "";
+    private List<SerieDto> _seriesDoc = new();
+    private List<SubserieDto> _subseriesDoc = new();
+    private List<TipologiaDocDto> _tiposDoc = new();
+
     // Modal de personas de una dependencia.
     private DependenciaDto? _personasDe;
     private List<ColaboradorDto> _personas = new();
@@ -584,6 +797,10 @@
         _sel = t;
         _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList();
         _sinCuenta = await Trd.ColaboradoresSinCuentaAsync(t.Id);
+        // Se carga aunque el acordeon este plegado: si no, la cabecera anuncia
+        // "0 documentos" cuando si los hay.
+        _fltDep = _fltDoc = "";
+        await RecargarDocs();
     }
 
     private async Task CrearCuentasPendientes()
@@ -664,6 +881,126 @@
     }
 
     private void SeleccionarDep(DependenciaDto d) => _depSel = d;
+
+    // ---------- Tabla de Retencion Documental ----------
+
+    private void AlternarTrd() => _trdOpen = !_trdOpen;
+
+    private async Task RecargarDocs()
+    {
+        if (_sel is null) { return; }
+        _docError = null;
+        var dep = Guid.TryParse(_fltDep, out var g) ? g : (Guid?)null;
+        _docs = (await Trd.DocumentosTrdAsync(_sel.Id, dep, _fltDoc)).ToList();
+    }
+
+    private async Task FiltrarDocs(string? dependencia, string? texto)
+    {
+        if (dependencia is not null) { _fltDep = dependencia; }
+        if (texto is not null) { _fltDoc = texto; }
+        await RecargarDocs();
+    }
+
+    /// <summary>Sigla de disposicion, como la escribe el AGN.</summary>
+    private static string Disposicion(DocumentoTrdDto d)
+    {
+        var partes = new List<string>();
+        if (d.DispCt) { partes.Add("CT"); }
+        if (d.DispS) { partes.Add("S"); }
+        if (d.DispE) { partes.Add("E"); }
+        if (d.DispD) { partes.Add("D"); }
+        return partes.Count == 0 ? "-" : string.Join("/", partes);
+    }
+
+    private async Task AbrirDoc(DocumentoTrdDto? d)
+    {
+        _docError = null;
+        _seriesDoc = (await Trd.ListSeriesAsync()).ToList();
+
+        if (d is null)
+        {
+            _doc = new GuardarDocumentoTrdRequest { TrdId = _sel!.Id };
+            _docDep = _fltDep;
+            _docSerie = _docSub = _docTipo = "";
+            _subseriesDoc = new();
+            _tiposDoc = new();
+        }
+        else
+        {
+            _doc = new GuardarDocumentoTrdRequest
+            {
+                Id = d.Id, TrdId = _sel!.Id,
+                DependenciaId = d.DependenciaId, SerieId = d.SerieId,
+                SubserieId = d.SubserieId, TipologiaId = d.TipologiaId,
+                TiempoAg = d.TiempoAg, TiempoAc = d.TiempoAc,
+                DispCt = d.DispCt, DispS = d.DispS, DispE = d.DispE, DispD = d.DispD,
+                Val1Admin = d.Val1Admin, Val1Tecnica = d.Val1Tecnica, Val1Legal = d.Val1Legal,
+                Val1Contable = d.Val1Contable, Val1Fiscal = d.Val1Fiscal,
+                Val2Historica = d.Val2Historica, Val2Cientifica = d.Val2Cientifica, Val2Cultural = d.Val2Cultural
+            };
+            _docDep = d.DependenciaId.ToString();
+            _docSerie = d.SerieId.ToString();
+            _docSub = d.SubserieId?.ToString() ?? "";
+            _docTipo = d.TipologiaId?.ToString() ?? "";
+            _subseriesDoc = (await Trd.ListSubseriesAsync(d.SerieId)).ToList();
+            _tiposDoc = (await Trd.ListTipologiasAsync()).Where(t => t.SubserieId == d.SubserieId || t.SerieId == d.SerieId).ToList();
+        }
+        _docAbierto = true;
+    }
+
+    private void CerrarDoc() { _docAbierto = false; _docError = null; }
+
+    private async Task CambiarSerieDoc(ChangeEventArgs e)
+    {
+        _docSerie = e.Value?.ToString() ?? "";
+        _docSub = _docTipo = "";
+        _tiposDoc = new();
+        _subseriesDoc = Guid.TryParse(_docSerie, out var sid)
+            ? (await Trd.ListSubseriesAsync(sid)).ToList()
+            : new();
+    }
+
+    private async Task CambiarSubserieDoc(ChangeEventArgs e)
+    {
+        _docSub = e.Value?.ToString() ?? "";
+        _docTipo = "";
+        var todas = await Trd.ListTipologiasAsync();
+        _tiposDoc = Guid.TryParse(_docSub, out var sub)
+            ? todas.Where(t => t.SubserieId == sub).ToList()
+            : Guid.TryParse(_docSerie, out var ser)
+                ? todas.Where(t => t.SerieId == ser && t.SubserieId == null).ToList()
+                : new();
+    }
+
+    private async Task GuardarDoc()
+    {
+        _docError = null;
+        if (!Guid.TryParse(_docDep, out var dep)) { _docError = "Elige la dependencia productora."; return; }
+        if (!Guid.TryParse(_docSerie, out var ser)) { _docError = "Elige la serie documental."; return; }
+
+        _doc.TrdId = _sel!.Id;
+        _doc.DependenciaId = dep;
+        _doc.SerieId = ser;
+        _doc.SubserieId = Guid.TryParse(_docSub, out var sub) ? sub : null;
+        _doc.TipologiaId = Guid.TryParse(_docTipo, out var tip) ? tip : null;
+
+        try
+        {
+            await Trd.GuardarDocumentoTrdAsync(_doc, await Actor());
+            _docAbierto = false;
+            await RecargarDocs();
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _docError = ex.Message; }
+    }
+
+    private async Task BorrarDoc(Guid id)
+    {
+        _docError = null;
+        await Trd.EliminarDocumentoTrdAsync(id, await Actor());
+        await RecargarDocs();
+        await LoadAll();
+    }
 
     private void AbrirAlta(Guid? padreId)
     {

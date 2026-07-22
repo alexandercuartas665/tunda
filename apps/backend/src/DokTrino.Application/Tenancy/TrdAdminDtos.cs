@@ -22,6 +22,56 @@ public sealed record TrdDto(
 public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado, int Personas = 0);
 public sealed record ColaboradorDto(Guid Id, Guid DependenciaId, string Nombre, string Email, string Rol,
     string? Telefono = null, string? TokenUrl = null);
+
+/// <summary>
+/// Fila de la TRD tal como la ve el administrador: lo que diligencio cada
+/// dependencia desde su encuesta, mas lo que el admin agrego a mano.
+/// </summary>
+public sealed record DocumentoTrdDto(
+    Guid Id,
+    Guid DependenciaId, string DependenciaCodigo, string DependenciaNombre,
+    Guid SerieId, string SerieNombre,
+    Guid? SubserieId, string? SubserieNombre,
+    Guid? TipologiaId, string? TipologiaNombre,
+    decimal? TiempoAg, decimal? TiempoAc,
+    bool DispCt, bool DispS, bool DispE, bool DispD,
+    bool Val1Admin, bool Val1Tecnica, bool Val1Legal, bool Val1Contable, bool Val1Fiscal,
+    bool Val2Historica, bool Val2Cientifica, bool Val2Cultural,
+    string Formatos,
+    DateTimeOffset FechaReg);
+
+/// <summary>Alta o edicion de una fila de la TRD desde el lado administrador.</summary>
+public sealed class GuardarDocumentoTrdRequest
+{
+    /// <summary>Nulo al crear.</summary>
+    public Guid? Id { get; set; }
+
+    public Guid TrdId { get; set; }
+    public Guid DependenciaId { get; set; }
+    public Guid SerieId { get; set; }
+    public Guid? SubserieId { get; set; }
+    public Guid? TipologiaId { get; set; }
+
+    public decimal? TiempoAg { get; set; }
+    public decimal? TiempoAc { get; set; }
+    public string? TiempoObserv { get; set; }
+
+    public bool DispCt { get; set; }
+    public bool DispS { get; set; }
+    public bool DispE { get; set; }
+    public bool DispD { get; set; }
+    public string? DispObserv { get; set; }
+
+    public bool Val1Admin { get; set; }
+    public bool Val1Tecnica { get; set; }
+    public bool Val1Legal { get; set; }
+    public bool Val1Contable { get; set; }
+    public bool Val1Fiscal { get; set; }
+
+    public bool Val2Historica { get; set; }
+    public bool Val2Cientifica { get; set; }
+    public bool Val2Cultural { get; set; }
+}
 public sealed record SerieDto(Guid Id, string Codigo, string Nombre, bool Activo, int Subseries);
 public sealed record SubserieDto(Guid Id, Guid SerieId, string Codigo, string Nombre);
 public sealed record TipologiaDocDto(Guid Id, Guid? SerieId, Guid? SubserieId, string Codigo, string Nombre, string Tipo, bool Activo);

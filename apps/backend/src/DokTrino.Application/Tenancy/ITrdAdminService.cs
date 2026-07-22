@@ -38,6 +38,13 @@ public interface ITrdAdminService
     /// <summary>Crea las cuentas que faltan. Idempotente: repetirlo no cambia nada.</summary>
     Task<int> CrearCuentasPendientesAsync(Guid trdId, Guid actor, CancellationToken ct = default);
 
+    // Tabla de Retencion Documental: lo que las dependencias van diligenciando
+    // desde su encuesta. El administrador la ve en vivo y tambien puede editarla.
+    Task<IReadOnlyList<DocumentoTrdDto>> DocumentosTrdAsync(
+        Guid trdId, Guid? dependenciaId = null, string? texto = null, CancellationToken ct = default);
+    Task<Guid?> GuardarDocumentoTrdAsync(GuardarDocumentoTrdRequest req, Guid actor, CancellationToken ct = default);
+    Task<bool> EliminarDocumentoTrdAsync(Guid id, Guid actor, CancellationToken ct = default);
+
     // Invitacion por token (lo consume el visor cliente 2.D2)
     Task<TokenGeneradoDto?> GenerarTokenAsync(Guid dependenciaId, string? email, string baseUrl, Guid actor, CancellationToken ct = default);
 
