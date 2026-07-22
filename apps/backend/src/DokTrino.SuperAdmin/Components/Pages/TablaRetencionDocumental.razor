@@ -333,25 +333,22 @@
                                             @foreach (var d in Jerarquia())
                                             {
                                                 <tr class="@(_depSel?.Id == d.Id ? "on" : "")" @onclick="() => AbrirPersonas(d)">
-                                                    <td class="mono">@d.Codigo</td>
-                                                    <td><span style="padding-left: @(d.Nivel * 12)px;">@d.NombreCargo</span></td>
+                                                    <td @onclick:stopPropagation="true">
+                                                        <input class="dep-in cod celda" value="@d.Codigo"
+                                                               @onchange="e => GuardarDep(d, e.Value?.ToString(), null)" />
+                                                    </td>
+                                                    <td @onclick:stopPropagation="true">
+                                                        <input class="dep-in celda" style="margin-left: @(d.Nivel * 12)px;" value="@d.NombreCargo"
+                                                               @onchange="e => GuardarDep(d, null, e.Value?.ToString())" />
+                                                    </td>
                                                     <td>@d.Nivel</td>
                                                     <td>@d.Personas</td>
                                                     <td><span class="dep-badge">@d.Estado</span></td>
                                                     <td class="acc" @onclick:stopPropagation="true">
                                                         <button class="trx-btn ghost mini" @onclick="() => AbrirPersonas(d)">Personas</button>
-                                                        <button class="trx-btn ghost mini" @onclick="() => Token(d.Id)">Token</button>
                                                         <button class="trx-btn danger mini" @onclick="() => DelDep(d.Id)">&times;</button>
                                                     </td>
                                                 </tr>
-                                                @if (_tokenUrls.TryGetValue(d.Id, out var url))
-                                                {
-                                                    <tr class="tok">
-                                                        <td colspan="6">
-                                                            Enlace del colaborador: <a href="@url" target="_blank">@Trunc(url)</a>
-                                                        </td>
-                                                    </tr>
-                                                }
                                             }
                                         </tbody>
                                     </table>
@@ -385,8 +382,8 @@
                     <div class="trx-error">@_perError</div>
                 }
                 <div class="per-nota">
-                    Puedes asignar varias personas a la misma dependencia. Cada una recibe su propio
-                    enlace de trabajo cuando se emite el token.
+                    Puedes asignar varias personas a la misma dependencia. Cada una entra con su
+                    propio enlace y su cuenta nace con la clave <b>12345</b>.
                 </div>
 
                 @if (_personas.Count == 0)
@@ -398,17 +395,40 @@
                     <div class="per-row">
                         <span class="per-ini">@Iniciales(p.Nombre)</span>
                         <div class="per-datos">
-                            <div class="per-nom">@p.Nombre</div>
-                            <div class="per-mail">@p.Email</div>
+                            <div class="per-campos">
+                                <input class="dep-in celda" value="@p.Nombre"
+                                       @onchange="e => GuardarPersona(p, nombre: e.Value?.ToString())" />
+                                <input class="dep-in celda" value="@p.Email"
+                                       @onchange="e => GuardarPersona(p, email: e.Value?.ToString())" />
+                                <input class="dep-in celda" value="@p.Telefono" placeholder="Telefono"
+                                       @onchange="e => GuardarPersona(p, telefono: e.Value?.ToString())" />
+                                <select class="dep-in celda" value="@p.Rol"
+                                        @onchange="e => GuardarPersona(p, rol: e.Value?.ToString())">
+                                    <option value="RESPONSABLE">Responsable</option>
+                                    <option value="REVISOR">Revisor</option>
+                                    <option value="APOYO">Apoyo</option>
+                                </select>
+                            </div>
+                            @if (p.TokenUrl is string enlace)
+                            {
+                                <div class="per-link">
+                                    <a href="@enlace" target="_blank">@Trunc(enlace)</a>
+                                </div>
+                            }
                         </div>
-                        <span class="per-rol">@p.Rol</span>
-                        <button class="trx-btn danger mini" @onclick="() => DelPersona(p.Id)">&times;</button>
+                        <div class="per-acc">
+                            <button class="trx-btn ghost mini" @onclick="() => TokenPersona(p.Id)">
+                                @(p.TokenUrl is null ? "Generar enlace" : "Reemitir")
+                            </button>
+                            <button class="trx-btn danger mini" @onclick="() => DelPersona(p.Id)">&times;</button>
+                        </div>
                     </div>
                 }
 
                 <div class="per-alta">
                     <input class="dep-in" @bind="_np.Nombre" placeholder="Nombre de la persona" />
                     <input class="dep-in" @bind="_np.Email" placeholder="Correo electronico" />
+                    <input class="dep-in" @bind="_np.Telefono" placeholder="Telefono" />
                     <select class="dep-in" @bind="_np.Rol">
                         <option value="RESPONSABLE">Responsable</option>
                         <option value="REVISOR">Revisor</option>
@@ -464,6 +484,10 @@
               padding:7px 9px; font-size:12.5px; color:#37415c; outline:none; }
     .dep-in:focus { border-color:var(--primary); }
     .dep-in.cod { font-family:'IBM Plex Mono',monospace; }
+    /* Celda editable: parece texto hasta que se enfoca. */
+    .dep-in.celda { border-color:transparent; background:transparent; padding:4px 6px; }
+    .dep-in.celda:hover { border-color:#e3e7f2; background:#fff; }
+    .dep-in.celda:focus { border-color:var(--primary); background:#fff; }
 
     .dep-tb { width:100%; border-collapse:collapse; font-size:12.5px; }
     .dep-tb th { position:sticky; top:0; background:#1e2436; color:#fff; text-align:left;
@@ -484,7 +508,7 @@
                  padding:8px 11px; font-size:12px; margin-bottom:10px; }
 
     /* Modal de personas. */
-    .per-modal { width:640px; max-width:100%; max-height:86vh; overflow:auto; background:#faf9f5;
+    .per-modal { width:860px; max-width:100%; max-height:86vh; overflow:auto; background:#faf9f5;
                  border-radius:16px; box-shadow:0 30px 80px rgba(0,0,0,.35); pointer-events:auto; }
     .per-h { display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
              padding:18px 20px; background:linear-gradient(135deg, var(--primary), var(--primary-deep));
@@ -502,9 +526,13 @@
     .per-mail { font-size:11px; color:#8a93ad; }
     .per-rol { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 8px;
                border-radius:20px; background:#eef2fb; color:#4a5878; }
+    .per-campos { display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr; gap:4px; }
+    .per-link { font-size:10.5px; margin-top:3px; padding-left:6px; }
+    .per-link a { color:var(--primary); }
+    .per-acc { display:flex; gap:5px; flex-shrink:0; }
     .per-alta { margin-top:14px; padding-top:14px; border-top:1px dashed #e0e4ee;
-                display:grid; grid-template-columns:1fr 1fr auto auto; gap:8px; align-items:center; }
-    @@media (max-width: 620px) { .per-alta { grid-template-columns:1fr; } }
+                display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr auto; gap:8px; align-items:center; }
+    @@media (max-width: 760px) { .per-alta, .per-campos { grid-template-columns:1fr; } }
 
     .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .trd-form .form-control, .trd-form .form-select { max-width:220px; }
@@ -682,6 +710,18 @@
         catch (InvalidOperationException ex) { _depError = ex.Message; }
     }
 
+    /// <summary>Guarda codigo o nombre desde la celda; el que no se toca viaja igual.</summary>
+    private async Task GuardarDep(DependenciaDto d, string? codigo, string? nombre)
+    {
+        _depError = null;
+        try
+        {
+            await Trd.ActualizarDependenciaAsync(d.Id, codigo ?? d.Codigo, nombre ?? d.NombreCargo, await Actor());
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _depError = ex.Message; }
+    }
+
     private async Task DelDep(Guid id)
     {
         _error = _ok = _depError = null;
@@ -699,7 +739,44 @@
         _personasDe = d;
         _perError = null;
         _np = new CrearColaboradorRequest();
-        _personas = (await Trd.ColaboradoresAsync(d.Id)).ToList();
+        _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
+    }
+
+    private async Task RecargarPersonas()
+    {
+        if (_personasDe is null) { return; }
+        _personas = (await Trd.ColaboradoresAsync(_personasDe.Id, Nav.BaseUri)).ToList();
+    }
+
+    /// <summary>Edita en sitio; los campos no tocados viajan con su valor actual.</summary>
+    private async Task GuardarPersona(ColaboradorDto p, string? nombre = null, string? email = null,
+                                      string? telefono = null, string? rol = null)
+    {
+        _perError = null;
+        try
+        {
+            await Trd.ActualizarColaboradorAsync(new EditarColaboradorRequest
+            {
+                Id = p.Id,
+                Nombre = nombre ?? p.Nombre,
+                Email = email ?? p.Email,
+                Telefono = telefono ?? p.Telefono,
+                Rol = rol ?? p.Rol
+            }, await Actor());
+            await RecargarPersonas();
+        }
+        catch (InvalidOperationException ex) { _perError = ex.Message; }
+    }
+
+    private async Task TokenPersona(Guid colaboradorId)
+    {
+        _perError = null;
+        try
+        {
+            await Trd.GenerarTokenColaboradorAsync(colaboradorId, Nav.BaseUri.TrimEnd('/'), await Actor());
+            await RecargarPersonas();
+        }
+        catch (InvalidOperationException ex) { _perError = ex.Message; }
     }
 
     private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = null; }
@@ -713,7 +790,7 @@
         {
             await Trd.AgregarColaboradorAsync(_np, await Actor());
             _np = new CrearColaboradorRequest();
-            _personas = (await Trd.ColaboradoresAsync(_personasDe.Id)).ToList();
+            await RecargarPersonas();
             await LoadAll();
         }
         catch (InvalidOperationException ex) { _perError = ex.Message; }
@@ -724,7 +801,7 @@
         _perError = null;
         if (_personasDe is null) { return; }
         await Trd.EliminarColaboradorAsync(id, await Actor());
-        _personas = (await Trd.ColaboradoresAsync(_personasDe.Id)).ToList();
+        await RecargarPersonas();
         await LoadAll();
     }
 

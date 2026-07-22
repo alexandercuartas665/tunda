@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using DokTrino.Application.Common;
+using DokTrino.Application.Common.Auth;
 using DokTrino.Domain.Entities;
+using DokTrino.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace DokTrino.Application.Tenancy;
@@ -9,15 +11,24 @@ public sealed class TrdAdminService : ITrdAdminService
 {
     private static readonly string[] EstadosTrd = ["DESARROLLO", "ACTIVO", "CERRADO"];
 
+    /// <summary>
+    /// Clave con la que nace la cuenta del colaborador. Es una credencial conocida
+    /// y decidida por el cliente: quien reciba el correo de una persona puede
+    /// entrar a su cuenta hasta que la cambie. El enlace por token no la necesita.
+    /// </summary>
+    private const string ClavePorDefecto = "12345";
+
     private readonly IApplicationDbContext _db;
     private readonly ITenantContext _tenant;
     private readonly TimeProvider _clock;
+    private readonly IPasswordHasher _hasher;
 
-    public TrdAdminService(IApplicationDbContext db, ITenantContext tenant, TimeProvider clock)
+    public TrdAdminService(IApplicationDbContext db, ITenantContext tenant, TimeProvider clock, IPasswordHasher hasher)
     {
         _db = db;
         _tenant = tenant;
         _clock = clock;
+        _hasher = hasher;
     }
 
     public async Task<IReadOnlyList<TrdDto>> ListarTrdAsync(CancellationToken ct = default) =>
@@ -113,6 +124,25 @@ public sealed class TrdAdminService : ITrdAdminService
         return new DependenciaDto(dep.Id, dep.PadreId, dep.Nivel, dep.Orden, dep.NombreCargo, dep.Codigo, dep.Estado);
     }
 
+    public async Task<bool> ActualizarDependenciaAsync(Guid id, string codigo, string nombreCargo, Guid actor, CancellationToken ct = default)
+    {
+        var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (dep is null) { return false; }
+
+        var cod = (codigo ?? "").Trim();
+        var nom = (nombreCargo ?? "").Trim();
+        if (cod.Length == 0 || nom.Length == 0)
+        {
+            throw new InvalidOperationException("Codigo y nombre de la dependencia son obligatorios.");
+        }
+        if (cod.Length > 30) { throw new InvalidOperationException("El codigo admite hasta 30 caracteres."); }
+
+        dep.Codigo = cod;
+        dep.NombreCargo = nom;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default)
     {
         var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == id, ct);
@@ -122,18 +152,38 @@ public sealed class TrdAdminService : ITrdAdminService
         return true;
     }
 
-    public async Task<IReadOnlyList<ColaboradorDto>> ColaboradoresAsync(Guid dependenciaId, CancellationToken ct = default) =>
-        await _db.ColaboradoresDependencia.AsNoTracking()
+    public async Task<IReadOnlyList<ColaboradorDto>> ColaboradoresAsync(Guid dependenciaId, string baseUrl, CancellationToken ct = default)
+    {
+        var cols = await _db.ColaboradoresDependencia.AsNoTracking()
             .Where(c => c.DependenciaId == dependenciaId)
             .OrderBy(c => c.Nombre)
-            .Select(c => new ColaboradorDto(c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol))
+            .Select(c => new { c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol, c.Telefono })
             .ToListAsync(ct);
+
+        // Ultimo enlace vigente de cada persona: el enlace es por persona, no por
+        // dependencia, asi que cada quien ve solo el suyo.
+        var ids = cols.Select(c => c.Id).ToList();
+        var tokens = await _db.TokensDependencia.AsNoTracking()
+            .Where(t => t.ColaboradorId != null && ids.Contains(t.ColaboradorId!.Value) && t.ConsumidoEn == null)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new { t.ColaboradorId, t.Token })
+            .ToListAsync(ct);
+        var porColaborador = tokens
+            .GroupBy(t => t.ColaboradorId!.Value)
+            .ToDictionary(g => g.Key, g => g.First().Token);
+
+        return cols.Select(c => new ColaboradorDto(
+                c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol, c.Telefono,
+                porColaborador.TryGetValue(c.Id, out var tk) ? $"{baseUrl.TrimEnd('/')}/trd-cliente?token={tk}" : null))
+            .ToList();
+    }
 
     public async Task<ColaboradorDto?> AgregarColaboradorAsync(CrearColaboradorRequest req, Guid actor, CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tenantId) { return null; }
         var nombre = (req.Nombre ?? "").Trim();
         var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        var telefono = string.IsNullOrWhiteSpace(req.Telefono) ? null : req.Telefono.Trim();
         var rol = string.IsNullOrWhiteSpace(req.Rol) ? "RESPONSABLE" : req.Rol.Trim();
         if (nombre.Length == 0 || email.Length == 0)
         {
@@ -153,11 +203,105 @@ public sealed class TrdAdminService : ITrdAdminService
         var col = new ColaboradorDependencia
         {
             TenantId = tenantId, DependenciaId = req.DependenciaId,
-            Nombre = nombre, Email = email, Rol = rol
+            Nombre = nombre, Email = email, Telefono = telefono, Rol = rol
         };
         _db.ColaboradoresDependencia.Add(col);
         await _db.SaveChangesAsync(ct);
-        return new ColaboradorDto(col.Id, col.DependenciaId, col.Nombre, col.Email, col.Rol);
+
+        await AsegurarCuentaAsync(col, tenantId, ct);
+
+        return new ColaboradorDto(col.Id, col.DependenciaId, col.Nombre, col.Email, col.Rol, col.Telefono);
+    }
+
+    /// <summary>
+    /// Provisiona la cuenta de acceso del colaborador con la clave por defecto.
+    /// Si el correo ya existe en la plataforma se reutiliza la cuenta y NO se toca
+    /// su clave: sobrescribirla dejaria fuera a alguien que ya usa el sistema.
+    /// </summary>
+    private async Task AsegurarCuentaAsync(ColaboradorDependencia col, Guid tenantId, CancellationToken ct)
+    {
+        var pu = await _db.PlatformUsers.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Email == col.Email, ct);
+        if (pu is null)
+        {
+            pu = new PlatformUser
+            {
+                Email = col.Email,
+                DisplayName = col.Nombre,
+                EmailVerified = true,
+                AuthProvider = "local",
+                PasswordHash = _hasher.Hash(ClavePorDefecto),
+                Status = PlatformUserStatus.Active,
+                EsGlobal = false
+            };
+            _db.PlatformUsers.Add(pu);
+            await _db.SaveChangesAsync(ct);
+        }
+
+        if (!await _db.TenantUsers.IgnoreQueryFilters()
+                .AnyAsync(u => u.PlatformUserId == pu.Id && u.TenantId == tenantId, ct))
+        {
+            // El telefono y el nombre viven en el colaborador: TenantUser no los tiene
+            // y no vale la pena ampliarlo solo para esta pantalla.
+            _db.TenantUsers.Add(new TenantUser
+            {
+                TenantId = tenantId,
+                PlatformUserId = pu.Id,
+                Email = col.Email,
+                Status = PlatformUserStatus.Active
+            });
+            await _db.SaveChangesAsync(ct);
+        }
+
+        col.UsuarioId = pu.Id;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> ActualizarColaboradorAsync(EditarColaboradorRequest req, Guid actor, CancellationToken ct = default)
+    {
+        var col = await _db.ColaboradoresDependencia.FirstOrDefaultAsync(c => c.Id == req.Id, ct);
+        if (col is null) { return false; }
+
+        var nombre = (req.Nombre ?? "").Trim();
+        var email = (req.Email ?? "").Trim().ToLowerInvariant();
+        if (nombre.Length == 0 || email.Length == 0)
+        {
+            throw new InvalidOperationException("Nombre y correo de la persona son obligatorios.");
+        }
+        if (await _db.ColaboradoresDependencia
+                .AnyAsync(c => c.DependenciaId == col.DependenciaId && c.Email == email && c.Id != col.Id, ct))
+        {
+            throw new InvalidOperationException("Ya hay otra persona con ese correo en la dependencia.");
+        }
+
+        col.Nombre = nombre;
+        col.Email = email;
+        col.Telefono = string.IsNullOrWhiteSpace(req.Telefono) ? null : req.Telefono.Trim();
+        col.Rol = string.IsNullOrWhiteSpace(req.Rol) ? col.Rol : req.Rol.Trim();
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<TokenGeneradoDto?> GenerarTokenColaboradorAsync(Guid colaboradorId, string baseUrl, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var col = await _db.ColaboradoresDependencia.AsNoTracking().FirstOrDefaultAsync(c => c.Id == colaboradorId, ct);
+        if (col is null) { throw new InvalidOperationException("La persona ya no esta asignada."); }
+        var dep = await _db.Dependencias.AsNoTracking().FirstOrDefaultAsync(d => d.Id == col.DependenciaId, ct);
+        if (dep is null) { throw new InvalidOperationException("La dependencia no existe."); }
+
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+        _db.TokensDependencia.Add(new TokenDependencia
+        {
+            TenantId = tenantId,
+            TrdId = dep.TrdId,
+            DependenciaId = dep.Id,
+            ColaboradorId = col.Id,
+            Token = token,
+            EmailColaborador = col.Email,
+            ExpiraEn = DateTimeOffset.UtcNow.AddDays(7)
+        });
+        await _db.SaveChangesAsync(ct);
+        return new TokenGeneradoDto(token, $"{baseUrl.TrimEnd('/')}/trd-cliente?token={token}");
     }
 
     public async Task<bool> EliminarColaboradorAsync(Guid id, Guid actor, CancellationToken ct = default)

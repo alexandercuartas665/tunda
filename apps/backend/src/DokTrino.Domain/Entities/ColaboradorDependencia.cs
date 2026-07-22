@@ -15,6 +15,8 @@ public class ColaboradorDependencia : TenantEntity
     /// necesita mostrar a quien se le asigno la dependencia.</summary>
     public string Nombre { get; set; } = "";
 
+    public string? Telefono { get; set; }
+
     /// <summary>RESPONSABLE | REVISOR | ...</summary>
     public string Rol { get; set; } = "RESPONSABLE";
 }
