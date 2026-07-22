@@ -81,7 +81,7 @@ else
         }
 
         @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
-        else if (_sesion.SoloLectura) { <div class="ase-alert">La TRD o tu dependencia estan CERRADAS: solo lectura.</div> }
+        else if (_sesion.SoloLectura) { <div class="ase-alert">@(_sesion.MotivoSoloLectura ?? "No se puede editar.") Puedes consultar, pero no diligenciar.</div> }
         @if (_error is not null) { <div class="ase-alert">@_error</div> }
         @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
@@ -202,7 +202,7 @@ else
                                 <div class="cl-f cl-chk"><label>D</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispD" /></div>
                                 <div class="cl-f cl-chk"><label>V.Adm</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val1Admin" /></div>
                                 <div class="cl-f cl-chk"><label>V.Hist</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val2Historica" /></div>
-                                <div class="cl-f"><label>&nbsp;</label><button class="tcl-add" style="width: auto; margin: 0; padding: 9px 16px;" @onclick="Guardar">Registrar en mi TRD</button></div>
+                                <div class="cl-f"><label>&nbsp;</label><button class="tcl-add" style="width: auto; margin: 0; padding: 9px 16px;" @onclick="Guardar">Cargar Estructura &rarr;</button></div>
                             </div>
                             <small class="text-muted">
                                 AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion
@@ -211,6 +211,38 @@ else
                         }
                     }
                 </div>
+
+                @* ----- Columna 3: formato de los activos (paso 3) ----- *@
+                @if (_cargadas.Count > 0 && !_sesion.SoloLectura)
+                {
+                    <div class="tcl-panel fmt">
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <div class="tcl-panel-t" style="margin: 0;">Formato de los activos</div>
+                            <span class="tcl-count" style="margin-left: 8px;">@_cargadas.Count</span>
+                            <button class="tcl-coach-x" style="margin-left: auto;" @onclick="() => _cargadas.Clear()">&#10005;</button>
+                        </div>
+                        <div class="tcl-fmt-ayuda">
+                            Marca uno o varios formatos por tipologia (papel, Word, Excel, PDF, multimedia...).
+                        </div>
+
+                        @foreach (var c in _cargadas)
+                        {
+                            <div class="tcl-fmt-fila">
+                                <div class="tcl-fmt-nom">@(c.TipologiaNombre ?? c.SubserieNombre ?? c.SerieNombre)</div>
+                                <div class="tcl-chips">
+                                    @foreach (var f in FormatosDisponibles)
+                                    {
+                                        var puesto = _formatos.TryGetValue(c.Id, out var ya) && ya.Any(x => x.Formato == f);
+                                        <button class="tcl-chip @(puesto ? "on" : "")"
+                                                @onclick="() => AlternarChip(c.Id, f)">@f</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <button class="tcl-add" style="margin-top: 12px;" @onclick="ConfirmarFormatos">Guardar formatos</button>
+                    </div>
+                }
             </div>
         }
         else
@@ -253,10 +285,19 @@ else
                             <span class="name">@(grupo.Key.Contains(" - ") ? grupo.Key[(grupo.Key.IndexOf(" - ", StringComparison.Ordinal) + 3)..] : grupo.Key)</span>
                         </div>
                         <div style="padding: 6px 18px 14px;">
-                            @foreach (var r in grupo)
+                            @foreach (var porSub in grupo.GroupBy(r => r.SubserieNombre ?? "(sin subserie)"))
                             {
-                                <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f4f6fb;">
-                                    <span style="font-size: 12.5px; font-weight: 600; color: #37415c;">@(r.SubserieNombre ?? "(sin subserie)")</span>
+                                @* Badge de progreso X/Y: tipologias con formato / total. *@
+                                var total = porSub.Count();
+                                var conFormato = porSub.Count(r => _formatos.TryGetValue(r.Id, out var f) && f.Count > 0);
+                                <div class="tcl-grp-h">
+                                    <span>@porSub.Key</span>
+                                    <span class="tcl-progreso @(conFormato == total ? "ok" : "")">@conFormato/@total</span>
+                                </div>
+
+                            @foreach (var r in porSub)
+                            {
+                                <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0 9px 14px; border-bottom: 1px solid #f4f6fb;">
                                     <span style="font-size: 12px; color: #6f6754;">@(r.TipologiaNombre ?? "-")</span>
                                     <span style="margin-left: auto; font-size: 11.5px; color: #9aa3bd;">
                                         AG @(r.TiempoAg?.ToString() ?? "-") &middot; AC @(r.TiempoAc?.ToString() ?? "-") &middot; @r.Disposicion
@@ -294,6 +335,7 @@ else
                                         <button class="btn btn-outline-secondary btn-sm" @onclick="() => _formatoAbierto = null">Cancelar</button>
                                     </div>
                                 }
+                            }
                             }
                         </div>
                     </div>
@@ -483,18 +525,74 @@ else
 
         _cmd.SerieId = _serieSel.Id;
         _cmd.SubserieId = _subAbierta;
-        _cmd.TipologiaId = _tiposMarcadas.Count > 0 ? _tiposMarcadas.First() : null;
+        _cmd.TipologiaIds = _tiposMarcadas.ToList();
+        _cmd.TipologiaId = null;
         _cmd.SinSubserie = _subAbierta is null;
+
+        var marcadas = _tiposMarcadas.Count;
+        var serieNombre = _serieSel.Nombre;
+        var subNombre = _subAbierta is Guid sid ? _subseries.FirstOrDefault(x => x.Id == sid)?.Nombre : null;
 
         try
         {
             await Cliente.GuardarRespuestaAsync(Token ?? "", _cmd);
-            _ok = "Registro agregado a tu TRD.";
+            _ok = marcadas > 1
+                ? $"{marcadas} tipologias cargadas. Ahora indica su formato."
+                : "Registro cargado. Ahora indica su formato.";
             _cmd = new();
             _tiposMarcadas.Clear();
             await Recargar();
+
+            // La columna 3 trabaja sobre lo que se acaba de cargar: se identifica
+            // por serie y subserie porque el servicio devuelve los nombres, no los ids.
+            _cargadas = _resp
+                .Where(r => r.SerieNombre.Contains(serieNombre, StringComparison.OrdinalIgnoreCase)
+                            && (subNombre is null || (r.SubserieNombre ?? "").Contains(subNombre, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    /// <summary>Vocabulario de formatos del editor de series, para hablar igual en los dos lados.</summary>
+    private static readonly string[] FormatosDisponibles =
+        ["Papel", "PDF", "Word", "Excel", "Imagen", "Video", "Audio", "Correo"];
+
+    /// <summary>El unico soporte fisico es el papel; el resto son digitales.</summary>
+    private static string SoporteDe(string formato) =>
+        formato.Equals("Papel", StringComparison.OrdinalIgnoreCase) ? "PAPEL" : "DIGITAL";
+
+    /// <summary>Registros recien cargados; alimentan la columna 3 de formatos.</summary>
+    private List<RespuestaTrdDto> _cargadas = new();
+
+    private async Task AlternarChip(Guid respuestaId, string formato)
+    {
+        _error = null;
+        try
+        {
+            var actuales = _formatos.TryGetValue(respuestaId, out var f) ? f : new List<FormatoDto>();
+            var puesto = actuales.FirstOrDefault(x => x.Formato == formato);
+            if (puesto is not null)
+            {
+                await Cliente.QuitarFormatoAsync(Token ?? "", puesto.Id);
+            }
+            else
+            {
+                await Cliente.DeclararFormatoAsync(Token ?? "", respuestaId, SoporteDe(formato), formato);
+            }
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task ConfirmarFormatos()
+    {
+        var sinFormato = _cargadas.Count(c => !_formatos.TryGetValue(c.Id, out var f) || f.Count == 0);
+        _cargadas.Clear();
+        await Recargar();
+        _ok = sinFormato > 0
+            ? $"Formatos guardados. Quedan {sinFormato} sin formato: los veras en Estructura como pendientes."
+            : "Formatos guardados.";
+        _tab = "estructura";
     }
 
     private async Task Del(Guid id)

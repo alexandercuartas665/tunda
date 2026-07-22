@@ -29,6 +29,9 @@ public interface ITrdClienteService
     Task<IReadOnlyList<FormatoDto>> FormatosAsync(string token, Guid respuestaId, CancellationToken ct = default);
 
     /// <summary>Paso 3 del asistente: declara el soporte y formato de un registro.</summary>
+    /// <summary>Retira un formato ya declarado (el chip se apaga).</summary>
+    Task<bool> QuitarFormatoAsync(string token, Guid formatoId, CancellationToken ct = default);
+
     Task<Guid?> DeclararFormatoAsync(string token, Guid respuestaId, string soporte, string formato, CancellationToken ct = default);
 
     Task<bool> MostrarHintAsync(string token, CancellationToken ct = default);

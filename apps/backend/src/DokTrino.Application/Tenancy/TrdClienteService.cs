@@ -25,9 +25,18 @@ public sealed class TrdClienteService : ITrdClienteService
         var dep = await _db.Dependencias.IgnoreQueryFilters().AsNoTracking().FirstOrDefaultAsync(d => d.Id == tok.DependenciaId, ct);
         if (trd is null || dep is null) { return null; }
         var expirado = tok.ExpiraEn is DateTimeOffset exp && exp < _clock.GetUtcNow();
-        var soloLectura = expirado || trd.Estado == "CERRADO" || dep.Estado == "CERRADO";
+
+        // Solo se diligencia la encuesta ACTIVA: una en DESARROLLO todavia se
+        // esta armando y una CERRADA ya se cerro. Antes ambas aceptaban
+        // respuestas igual que la activa.
+        var soloLectura = expirado || trd.Estado != "ACTIVO" || dep.Estado == "CERRADO";
+        var motivo = !soloLectura ? null
+            : expirado ? "El enlace expiro."
+            : dep.Estado == "CERRADO" ? "Tu dependencia esta cerrada."
+            : trd.Estado == "DESARROLLO" ? "La encuesta aun esta en desarrollo; el administrador debe activarla."
+            : "La encuesta esta cerrada.";
         return new TokenSesionDto(tok.TenantId, trd.Id, trd.Consecutivo, trd.Titulo, trd.Estado,
-            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado);
+            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado, motivo);
     }
 
     public async Task<IReadOnlyList<RespuestaTrdDto>> ListarRespuestasAsync(string token, CancellationToken ct = default)
@@ -60,23 +69,42 @@ public sealed class TrdClienteService : ITrdClienteService
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
         if (s.Expirado) { throw new InvalidOperationException("El token expiro."); }
-        if (s.SoloLectura) { throw new InvalidOperationException("La TRD o la dependencia estan CERRADAS; no se puede diligenciar."); }
+        if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede diligenciar."); }
         if (!await _db.Series.IgnoreQueryFilters().AnyAsync(x => x.Id == cmd.SerieId && x.TenantId == s.TenantId, ct))
         { throw new InvalidOperationException("La serie no existe."); }
 
-        var entity = new RespuestaTablaDocumental
+        // Una respuesta por tipologia marcada. Sin tipologias se guarda una sola
+        // fila a nivel de serie/subserie.
+        var tipologias = cmd.TipologiaIds.Count > 0
+            ? cmd.TipologiaIds.Distinct().Cast<Guid?>().ToList()
+            : [cmd.TipologiaId];
+
+        RespuestaTablaDocumental? ultima = null;
+        foreach (var tipologiaId in tipologias)
         {
-            TenantId = s.TenantId, TrdId = s.TrdId, DependenciaId = s.DependenciaId,
-            SerieId = cmd.SerieId, SubserieId = cmd.SubserieId, TipologiaId = cmd.TipologiaId,
-            SinSubserie = cmd.SinSubserie || cmd.SubserieId == null,
-            TiempoAg = cmd.TiempoAg, TiempoAc = cmd.TiempoAc,
-            DispCt = cmd.DispCt, DispS = cmd.DispS, DispE = cmd.DispE, DispD = cmd.DispD,
-            Val1Admin = cmd.Val1Admin, Val1Legal = cmd.Val1Legal, Val2Historica = cmd.Val2Historica,
-            Extension = "{}", FechaReg = _clock.GetUtcNow(), CreadoPor = Guid.Empty
-        };
-        _db.RespuestasTablaDocumental.Add(entity);
+            // El unique (trd, dependencia, serie, subserie, tipologia) rechazaria
+            // el duplicado: si ya esta declarada, se deja la que hay.
+            var yaEsta = await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(
+                r => r.TenantId == s.TenantId && r.TrdId == s.TrdId && r.DependenciaId == s.DependenciaId
+                     && r.SerieId == cmd.SerieId && r.SubserieId == cmd.SubserieId
+                     && r.TipologiaId == tipologiaId, ct);
+            if (yaEsta) { continue; }
+
+            ultima = new RespuestaTablaDocumental
+            {
+                TenantId = s.TenantId, TrdId = s.TrdId, DependenciaId = s.DependenciaId,
+                SerieId = cmd.SerieId, SubserieId = cmd.SubserieId, TipologiaId = tipologiaId,
+                SinSubserie = cmd.SinSubserie || cmd.SubserieId == null,
+                TiempoAg = cmd.TiempoAg, TiempoAc = cmd.TiempoAc,
+                DispCt = cmd.DispCt, DispS = cmd.DispS, DispE = cmd.DispE, DispD = cmd.DispD,
+                Val1Admin = cmd.Val1Admin, Val1Legal = cmd.Val1Legal, Val2Historica = cmd.Val2Historica,
+                Extension = "{}", FechaReg = _clock.GetUtcNow(), CreadoPor = Guid.Empty
+            };
+            _db.RespuestasTablaDocumental.Add(ultima);
+        }
+
         await _db.SaveChangesAsync(ct);
-        return entity.Id;
+        return ultima?.Id;
     }
 
     public async Task<bool> EliminarRespuestaAsync(string token, Guid respuestaId, CancellationToken ct = default)
@@ -156,7 +184,7 @@ public sealed class TrdClienteService : ITrdClienteService
     {
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
-        if (s.SoloLectura) { throw new InvalidOperationException("La TRD o la dependencia estan CERRADAS; no se puede sugerir catalogo."); }
+        if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede sugerir catalogo."); }
 
         var nombre = (cmd.Nombre ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("El nombre es obligatorio."); }
@@ -220,11 +248,30 @@ public sealed class TrdClienteService : ITrdClienteService
             .ToListAsync(ct);
     }
 
+    public async Task<bool> QuitarFormatoAsync(string token, Guid formatoId, CancellationToken ct = default)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { throw new InvalidOperationException("Token invalido."); }
+        if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede editar."); }
+
+        // Solo puede quitar formatos de registros de su propia dependencia.
+        var f = await _db.FormatosSerie.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == formatoId && x.TenantId == s.TenantId, ct);
+        if (f is null) { return false; }
+        var propio = await _db.RespuestasTablaDocumental.IgnoreQueryFilters()
+            .AnyAsync(r => r.Id == f.RespuestaId && r.DependenciaId == s.DependenciaId, ct);
+        if (!propio) { throw new InvalidOperationException("El registro no pertenece a tu dependencia."); }
+
+        _db.FormatosSerie.Remove(f);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<Guid?> DeclararFormatoAsync(string token, Guid respuestaId, string soporte, string formato, CancellationToken ct = default)
     {
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
-        if (s.SoloLectura) { throw new InvalidOperationException("La TRD o la dependencia estan CERRADAS."); }
+        if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede editar."); }
 
         var nombre = (formato ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("Indica el formato (PDF, papel, video...)."); }

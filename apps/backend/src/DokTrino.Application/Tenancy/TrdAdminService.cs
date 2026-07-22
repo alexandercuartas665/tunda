@@ -75,6 +75,23 @@ public sealed class TrdAdminService : ITrdAdminService
         // Transicion controlada: DESARROLLO -> ACTIVO -> CERRADO (no saltar a un estado anterior).
         int Orden(string e) => Array.IndexOf(EstadosTrd, e);
         if (Orden(estado) < Orden(trd.Estado)) { throw new InvalidOperationException($"No se puede volver de {trd.Estado} a {estado}."); }
+
+        // Solo una encuesta activa a la vez. Se bloquea en vez de cerrar la
+        // vigente sola: cerrar es irreversible y tumbaria el levantamiento en
+        // curso de las dependencias sin que nadie lo pida.
+        if (estado == "ACTIVO")
+        {
+            var vigente = await _db.TablasRetencionDocumental.AsNoTracking()
+                .Where(x => x.Estado == "ACTIVO" && x.Id != trdId)
+                .Select(x => x.Consecutivo)
+                .FirstOrDefaultAsync(ct);
+            if (vigente is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Ya hay una encuesta activa ({vigente}). Cierrala antes de activar esta.");
+            }
+        }
+
         trd.Estado = estado;
         trd.FechaNovedad = _clock.GetUtcNow();
         await _db.SaveChangesAsync(ct);
