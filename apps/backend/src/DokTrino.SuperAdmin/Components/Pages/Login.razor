@@ -15,17 +15,19 @@
         <div class="auth-aside-deco auth-deco-bl"></div>
 
         <div class="auth-brand">
+            @* El logotipo ya lleva el nombre dentro: no se repite en texto. Sobre el
+               panel azul va la version en negativo, sin pastilla de fondo. *@
             @if (!string.IsNullOrWhiteSpace(_logoUrl))
             {
-                <img class="auth-brand-logo-img" src="@_logoUrl" alt="@_displayName" />
+                <img class="auth-brand-logo-img" src="@LogoNegativo(_logoUrl)" alt="@_displayName" />
             }
             else
             {
                 <div class="auth-brand-logo">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
                 </div>
+                <span class="auth-brand-name">@_displayName</span>
             }
-            <span class="auth-brand-name">@_displayName</span>
         </div>
 
         <div class="auth-aside-body">
@@ -257,6 +259,15 @@
     [SupplyParameterFromQuery] public string? Mode { get; set; }
 
     private DokTrino.Application.Admin.PlatformBrandingDto _brand = DokTrino.Application.Admin.PlatformBrandingDto.Default;
+
+    /// <summary>
+    /// El panel del login es azul: si existe la variante en negativo del logo la
+    /// usa, para no tener que recuadrar el logo claro sobre el fondo.
+    /// </summary>
+    private static string LogoNegativo(string url) =>
+        url.Contains("archimente-claro", StringComparison.OrdinalIgnoreCase)
+            ? url.Replace("archimente-claro", "archimente-oscuro", StringComparison.OrdinalIgnoreCase)
+            : url;
     private bool _googleEnabled;
 
     // Logo y nombre que finalmente se renderizan en el panel de la izquierda.

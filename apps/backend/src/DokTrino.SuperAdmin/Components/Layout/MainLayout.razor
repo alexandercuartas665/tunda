@@ -32,18 +32,19 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18" /><path d="M3 12h18" /><path d="M3 18h18" /></svg>
             </label>
 
+            @* El logotipo ya incluye el nombre: si hay logo no se repite en texto. *@
             <a class="doktrino-topbar-brand" href="">
-                <span class="doktrino-topbar-mark">
-                    @if (!string.IsNullOrWhiteSpace(_brandLogoUrl))
-                    {
-                        <img src="@_brandLogoUrl" alt="@_brandName" />
-                    }
-                    else
-                    {
-                        @(_brandName.Length > 0 ? _brandName[..1].ToUpperInvariant() : "D")
-                    }
-                </span>
-                <span class="doktrino-topbar-name">@_brandName</span>
+                @if (!string.IsNullOrWhiteSpace(_brandLogoUrl))
+                {
+                    <img class="doktrino-topbar-logo" src="@_brandLogoUrl" alt="@_brandName" />
+                }
+                else
+                {
+                    <span class="doktrino-topbar-mark">
+                        @(_brandName.Length > 0 ? _brandName[..1].ToUpperInvariant() : "A")
+                    </span>
+                    <span class="doktrino-topbar-name">@_brandName</span>
+                }
             </a>
 
             <div class="doktrino-page-title">@PageTitle</div>
@@ -137,7 +138,7 @@
 </script>
 
 @code {
-    private string _brandName = "DokTrino";
+    private string _brandName = "Archimente";
     private string? _brandLogoUrl;
 
     private sealed record RailItem(string Href, string Label, string Hint, MarkupString Icon);

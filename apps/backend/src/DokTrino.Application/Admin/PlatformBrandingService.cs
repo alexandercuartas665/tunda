@@ -14,9 +14,9 @@ public sealed record PlatformBrandingDto(
 {
     /// <summary>Valores por defecto cuando aun no se ha configurado la marca.</summary>
     public static PlatformBrandingDto Default => new(
-        "DokTrino",
+        "Archimente",
         "Gestion Documental",
-        null,
+        "/img/marca/archimente-claro.png",
         "Gestion documental, agil y trazable",
         "Coordina tu archivo: TRD, radicacion, expedientes y retencion documental en una sola plataforma.");
 }
@@ -58,7 +58,7 @@ public sealed class PlatformBrandingService : IPlatformBrandingService
 
     public async Task SaveAsync(SaveBrandingRequest request, Guid actorUserId, CancellationToken cancellationToken = default)
     {
-        var name = string.IsNullOrWhiteSpace(request.PlatformName) ? "DokTrino" : request.PlatformName.Trim();
+        var name = string.IsNullOrWhiteSpace(request.PlatformName) ? "Archimente" : request.PlatformName.Trim();
 
         var row = await _db.PlatformBrandings.FirstOrDefaultAsync(cancellationToken);
         if (row is null)

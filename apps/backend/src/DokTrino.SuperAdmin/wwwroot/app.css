@@ -172,6 +172,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 }
 .doktrino-topbar-mark img { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; background: #fff; }
 .doktrino-topbar-name { font-weight: 800; font-size: 19px; color: #1f2433; letter-spacing: -.4px; }
+.doktrino-topbar-logo { height: 26px; width: auto; display: block; }
 .doktrino-page-title {
   font-weight: 700; font-size: 16px; color: #2a3346;
   border-left: 1px solid #ece8dd; padding-left: 18px;
@@ -467,7 +468,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .auth-brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
 .auth-brand-logo { width: 46px; height: 46px; border-radius: 13px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.25); display: grid; place-items: center; backdrop-filter: blur(6px); }
 .auth-brand-logo svg { width: 22px; height: 22px; transform: rotate(-45deg); }
-.auth-brand-logo-img { height: 46px; max-width: 180px; object-fit: contain; border-radius: 10px; background: rgba(255,255,255,.92); padding: 6px 10px; }
+.auth-brand-logo-img { height: 34px; max-width: 230px; object-fit: contain; }
 .auth-brand-name { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; }
 .auth-aside-body { position: relative; z-index: 1; max-width: 420px; }
 .auth-aside-body h2 { font-size: 2.1rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 14px; }
@@ -1181,6 +1182,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 /* Telefonos pequenos. */
 @media (max-width: 560px) {
   .doktrino-topbar-name { font-size: 15px; }
+  .doktrino-topbar-logo { height: 20px; }
   .doktrino-help span { display: none; }
   .doktrino-content { padding: 14px 11px; }
   .page-title { font-size: 1.32rem; }
