@@ -5,6 +5,7 @@
 @using DokTrino.Application.Tenancy
 @inject ICuestionarioService Cuestionarios
 @inject ITrdClienteService Cliente
+@inject IClienteCursoService Curso
 
 <PageTitle>Formacion Archimente</PageTitle>
 
@@ -33,6 +34,46 @@ else
 
         @if (_error is not null) { <div class="ase-alert">@_error</div> }
 
+        @* Contenido del curso: modulos con sus lecciones (video/imagen/pdf/texto) *@
+        @if (_curso is not null)
+        {
+            @foreach (var m in _curso.Modulos)
+            {
+                <div class="ase-card">
+                    <div class="ase-card-h">@m.Titulo</div>
+                    @if (!string.IsNullOrWhiteSpace(m.Descripcion)) { <div class="dkd-empty" style="padding: 0 0 10px;">@m.Descripcion</div> }
+                    @foreach (var l in m.Lecciones)
+                    {
+                        <div class="form-lec">
+                            <div class="form-lec-t">@l.Titulo <span class="form-lec-tipo">@l.Tipo</span></div>
+                            @if (!string.IsNullOrWhiteSpace(l.Descripcion)) { <div class="form-lec-s">@l.Descripcion</div> }
+                            @{ var src = $"/capacitaciones/cliente/leccion/{l.Id}/recurso?token={Token}"; }
+                            @if (l.Tipo == "VIDEO" && l.TieneArchivo)
+                            {
+                                <video class="form-lec-media" controls src="@src"></video>
+                            }
+                            else if (l.Tipo == "IMAGEN" && l.TieneArchivo)
+                            {
+                                <img class="form-lec-media" src="@src" alt="@l.Titulo" />
+                            }
+                            else if (l.Tipo == "PDF" && l.TieneArchivo)
+                            {
+                                <iframe class="form-lec-media form-lec-pdf" src="@src" title="@l.Titulo"></iframe>
+                            }
+                            else if (l.Tipo == "TEXTO" && !string.IsNullOrWhiteSpace(l.Contenido))
+                            {
+                                <div class="form-lec-texto">@l.Contenido</div>
+                            }
+                        </div>
+                    }
+                    @if (m.Lecciones.Count == 0)
+                    {
+                        <div class="dkd-empty">Este modulo aun no tiene lecciones.</div>
+                    }
+                </div>
+            }
+        }
+
         @* Estado de la capacitacion *@
         <div class="ase-card">
             <div class="ase-card-h">Estado de tu capacitacion</div>
@@ -42,10 +83,20 @@ else
                     Tu entidad aun no publico un cuestionario de formacion. Puedes diligenciar tu TRD sin restriccion.
                 </div>
             }
-            else if (_estado.Superado)
+            else if (Aprobado)
             {
                 <div class="tcl-ok">&#10003; Capacitacion superada. Ya puedes diligenciar tu TRD.</div>
                 <a class="tcl-add" style="width: auto; display: inline-flex;" href="@($"trd-cliente?token={Token}")">Ir a mi encuesta</a>
+            }
+            else if (_gate.Bloqueado)
+            {
+                <div class="tcl-pend">
+                    <div class="tcl-pend-h">&#128274; Evaluacion bloqueada</div>
+                    <div class="tcl-pend-s">
+                        Agotaste los @_gate.IntentosMax intento(s) sin aprobar. Pide al administrador
+                        documental que te desbloquee para volver a intentarlo.
+                    </div>
+                </div>
             }
             else
             {
@@ -87,8 +138,8 @@ else
             </div>
         }
 
-        @* Cuestionario *@
-        @if (_cuestionario is not null && !_estado.Superado)
+        @* Cuestionario: solo si no aprobo y no esta bloqueado por intentos *@
+        @if (_cuestionario is not null && !Aprobado && !_gate.Bloqueado)
         {
             <div class="ase-card">
                 <div class="ase-card-h">@_cuestionario.Titulo</div>
@@ -133,6 +184,14 @@ else
     .form-score span { font-size:16px; font-weight:600; color:#9aa3bd; }
     .form-score.ok { color:#15803d; }
     .form-score.no { color:#b8770b; }
+    .form-lec { padding:12px 0; border-bottom:1px solid #f1f3f8; }
+    .form-lec:last-child { border-bottom:none; }
+    .form-lec-t { font-size:13.5px; font-weight:700; color:#1f2433; display:flex; align-items:center; gap:8px; }
+    .form-lec-tipo { font-size:9.5px; font-weight:800; letter-spacing:.4px; padding:2px 7px; border-radius:20px; background:#eef2fb; color:#4a5878; }
+    .form-lec-s { font-size:12px; color:#6b7488; margin:3px 0 8px; }
+    .form-lec-media { display:block; width:100%; max-width:640px; border-radius:10px; margin-top:8px; }
+    .form-lec-pdf { height:520px; border:1px solid #e6e9f2; }
+    .form-lec-texto { font-size:13px; color:#37415c; line-height:1.6; white-space:pre-wrap; margin-top:6px; }
 </style>
 
 @code {
@@ -141,9 +200,14 @@ else
     private TokenSesionDto? _sesion;
     private CuestionarioDto? _cuestionario;
     private EstadoCapacitacionDto _estado = new(false, 0, 0, false);
+    private CursoGateDto _gate = new(false, false, null, null, null, false, false, 0, 0);
+    private CursoClienteDto? _curso;
     private ResultadoIntentoDto? _resultado;
     private int[] _respuestas = [];
     private string? _error;
+
+    /// <summary>Aprobado real: si hay curso vigente lo dice el gate; si no, el quiz suelto.</summary>
+    private bool Aprobado => _gate.HayCurso ? _gate.Aprobado : _estado.Superado;
 
     protected override async Task OnInitializedAsync()
     {
@@ -151,6 +215,9 @@ else
         _sesion = await Cliente.ResolverTokenAsync(t);
         if (_sesion is null) { return; }
 
+        // Registrar el inicio del curso deja constancia para la estadistica.
+        await Curso.RegistrarInicioAsync(t);
+        _curso = await Curso.CursoAsync(t);
         await Recargar();
     }
 
@@ -159,6 +226,7 @@ else
         var t = Token ?? "";
         _cuestionario = await Cuestionarios.ObtenerPorTokenAsync(t);
         _estado = await Cuestionarios.EstadoAsync(t);
+        _gate = await Curso.GateAsync(t);
 
         // -1 = sin responder, para distinguirlo de haber marcado la primera opcion.
         var n = _cuestionario?.Preguntas.Count ?? 0;

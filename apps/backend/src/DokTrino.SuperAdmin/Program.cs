@@ -650,6 +650,18 @@ app.MapGet("/capacitaciones/leccion/{id:guid}/recurso", async (
     return Results.File(d.Content, d.Mime, enableRangeProcessing: true);
 }).RequireAuthorization();
 
+// Recurso de una leccion del curso, para el colaborador (anonimo). El token de
+// encuesta ES la autenticacion: se valida que la leccion sea del tenant del token.
+app.MapGet("/capacitaciones/cliente/leccion/{id:guid}/recurso", async (
+    Guid id,
+    string token,
+    DokTrino.Application.Tenancy.IClienteCursoService svc,
+    CancellationToken ct) =>
+{
+    var d = await svc.DescargarLeccionAsync(token, id, ct);
+    return d is null ? Results.NotFound() : Results.File(d.Content, d.Mime, enableRangeProcessing: true);
+}).AllowAnonymous();
+
 // Endpoint publico consumido por Power BI / conectores externos (spec 2.D5). El token ES la
 // autenticacion: se resuelve contra bi_token_uso, acota al tenant del token, ejecuta SOLO
 // SELECT con parametros nombrados y registra la ejecucion (duracion/error) en bi_log.

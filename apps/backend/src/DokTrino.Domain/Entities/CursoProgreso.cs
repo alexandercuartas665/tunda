@@ -23,6 +23,14 @@ public class CursoProgreso : TenantEntity
     public DateTimeOffset? FechaAprobacion { get; set; }
 
     public int Intentos { get; set; }
+
+    /// <summary>
+    /// Intentos perdonados por un desbloqueo. El bloqueo mira (Intentos -
+    /// Perdonados) contra el maximo, asi el histgrico total se conserva para
+    /// estadisticas pero el colaborador recibe intentos frescos al desbloquear.
+    /// </summary>
+    public int IntentosPerdonados { get; set; }
+
     public int MejorNota { get; set; }
     public bool Aprobado { get; set; }
 

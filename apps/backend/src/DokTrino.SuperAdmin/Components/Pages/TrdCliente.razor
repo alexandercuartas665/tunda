@@ -5,6 +5,7 @@
 @using DokTrino.Application.Tenancy
 @inject ITrdClienteService Cliente
 @inject ICuestionarioService Cuestionarios
+@inject IClienteCursoService Curso
 @inject NavigationManager Nav
 
 <PageTitle>Encuesta documental - Archimente</PageTitle>
@@ -394,9 +395,10 @@ else
 
         _mostrarHint = await Cliente.MostrarHintAsync(t);
 
-        // Gate de capacitacion: solo bloquea si la entidad publico cuestionario.
-        var cap = await Cuestionarios.EstadoAsync(t);
-        _capacitacionPendiente = cap.HayCuestionario && !cap.Superado;
+        // Gate de capacitacion: el curso vigente decide. Si es obligatorio y no se
+        // aprobo (o quedo bloqueado por intentos), no se puede diligenciar.
+        var gate = await Curso.GateAsync(t);
+        _capacitacionPendiente = !gate.PuedeDiligenciar;
 
         await Recargar();
     }

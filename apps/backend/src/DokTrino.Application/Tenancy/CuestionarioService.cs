@@ -41,13 +41,38 @@ public sealed class CuestionarioService : ICuestionarioService
         _clock = clock;
     }
 
+    /// <summary>
+    /// Cuestionario que actua como evaluacion: el del curso vigente si hay uno
+    /// asociado en Configuracion documental; si no, el modulo FORMACION_TRD
+    /// (compatibilidad con el quiz suelto anterior). Devuelve tambien la config
+    /// del curso para aplicar intentos/bloqueo.
+    /// </summary>
+    private async Task<(CuestionarioCapacitacion? Cuestionario, ConfiguracionCursoCliente? Curso)> ResolverGateAsync(Guid tenantId, CancellationToken ct)
+    {
+        var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId, ct);
+        if (cfg is not null)
+        {
+            var cuestId = await _db.Cursos.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.Id == cfg.CursoId && c.Activo).Select(c => c.CuestionarioId).FirstOrDefaultAsync(ct);
+            if (cuestId is Guid qid)
+            {
+                var q = await _db.Cuestionarios.IgnoreQueryFilters().AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == qid && c.Activo, ct);
+                if (q is not null) { return (q, cfg); }
+            }
+        }
+        var fallback = await _db.Cuestionarios.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Modulo == "FORMACION_TRD" && c.Activo, ct);
+        return (fallback, null);
+    }
+
     public async Task<CuestionarioDto?> ObtenerPorTokenAsync(string token, CancellationToken ct = default)
     {
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { return null; }
 
-        var cuestionario = await _db.Cuestionarios.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.Modulo == "FORMACION_TRD" && c.Activo, ct);
+        var (cuestionario, _) = await ResolverGateAsync(s.TenantId, ct);
         if (cuestionario is null) { return null; }
 
         var preguntas = await _db.CuestionarioPreguntas.IgnoreQueryFilters().AsNoTracking()
@@ -67,13 +92,16 @@ public sealed class CuestionarioService : ICuestionarioService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { return new EstadoCapacitacionDto(false, 0, 0, false); }
 
-        var hay = await _db.Cuestionarios.IgnoreQueryFilters()
-            .AnyAsync(c => c.TenantId == s.TenantId && c.Modulo == "FORMACION_TRD" && c.Activo, ct);
+        var (cuest, _) = await ResolverGateAsync(s.TenantId, ct);
+        var hay = cuest is not null;
 
-        var intentos = await _db.CuestionarioIntentos.IgnoreQueryFilters().AsNoTracking()
-            .Where(i => i.TenantId == s.TenantId && i.DependenciaId == s.DependenciaId)
-            .Select(i => new { i.Puntaje, i.Aprobado })
-            .ToListAsync(ct);
+        // Intentos del cuestionario que hoy es la evaluacion (curso o FORMACION_TRD).
+        var intentos = cuest is null
+            ? new List<(int Puntaje, bool Aprobado)>()
+            : (await _db.CuestionarioIntentos.IgnoreQueryFilters().AsNoTracking()
+                .Where(i => i.CuestionarioId == cuest.Id && i.DependenciaId == s.DependenciaId)
+                .Select(i => new { i.Puntaje, i.Aprobado }).ToListAsync(ct))
+                .Select(i => (i.Puntaje, i.Aprobado)).ToList();
 
         return new EstadoCapacitacionDto(
             intentos.Any(i => i.Aprobado),
@@ -88,9 +116,21 @@ public sealed class CuestionarioService : ICuestionarioService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
 
-        var cuestionario = await _db.Cuestionarios.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.Modulo == "FORMACION_TRD" && c.Activo, ct);
+        var (cuestionario, cfgCurso) = await ResolverGateAsync(s.TenantId, ct);
         if (cuestionario is null) { return null; }
+
+        // Si el curso tiene la compuerta y el colaborador agoto los intentos sin
+        // aprobar, no se acepta un intento mas hasta que el admin desbloquee.
+        if (cfgCurso is not null)
+        {
+            var previo = await _db.CursoProgresos.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(p => p.CursoId == cfgCurso.CursoId && p.DependenciaId == s.DependenciaId, ct);
+            if (previo is not null && !previo.Aprobado
+                && (previo.Intentos - previo.IntentosPerdonados) >= cfgCurso.IntentosMax)
+            {
+                throw new InvalidOperationException("Agotaste los intentos. Pide al administrador que te desbloquee.");
+            }
+        }
 
         var preguntas = await _db.CuestionarioPreguntas.IgnoreQueryFilters().AsNoTracking()
             .Where(p => p.CuestionarioId == cuestionario.Id)
@@ -135,7 +175,43 @@ public sealed class CuestionarioService : ICuestionarioService
             await MarcarSuperadoAsync(s, ct);
         }
 
+        // Consolida el avance del curso para estadisticas y compuerta.
+        if (cfgCurso is not null)
+        {
+            await SincronizarProgresoAsync(s, cfgCurso.CursoId, cfgCurso.IntentosMax, puntaje, aprobado, ct);
+        }
+
         return new ResultadoIntentoDto(puntaje, aprobado, correctas, preguntas.Count, retro);
+    }
+
+    /// <summary>Actualiza CursoProgreso tras un intento: cuenta, mejor nota, aprobacion y bloqueo.</summary>
+    private async Task SincronizarProgresoAsync(TokenSesionDto s, Guid cursoId, int intentosMax, int puntaje, bool aprobado, CancellationToken ct)
+    {
+        var prog = await _db.CursoProgresos.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(p => p.CursoId == cursoId && p.DependenciaId == s.DependenciaId, ct);
+        if (prog is null)
+        {
+            prog = new CursoProgreso
+            {
+                TenantId = s.TenantId, CursoId = cursoId, DependenciaId = s.DependenciaId,
+                FechaInicio = _clock.GetUtcNow()
+            };
+            _db.CursoProgresos.Add(prog);
+        }
+
+        prog.Intentos += 1;
+        if (puntaje > prog.MejorNota) { prog.MejorNota = puntaje; }
+        if (aprobado && !prog.Aprobado)
+        {
+            prog.Aprobado = true;
+            prog.FechaAprobacion = _clock.GetUtcNow();
+            prog.Bloqueado = false;
+        }
+        if (!prog.Aprobado)
+        {
+            prog.Bloqueado = (prog.Intentos - prog.IntentosPerdonados) >= intentosMax;
+        }
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>Deja constancia en la formacion de la dependencia al aprobar.</summary>

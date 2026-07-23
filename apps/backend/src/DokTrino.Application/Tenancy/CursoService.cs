@@ -267,6 +267,9 @@ public sealed class CursoService : ICursoService
     {
         var p = await _db.CursoProgresos.FirstOrDefaultAsync(x => x.Id == progresoId, ct);
         if (p is null) { return false; }
+        // Perdona todos los intentos hechos hasta ahora: recibe una tanda fresca,
+        // pero el total se conserva para la estadistica.
+        p.IntentosPerdonados = p.Intentos;
         p.Bloqueado = false;
         p.Desbloqueado = true;
         p.DesbloqueadoPor = actor;
