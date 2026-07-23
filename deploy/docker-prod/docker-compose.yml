@@ -1,29 +1,30 @@
-# Stack de PRODUCCION de DokTrino IPS RT.
+# Stack de PRODUCCION de DokTrino.
 #
-# Diseño: el servidor YA tiene un reverse proxy global (nginx-proxy-manager,
-# traefik, otro Caddy, etc.) en los puertos 80/443 que se encarga del SSL.
-# Este compose expone doktrino-app en un puerto uncommon del host; tu reverse
-# proxy global hace TLS termination y forwardea hacia ese puerto.
+# Diseño: el servidor YA tiene un reverse proxy global (Caddy en otra maquina)
+# que se encarga del SSL. Este compose expone doktrino-app en un puerto uncommon
+# del host; el Caddy externo hace TLS termination y forwardea hacia ese puerto.
 #
 # Servicios:
-#   - doktrino-app   : la consola Blazor (imagen de GHCR). Expuesta SOLO en
-#                   ${DOKTRINO_PORT}; tu proxy global la alcanza.
-#   - postgres    : base persistente. NO expuesta al host (solo red interna).
+#   - doktrino-app : la consola Blazor (imagen de GHCR). Expuesta SOLO en ${DOKTRINO_PORT}.
+#   - postgres     : base persistente. NO expuesta al host (solo red interna).
+#   - minio        : object storage de blobs (archivo digital, media de cursos).
+#                    NO expuesto al host: la app lo alcanza por la red interna.
+#
+# Aislamiento del host compartido (junto a Visal/ECOREX): usar SIEMPRE
+#   docker compose -p doktrino ...
+# para que red, volumenes y nombres queden bajo el proyecto 'doktrino'.
 #
 # Uso:
-#   1) Copiar .env.example a .env y editar DOKTRINO_PORT, DOKTRINO_IMAGE, POSTGRES_*.
-#   2) docker login ghcr.io (si la imagen sigue privada, con un PAT read:packages)
-#   3) docker compose up -d
-#   4) En tu reverse proxy global, agregar reverse_proxy hacia
-#      http://localhost:${DOKTRINO_PORT}  (Blazor SignalR requiere WebSockets;
-#      casi todos los proxies modernos los pasan por defecto).
-#   5) Actualizar: docker compose pull && docker compose up -d
+#   1) Copiar .env.example a .env y editar DOKTRINO_PORT, POSTGRES_*, MINIO_*.
+#   2) docker compose -p doktrino pull
+#   3) docker compose -p doktrino up -d
+#   4) En el Caddy externo: reverse_proxy hacia http://<host>:${DOKTRINO_PORT}
+#   5) Actualizar: docker compose -p doktrino pull && docker compose -p doktrino up -d
 
 name: doktrino-prod
 
 services:
   doktrino-app:
-    # Cambia owner/repo si es tu fork. Default: la imagen publicada por el workflow.
     image: ${DOKTRINO_IMAGE:-ghcr.io/alexandercuartas665/tunda/superadmin:latest}
     container_name: doktrino-app
     restart: unless-stopped
@@ -31,25 +32,31 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://0.0.0.0:8080
       ASPNETCORE_HTTP_PORTS: 8080
-      # Connection string apuntando al servicio postgres del compose (red interna).
+      TZ: America/Bogota
+      # Postgres por la red interna del compose.
       DOKTRINO_DB_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      # Aplica migrations EF al arrancar (idempotente).
       DOKTRINO_RUN_MIGRATIONS: "true"
-      # Confianza al proxy global (TLS terminado afuera).
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # MinIO por la red interna (servicio 'minio', puerto 9000). NO localhost.
+      DOKTRINO_MINIO_ENDPOINT: "http://minio:9000"
+      DOKTRINO_MINIO_ACCESSKEY: ${MINIO_ROOT_USER}
+      DOKTRINO_MINIO_SECRETKEY: ${MINIO_ROOT_PASSWORD}
+      DOKTRINO_MINIO_BUCKET: ${MINIO_BUCKET:-doktrino-blobs}
     ports:
-      # Publica al host en un puerto uncommon. Por default 5380 (ASCII de "S-D" : SuperAdmin).
-      # Tu reverse proxy global apunta a http://localhost:${DOKTRINO_PORT}.
-      - "${DOKTRINO_PORT:-5380}:8080"
+      # Puerto libre en el host de produccion (5380=Visal, 5480=ECOREX ya ocupados).
+      - "${DOKTRINO_PORT:-5580}:8080"
+    volumes:
+      # Persistencia de archivos servidos desde wwwroot (p.ej. logos de marca).
+      - doktrino-uploads:/app/wwwroot/uploads
     depends_on:
       postgres:
         condition: service_healthy
+      # Solo orden de arranque: las operaciones de blob son perezosas (crean el
+      # bucket en el primer uso), asi que no hace falta gate por health de minio.
+      minio:
+        condition: service_started
     networks:
       - doktrino-net
-    # Sin healthcheck explicito: la imagen aspnet:9.0 (Debian slim) no trae
-    # ni wget, ni curl, ni bash con /dev/tcp en sh. Mientras no agreguemos
-    # curl al Dockerfile, el reverse proxy global hace su propio probe HTTP
-    # contra /login. La app sigue gobernada por `restart: unless-stopped`.
 
   postgres:
     image: postgres:16-alpine
@@ -60,11 +67,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: America/Bogota
+      PGTZ: America/Bogota
     volumes:
       - doktrino-pgdata:/var/lib/postgresql/data
     networks:
       - doktrino-net
-    # En produccion NO publicamos al host. La BD solo se accede desde la red interna.
+    # En produccion NO publicamos al host. Solo se accede desde la red interna.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -72,8 +81,25 @@ services:
       retries: 10
       start_period: 20s
 
+  minio:
+    image: minio/minio:latest
+    container_name: doktrino-minio-prod
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: America/Bogota
+    volumes:
+      - doktrino-minio-data:/data
+    networks:
+      - doktrino-net
+    # Sin 'ports:': MinIO queda solo en la red interna, no expuesto al host.
+
 volumes:
   doktrino-pgdata:
+  doktrino-uploads:
+  doktrino-minio-data:
 
 networks:
   doktrino-net:
