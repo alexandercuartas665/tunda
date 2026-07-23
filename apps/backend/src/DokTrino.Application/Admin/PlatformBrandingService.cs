@@ -17,8 +17,8 @@ public sealed record PlatformBrandingDto(
         "Archimente",
         "Gestion Documental",
         "/img/marca/archimente-claro.png",
-        "Gestion Documental Inteligente",
-        "Transformamos el caos en control con tecnologia de vanguardia.");
+        "Gestión Documental Inteligente",
+        "Transformamos el caos en control con tecnología de vanguardia.");
 }
 
 public sealed record SaveBrandingRequest(
