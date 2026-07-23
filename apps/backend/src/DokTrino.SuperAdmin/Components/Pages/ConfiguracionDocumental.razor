@@ -6,6 +6,7 @@
 @inject IConfiguracionDocumentalService Cfg
 @inject IEditorSeriesService Editor
 @inject IImportadorBancoAgnService Banco
+@inject ICursoService Cursos
 @inject IWebHostEnvironment Entorno
 
 <PageTitle>Configuracion documental - Archimente</PageTitle>
@@ -30,6 +31,9 @@
         </button>
         <button class="tcl-tab @(_tab == "sugerencias" ? "on" : "")" @onclick='() => Cambiar("sugerencias")'>
             Sugerencias <span class="badge2">@_sugerencias.Count</span>
+        </button>
+        <button class="tcl-tab @(_tab == "formacion" ? "on" : "")" @onclick='() => Cambiar("formacion")'>
+            Formacion
         </button>
     </div>
 
@@ -164,7 +168,7 @@
             seleccionan sus subseries y tipologias.
         </div>
     }
-    else
+    else if (_tab == "sugerencias")
     {
         <div class="cfgd-tabla">
             <div class="cfgd-scroll">
@@ -194,6 +198,94 @@
             Al aprobar, la entrada pasa al catalogo maestro y la ven todas las dependencias.
             Al rechazar queda archivada y desaparece de la encuesta del colaborador.
         </div>
+    }
+    else
+    {
+        @* --- Formacion: curso obligatorio del Cliente Encuesta --- *@
+        <div class="cfgd-form">
+            <div class="cfgd-form-t">Curso vigente para el Cliente Encuesta</div>
+            <div class="cfgd-nota" style="margin-top:0;">
+                El curso obligatorio bloquea el diligenciamiento del Cliente Encuesta hasta aprobarlo.
+                Si el colaborador agota los intentos, queda bloqueado y puedes desbloquearlo aqui.
+            </div>
+
+            <div class="cfgd-form-fila">
+                <div style="flex:1; min-width:220px;">
+                    <div class="ed-lbl">Curso</div>
+                    <select class="ed-input" @bind="_cursoSel">
+                        <option value="">Ninguno (sin curso obligatorio)</option>
+                        @foreach (var c in _cursos)
+                        {
+                            <option value="@c.Id">@c.Titulo</option>
+                        }
+                    </select>
+                </div>
+                <div style="width:130px; flex-shrink:0;">
+                    <div class="ed-lbl">Intentos</div>
+                    <input class="ed-input mono" type="number" min="1" @bind="_intentos" />
+                </div>
+            </div>
+
+            <label class="ed-casilla @(_obligatorio ? "on" : "")" style="margin:12px 0;"
+                   @onclick="() => _obligatorio = !_obligatorio">
+                <span class="caja">@(_obligatorio ? "✓" : "")</span>
+                <span>Obligatorio para diligenciar el Cliente Encuesta</span>
+            </label>
+
+            <div style="display:flex; gap:8px;">
+                <button class="trx-btn" @onclick="GuardarFormacion">Guardar</button>
+            </div>
+        </div>
+
+        @if (_cursoVigenteId is Guid vig)
+        {
+            <div class="cfgd-tabla" style="margin-top:16px;">
+                <div class="cfgd-scroll">
+                    <div class="cfgd-grid-prog cfgd-head">
+                        <div>Dependencia</div><div>Fecha inicio</div><div>Fecha aprobacion</div>
+                        <div>Intentos</div><div>Mejor nota</div><div>Estado</div><div>Accion</div>
+                    </div>
+
+                    @if (_progreso.Count == 0)
+                    {
+                        <div class="cfgd-vacio">Todavia nadie ha iniciado el curso vigente.</div>
+                    }
+                    @foreach (var p in _progreso)
+                    {
+                        <div class="cfgd-grid-prog cfgd-row">
+                            <div class="nom">@p.DependenciaNombre</div>
+                            <div class="mono">@(p.FechaInicio is DateTimeOffset fi ? fi.ToString("dd/MM/yyyy HH:mm") : "-")</div>
+                            <div class="mono">@(p.FechaAprobacion is DateTimeOffset fa ? fa.ToString("dd/MM/yyyy HH:mm") : "-")</div>
+                            <div class="txt">@p.Intentos</div>
+                            <div class="txt">@p.MejorNota</div>
+                            <div>
+                                @if (p.Aprobado)
+                                {
+                                    <span class="trx-est activo">Aprobado</span>
+                                }
+                                else if (p.Bloqueado)
+                                {
+                                    <span class="trx-est desarrollo">Bloqueado</span>
+                                }
+                                else
+                                {
+                                    <span class="trx-est desarrollo">En curso</span>
+                                }
+                            </div>
+                            <div>
+                                @if (p.Bloqueado)
+                                {
+                                    <button class="btn btn-outline-success btn-sm" @onclick="() => Desbloquear(p)">Desbloquear</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="cfgd-pie">
+                    <span>@_progreso.Count colaboradores en el curso vigente</span>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -704,6 +796,12 @@
     .cfgd-grid { display:grid; grid-template-columns:110px minmax(220px,1fr) 90px 95px 140px 110px; gap:12px; align-items:center; }
     .cfgd-grid-banco { display:grid; grid-template-columns:130px minmax(200px,1.4fr) minmax(160px,1.2fr) 170px; gap:12px; align-items:center; }
     .cfgd-grid-sug { display:grid; grid-template-columns:110px 120px minmax(180px,1fr) 160px 170px; gap:12px; align-items:center; }
+    .cfgd-grid-prog { display:grid; grid-template-columns:minmax(180px,1.4fr) 140px 140px 80px 90px 110px 120px; gap:12px; align-items:center; }
+
+    /* Formacion: tarjeta de configuracion del curso vigente. */
+    .cfgd-form { background:#fff; border:1px solid var(--chrome-border); border-radius:16px; padding:18px 20px; box-shadow:0 1px 3px oklch(0.35 0.06 237 / .05); }
+    .cfgd-form-t { font-size:14px; font-weight:700; color:#1f2433; margin-bottom:8px; }
+    .cfgd-form-fila { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:14px; }
 
     /* La cabecera y la fila de filtros quedan fijas al hacer scroll. */
     .cfgd-head { position:sticky; top:0; z-index:2; padding:12px 18px; background:#161c2e; font-size:10.5px; font-weight:600; color:#cdd5ea; text-transform:uppercase; letter-spacing:.4px; }
@@ -735,7 +833,7 @@
     .cfgd-modal-body { padding:18px 22px; }
     .cfgd-comp-item { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #e9ecf5; border-radius:13px; padding:13px 15px; margin-bottom:10px; }
     @@media (max-width: 1000px) {
-        .cfgd-grid, .cfgd-grid-banco, .cfgd-grid-sug { grid-template-columns:1fr; gap:4px; }
+        .cfgd-grid, .cfgd-grid-banco, .cfgd-grid-sug, .cfgd-grid-prog { grid-template-columns:1fr; gap:4px; }
     }
 </style>
 
@@ -825,6 +923,14 @@
     private List<ComplementoDto> _complementos = new();
     private List<SugerenciaDto> _sugerencias = new();
 
+    // --- Formacion: curso obligatorio del Cliente Encuesta ---
+    private List<CursoDto> _cursos = new();
+    private List<CursoProgresoDto> _progreso = new();
+    private string _cursoSel = "";        // Id del curso elegido en el dropdown (vacio = ninguno).
+    private bool _obligatorio;
+    private int _intentos = 1;
+    private Guid? _cursoVigenteId;         // Curso ya guardado; alimenta la tabla de estadisticas.
+
     protected override async Task OnInitializedAsync() => await Recargar();
 
     private async Task Recargar()
@@ -835,7 +941,56 @@
         _sugerencias = (await Cfg.ListarSugerenciasAsync()).ToList();
     }
 
-    private void Cambiar(string tab) { _tab = tab; LimpiarFiltrosSeries(); }
+    private async Task Cambiar(string tab)
+    {
+        _tab = tab;
+        LimpiarFiltrosSeries();
+        if (tab == "formacion") { await CargarFormacion(); }
+    }
+
+    /// <summary>Trae el catalogo de cursos, la configuracion vigente y, si hay curso, sus estadisticas.</summary>
+    private async Task CargarFormacion()
+    {
+        _cursos = (await Cursos.ListarCursosAsync()).ToList();
+
+        var cfg = await Cursos.ConfigClienteAsync();
+        _cursoVigenteId = cfg.CursoId;
+        _cursoSel = cfg.CursoId?.ToString() ?? "";
+        _obligatorio = cfg.Obligatorio;
+        _intentos = cfg.IntentosMax < 1 ? 1 : cfg.IntentosMax;
+
+        _progreso = _cursoVigenteId is Guid id
+            ? (await Cursos.ProgresoAsync(id)).ToList()
+            : new();
+    }
+
+    private async Task GuardarFormacion()
+    {
+        _error = _ok = null;
+        try
+        {
+            Guid? cursoId = Guid.TryParse(_cursoSel, out var id) ? id : null;
+            var intentos = _intentos < 1 ? 1 : _intentos;
+            await Cursos.GuardarConfigClienteAsync(cursoId, _obligatorio, intentos, await Actor());
+            _ok = cursoId is null
+                ? "Se desasocio el curso del Cliente Encuesta."
+                : "Configuracion de formacion guardada.";
+            await CargarFormacion();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Desbloquear(CursoProgresoDto p)
+    {
+        _error = _ok = null;
+        try
+        {
+            var ok = await Cursos.DesbloquearAsync(p.Id, await Actor());
+            _ok = ok ? $"Se desbloqueo a {p.DependenciaNombre}." : "No se pudo desbloquear.";
+            await CargarFormacion();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
 
 
     private async Task<Guid> Actor()

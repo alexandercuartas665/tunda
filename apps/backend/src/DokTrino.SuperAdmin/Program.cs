@@ -637,6 +637,19 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
     return Results.File(d.Content, d.Mime, d.FileName);
 }).RequireAuthorization();
 
+// Recurso (video/imagen/pdf) de una leccion de capacitacion, stream desde MinIO.
+// enableRangeProcessing habilita el seek de <video>. Tenant-scoped por el query
+// filter del DbContext (cookie de sesion).
+app.MapGet("/capacitaciones/leccion/{id:guid}/recurso", async (
+    Guid id,
+    DokTrino.Application.Tenancy.ICursoService svc,
+    CancellationToken ct) =>
+{
+    var d = await svc.DescargarRecursoAsync(id, ct);
+    if (d is null) { return Results.NotFound(); }
+    return Results.File(d.Content, d.Mime, enableRangeProcessing: true);
+}).RequireAuthorization();
+
 // Endpoint publico consumido por Power BI / conectores externos (spec 2.D5). El token ES la
 // autenticacion: se resuelve contra bi_token_uso, acota al tenant del token, ejecuta SOLO
 // SELECT con parametros nombrados y registra la ejecucion (duracion/error) en bi_log.

@@ -3,6 +3,7 @@
 @using DokTrino.Application.Tenancy
 @using DokTrino.SuperAdmin.Components.Dashboard
 @inject IDashboardDocumentalService DashboardSvc
+@inject ICursoService Cursos
 @inject NavigationManager Navigation
 
 <PageTitle>Dashboard - Archimente</PageTitle>
@@ -26,6 +27,10 @@ else
                      Label="TRD activas" Icon="&#128209;" IconBackground="#eef0ff" />
             <KpiCard Valor="_datos.SubseriesPendientes.Valor" Warn="true"
                      Label="Subseries pendientes" Icon="&#9888;" IconBackground="#fff3d6" />
+            <KpiCard Valor="_curso.Aprobados"
+                     Delta="_curso.Inscritos > 0 ? (int)Math.Round(_curso.Aprobados * 100d / _curso.Inscritos) : (int?)null"
+                     Label="@($"Aprueban el curso ({(_curso.Inscritos > 0 ? $"{_curso.Aprobados} de {_curso.Inscritos}" : "sin datos")})")"
+                     Icon="&#127891;" IconBackground="#e8f6ec" />
         </div>
 
         @* --- Rejilla principal --- *@
@@ -103,6 +108,9 @@ else
 @code {
     private DashboardDocumentalDto? _datos;
 
+    // Usuarios que inician vs. aprueban el curso vigente (KPI de formacion).
+    private (int Inscritos, int Aprobados) _curso;
+
     protected override async Task OnInitializedAsync()
     {
         // El operador de plataforma no tiene datos documentales: su consola es /admin.
@@ -113,6 +121,8 @@ else
             return;
         }
 
+        // Secuencial (no en paralelo) para no usar el DbContext de forma concurrente.
+        _curso = await Cursos.ResumenVigenteAsync();
         _datos = await DashboardSvc.ObtenerAsync();
     }
 

@@ -1,0 +1,464 @@
+@page "/capacitaciones"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Forms
+@using DokTrino.Application.Tenancy
+@inject ICursoService Curso
+
+<PageTitle>Capacitaciones - Archimente</PageTitle>
+
+<div class="trx">
+    <div class="trx-breadcrumb">Inicio &middot; Plataforma &middot; Capacitaciones</div>
+
+    <div class="trx-head">
+        <div>
+            <div class="trx-title">Capacitaciones</div>
+            <div class="trx-sub">Arma cursos con modulos y lecciones (video, imagen, PDF, texto) y su evaluacion final.</div>
+        </div>
+        @if (_detalle is null && !_nuevo)
+        {
+            <div class="trx-head-actions">
+                <button class="trx-btn" @onclick="NuevoCurso">&#65291; Nuevo curso</button>
+            </div>
+        }
+    </div>
+
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    @if (_detalle is null && !_nuevo)
+    {
+        @* ---------- Lista de cursos ---------- *@
+        @if (_cursos.Count == 0)
+        {
+            <div class="cap-vacio">Aun no hay cursos. Crea el primero con "Nuevo curso".</div>
+        }
+        else
+        {
+            <div class="cap-grid">
+                @foreach (var c in _cursos)
+                {
+                    <div class="cap-card" @onclick="() => AbrirCurso(c.Id)">
+                        <div class="cap-card-h">
+                            <div class="cap-card-t">@c.Titulo</div>
+                            @if (c.EsVigente) { <span class="cap-badge">Vigente</span> }
+                            @if (!c.Activo) { <span class="cap-badge off">Inactivo</span> }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(c.Descripcion))
+                        {
+                            <div class="cap-card-d">@c.Descripcion</div>
+                        }
+                        <div class="cap-card-m">
+                            <span>&#128218; @c.Modulos modulos</span>
+                            <span>&#127909; @c.Lecciones lecciones</span>
+                            <span>&#128221; @(c.CuestionarioTitulo ?? "sin evaluacion")</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        @* ---------- Editor de curso ---------- *@
+        <div class="cap-editor">
+            <div class="cap-toolbar">
+                <button class="trx-btn ghost" @onclick="Cerrar">&#8592; Volver a la lista</button>
+                @if (_form.Id is Guid)
+                {
+                    <button class="btn btn-outline-danger btn-sm" @onclick="EliminarCurso">Eliminar curso</button>
+                }
+            </div>
+
+            <div class="cap-panel">
+                <div class="cap-panel-t">Datos del curso</div>
+
+                <div class="cap-f">
+                    <label>Titulo</label>
+                    <input class="cap-input" @bind="_form.Titulo" placeholder="Induccion documental" />
+                </div>
+                <div class="cap-f">
+                    <label>Descripcion</label>
+                    <textarea class="cap-input" rows="2" @bind="_form.Descripcion" placeholder="De que trata el curso"></textarea>
+                </div>
+                <div class="cap-f-row">
+                    <label class="cap-chk">
+                        <input type="checkbox" @bind="_form.Activo" />
+                        <span>Curso activo</span>
+                    </label>
+                    <div class="cap-f" style="flex:1;">
+                        <label>Evaluacion final</label>
+                        <select class="cap-input" @onchange="OnCuestionarioChange">
+                            <option value="" selected="@(_form.CuestionarioId is null)">Sin evaluacion</option>
+                            @foreach (var q in _cuestionarios)
+                            {
+                                <option value="@q.Id" selected="@(_form.CuestionarioId == q.Id)">@q.Titulo</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="cap-guardar">
+                    <button class="trx-btn" @onclick="GuardarCurso">
+                        @(_form.Id is null ? "Crear curso" : "Guardar cambios")
+                    </button>
+                </div>
+            </div>
+
+            @if (_detalle is not null)
+            {
+                @* ---------- Arbol modulos -> lecciones ---------- *@
+                <div class="cap-panel">
+                    <div class="cap-panel-t">
+                        Contenido
+                        <button class="cap-add" @onclick="AgregarModulo">&#65291; Modulo</button>
+                    </div>
+
+                    @if (_detalle.Modulos.Count == 0)
+                    {
+                        <div class="cap-sin">Sin modulos. Agrega el primero.</div>
+                    }
+
+                    @foreach (var m in _detalle.Modulos)
+                    {
+                        <div class="cap-modulo">
+                            <div class="cap-modulo-h">
+                                <span class="cap-modulo-ico">&#128218;</span>
+                                <input class="cap-modulo-nom" value="@m.Titulo"
+                                       @onchange="e => RenombrarModulo(m, e.Value?.ToString() ?? string.Empty)" />
+                                <button class="cap-add ghost" @onclick="() => AgregarLeccion(m)">&#65291; Leccion</button>
+                                <span class="cap-quitar" title="Eliminar modulo" @onclick="() => EliminarModulo(m)">&#10005;</span>
+                            </div>
+
+                            @if (m.Lecciones.Count == 0)
+                            {
+                                <div class="cap-sin sub">Sin lecciones en este modulo.</div>
+                            }
+
+                            @foreach (var l in m.Lecciones)
+                            {
+                                <div class="cap-leccion">
+                                    <div class="cap-leccion-top">
+                                        <span class="cap-leccion-ico">@IconoTipo(l.Tipo)</span>
+                                        <input class="cap-input compact" style="flex:1.4;" value="@l.Titulo"
+                                               placeholder="Titulo de la leccion"
+                                               @onchange="e => GuardarLeccionCampo(l, titulo: e.Value?.ToString())" />
+                                        <select class="cap-input compact" style="width:120px; flex:none;"
+                                                @onchange="e => GuardarLeccionCampo(l, tipo: e.Value?.ToString())">
+                                            <option value="VIDEO" selected="@(l.Tipo == "VIDEO")">Video</option>
+                                            <option value="IMAGEN" selected="@(l.Tipo == "IMAGEN")">Imagen</option>
+                                            <option value="PDF" selected="@(l.Tipo == "PDF")">PDF</option>
+                                            <option value="TEXTO" selected="@(l.Tipo == "TEXTO")">Texto</option>
+                                        </select>
+                                        <span class="cap-quitar" title="Eliminar leccion" @onclick="() => EliminarLeccion(l)">&#10005;</span>
+                                    </div>
+
+                                    <input class="cap-input compact" value="@l.Descripcion"
+                                           placeholder="Descripcion (opcional)"
+                                           @onchange="e => GuardarLeccionCampo(l, descripcion: e.Value?.ToString())" />
+
+                                    @if (l.Tipo == "TEXTO")
+                                    {
+                                        <textarea class="cap-input compact" rows="4" value="@l.Contenido"
+                                                  placeholder="Contenido de la leccion"
+                                                  @onchange="e => GuardarLeccionCampo(l, contenido: e.Value?.ToString())"></textarea>
+                                    }
+                                    else
+                                    {
+                                        <div class="cap-media">
+                                            <div class="cap-upload">
+                                                <InputFile class="cap-input compact" OnChange="e => SubirRecurso(l, e)"
+                                                           accept="@AceptaTipo(l.Tipo)" />
+                                                @if (l.TamanoBytes is long bytes)
+                                                {
+                                                    <span class="cap-size">@FormatoTamano(bytes)</span>
+                                                }
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(l.ObjetoKey))
+                                            {
+                                                var url = $"/capacitaciones/leccion/{l.Id}/recurso";
+                                                if (l.Tipo == "VIDEO")
+                                                {
+                                                    <video class="cap-preview" controls src="@url"></video>
+                                                }
+                                                else if (l.Tipo == "IMAGEN")
+                                                {
+                                                    <img class="cap-preview" src="@url" alt="@l.Titulo" />
+                                                }
+                                                else if (l.Tipo == "PDF")
+                                                {
+                                                    <iframe class="cap-preview" src="@url" title="@l.Titulo"></iframe>
+                                                    <a class="cap-link" href="@url" target="_blank">Abrir PDF en pestana nueva</a>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .cap-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
+    .cap-card { background:#fff; border:1px solid var(--chrome-border); border-radius:14px; padding:16px 18px; cursor:pointer; transition:box-shadow .15s, transform .15s; }
+    .cap-card:hover { box-shadow:0 8px 24px rgba(0,0,0,.08); transform:translateY(-2px); }
+    .cap-card-h { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .cap-card-t { font-size:14.5px; font-weight:800; color:#1f2433; flex:1; }
+    .cap-badge { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; background:#e7f6ec; color:#1f8a4c; border-radius:7px; padding:3px 8px; }
+    .cap-badge.off { background:#f3f0e9; color:#8a7f66; }
+    .cap-card-d { font-size:12px; color:#6b7488; line-height:1.5; margin-bottom:10px; }
+    .cap-card-m { display:flex; flex-wrap:wrap; gap:12px; font-size:11.5px; font-weight:600; color:#8a93a8; }
+    .cap-vacio { padding:34px; text-align:center; font-size:13px; color:var(--chrome-label); border:1px dashed var(--chrome-border); border-radius:14px; }
+
+    .cap-editor { display:flex; flex-direction:column; gap:16px; }
+    .cap-toolbar { display:flex; align-items:center; gap:10px; }
+    .cap-toolbar .btn { margin-left:auto; }
+    .cap-panel { background:#fff; border:1px solid var(--chrome-border); border-radius:16px; padding:18px 20px; }
+    .cap-panel-t { display:flex; align-items:center; font-size:13px; font-weight:800; color:#1f2433; text-transform:uppercase; letter-spacing:.4px; margin-bottom:14px; }
+    .cap-add { margin-left:auto; border:0; cursor:pointer; background:var(--primary); color:#fff; border-radius:9px; padding:7px 13px; font-size:11.5px; font-weight:700; }
+    .cap-add.ghost { background:var(--primary-soft); color:var(--primary); border:1px solid oklch(0.87 0.07 237); }
+    .cap-f { margin-bottom:12px; }
+    .cap-f label { display:block; font-size:11px; font-weight:700; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+    .cap-f-row { display:flex; align-items:flex-end; gap:16px; margin-bottom:12px; }
+    .cap-input { width:100%; border:1px solid #e3e7f2; background:#fff; border-radius:9px; padding:9px 11px; font-size:12.5px; font-weight:500; color:#37415c; outline:none; }
+    .cap-input.compact { padding:7px 10px; font-size:12px; margin-bottom:7px; }
+    .cap-input:focus { border-color:var(--primary); }
+    .cap-input::placeholder { color:#aab1c4; font-weight:400; font-style:italic; }
+    .cap-chk { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:#37415c; padding-bottom:9px; }
+    .cap-guardar { margin-top:6px; }
+
+    .cap-sin { text-align:center; padding:16px; color:#c2bca8; font-size:12px; font-weight:500; border:1px dashed #e3ddcd; border-radius:11px; }
+    .cap-sin.sub { padding:11px; font-size:11.5px; margin-top:8px; }
+    .cap-modulo { border:1px solid #e9ecf5; border-radius:13px; padding:12px 14px; margin-bottom:12px; background:#fbfaf7; }
+    .cap-modulo-h { display:flex; align-items:center; gap:9px; }
+    .cap-modulo-ico { font-size:16px; flex-shrink:0; }
+    .cap-modulo-nom { flex:1; min-width:0; border:0; background:transparent; font-size:13.5px; font-weight:700; color:#1f2433; outline:none; padding:4px 6px; border-radius:6px; }
+    .cap-modulo-nom:focus { background:#fff; box-shadow:0 0 0 2px var(--primary-tint); }
+    .cap-quitar { cursor:pointer; color:#cdb4b4; font-size:13px; flex-shrink:0; padding:2px 4px; }
+    .cap-quitar:hover { color:#e5484d; }
+    .cap-leccion { background:#fff; border:1px solid #eef1f7; border-radius:11px; padding:11px 12px; margin-top:9px; }
+    .cap-leccion-top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+    .cap-leccion-ico { font-size:15px; flex-shrink:0; }
+    .cap-media { display:flex; flex-direction:column; gap:9px; }
+    .cap-upload { display:flex; align-items:center; gap:10px; }
+    .cap-size { font-size:11px; font-weight:600; color:#8a93a8; white-space:nowrap; }
+    .cap-preview { width:100%; max-width:520px; border:1px solid #e9ecf5; border-radius:10px; background:#000; }
+    video.cap-preview { max-height:320px; }
+    img.cap-preview { background:#f6f8fc; object-fit:contain; max-height:320px; }
+    iframe.cap-preview { height:420px; background:#fff; }
+    .cap-link { font-size:11.5px; font-weight:700; color:var(--primary); text-decoration:none; }
+    .cap-link:hover { text-decoration:underline; }
+    @@media (max-width: 720px) { .cap-f-row { flex-direction:column; align-items:stretch; gap:10px; } }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Subida generosa: los videos de capacitacion pueden ser grandes.
+    private const long MaxBytes = 500L * 1024 * 1024;
+
+    private List<CursoDto> _cursos = new();
+    private IReadOnlyList<(Guid Id, string Titulo)> _cuestionarios = new List<(Guid, string)>();
+    private CursoDetalleDto? _detalle;
+    private GuardarCursoRequest _form = new();
+    private bool _nuevo;
+    private string? _error, _ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cuestionarios = await Curso.CuestionariosAsync();
+        await RecargarLista();
+    }
+
+    private async Task RecargarLista() => _cursos = (await Curso.ListarCursosAsync()).ToList();
+
+    private void NuevoCurso()
+    {
+        _error = _ok = null;
+        _nuevo = true;
+        _detalle = null;
+        _form = new GuardarCursoRequest { Activo = true };
+    }
+
+    private async Task AbrirCurso(Guid id)
+    {
+        _error = _ok = null;
+        _nuevo = false;
+        await CargarDetalle(id);
+    }
+
+    private async Task CargarDetalle(Guid id)
+    {
+        _detalle = await Curso.DetalleAsync(id);
+        if (_detalle is null) { _error = "El curso ya no existe."; _nuevo = false; await RecargarLista(); return; }
+        _form = new GuardarCursoRequest
+        {
+            Id = _detalle.Id,
+            Titulo = _detalle.Titulo,
+            Descripcion = _detalle.Descripcion,
+            Activo = _detalle.Activo,
+            CuestionarioId = _detalle.CuestionarioId,
+        };
+    }
+
+    private void Cerrar()
+    {
+        _detalle = null;
+        _nuevo = false;
+        _error = _ok = null;
+    }
+
+    private void OnCuestionarioChange(ChangeEventArgs e) =>
+        _form.CuestionarioId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private async Task GuardarCurso()
+    {
+        _error = _ok = null;
+        try
+        {
+            var id = await Curso.GuardarCursoAsync(_form, await Actor());
+            if (id is null) { _error = "No se pudo guardar el curso (sin tenant activo)."; return; }
+            _ok = "Curso guardado.";
+            _nuevo = false;
+            await CargarDetalle(id.Value);
+            await RecargarLista();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task EliminarCurso()
+    {
+        if (_form.Id is not Guid id) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Curso.EliminarCursoAsync(id, await Actor());
+            _ok = "Curso eliminado.";
+            Cerrar();
+            await RecargarLista();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // ---------- Modulos ----------
+
+    private async Task AgregarModulo()
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.GuardarModuloAsync(
+            new GuardarModuloRequest { CursoId = cursoId, Titulo = "Nuevo modulo" }, await Actor()), cursoId);
+    }
+
+    private async Task RenombrarModulo(CursoModuloConLeccionesDto m, string titulo)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.GuardarModuloAsync(
+            new GuardarModuloRequest { Id = m.Id, CursoId = cursoId, Titulo = titulo, Descripcion = m.Descripcion },
+            await Actor()), cursoId);
+    }
+
+    private async Task EliminarModulo(CursoModuloConLeccionesDto m)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.EliminarModuloAsync(m.Id, await Actor()), cursoId);
+    }
+
+    // ---------- Lecciones ----------
+
+    private async Task AgregarLeccion(CursoModuloConLeccionesDto m)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.GuardarLeccionAsync(
+            new GuardarLeccionRequest { CursoModuloId = m.Id, Titulo = "Nueva leccion", Tipo = "VIDEO" },
+            await Actor()), cursoId);
+    }
+
+    private async Task GuardarLeccionCampo(CursoLeccionDto l, string? titulo = null, string? descripcion = null,
+        string? tipo = null, string? contenido = null)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.GuardarLeccionAsync(new GuardarLeccionRequest
+        {
+            Id = l.Id,
+            CursoModuloId = l.CursoModuloId,
+            Titulo = titulo ?? l.Titulo,
+            Descripcion = descripcion ?? l.Descripcion,
+            Tipo = tipo ?? l.Tipo,
+            Contenido = contenido ?? l.Contenido,
+        }, await Actor()), cursoId);
+    }
+
+    private async Task EliminarLeccion(CursoLeccionDto l)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        await EjecutarDetalle(async () => await Curso.EliminarLeccionAsync(l.Id, await Actor()), cursoId);
+    }
+
+    private async Task SubirRecurso(CursoLeccionDto l, InputFileChangeEventArgs e)
+    {
+        if (_form.Id is not Guid cursoId) { return; }
+        _error = _ok = null;
+        var file = e.File;
+        var mime = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxBytes);
+            var subido = await Curso.SubirRecursoAsync(l.Id, stream, mime, file.Size, await Actor());
+            _ok = subido ? $"Archivo '{file.Name}' cargado." : "No se pudo cargar el archivo.";
+            await CargarDetalle(cursoId);
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // ---------- Helpers ----------
+
+    private async Task EjecutarDetalle(Func<Task> accion, Guid cursoId)
+    {
+        _error = _ok = null;
+        try
+        {
+            await accion();
+            await CargarDetalle(cursoId);
+            await RecargarLista();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private static string IconoTipo(string tipo) => tipo switch
+    {
+        "VIDEO" => "\U0001F3AC",
+        "IMAGEN" => "\U0001F5BC",
+        "PDF" => "\U0001F4C4",
+        _ => "\U0001F4DD"
+    };
+
+    private static string AceptaTipo(string tipo) => tipo switch
+    {
+        "VIDEO" => "video/*",
+        "IMAGEN" => "image/*",
+        "PDF" => "application/pdf",
+        _ => "*/*"
+    };
+
+    private static string FormatoTamano(long bytes)
+    {
+        if (bytes >= 1024L * 1024 * 1024) { return $"{bytes / 1024d / 1024 / 1024:0.##} GB"; }
+        if (bytes >= 1024 * 1024) { return $"{bytes / 1024d / 1024:0.##} MB"; }
+        if (bytes >= 1024) { return $"{bytes / 1024d:0.##} KB"; }
+        return $"{bytes} B";
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}

@@ -79,6 +79,14 @@
         </NavLink>
         }
 
+        @if (!_deshabilitados.Contains("capacitaciones"))
+        {
+        <NavLink class="doktrino-nav-link" href="capacitaciones">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 8-4 8 4-8 4Z"/><path d="M4 6v6a8 4 0 0 0 16 0V6"/><path d="M20 10v6"/></svg>
+            <span>Capacitaciones</span>
+        </NavLink>
+        }
+
         @if (_crmHabilitado && !_deshabilitados.Contains("lineas"))
         {
         <NavLink class="doktrino-nav-link" href="lineas">
