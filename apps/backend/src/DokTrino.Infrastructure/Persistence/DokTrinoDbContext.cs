@@ -98,6 +98,11 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<CuestionarioCapacitacion> Cuestionarios => Set<CuestionarioCapacitacion>();
     public DbSet<CuestionarioPregunta> CuestionarioPreguntas => Set<CuestionarioPregunta>();
     public DbSet<CuestionarioIntento> CuestionarioIntentos => Set<CuestionarioIntento>();
+    public DbSet<Curso> Cursos => Set<Curso>();
+    public DbSet<CursoModulo> CursoModulos => Set<CursoModulo>();
+    public DbSet<CursoLeccion> CursoLecciones => Set<CursoLeccion>();
+    public DbSet<CursoProgreso> CursoProgresos => Set<CursoProgreso>();
+    public DbSet<ConfiguracionCursoCliente> ConfiguracionesCursoCliente => Set<ConfiguracionCursoCliente>();
     public DbSet<ProcesoNodo> ProcesoNodos => Set<ProcesoNodo>();
     public DbSet<ProcesoTransicion> ProcesoTransiciones => Set<ProcesoTransicion>();
     public DbSet<NivelTopografico> NivelesTopograficos => Set<NivelTopografico>();
@@ -812,6 +817,49 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Cuestionario).WithMany().HasForeignKey(x => x.CuestionarioId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.DependenciaId });
+        });
+
+        modelBuilder.Entity<Curso>(b =>
+        {
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(1000);
+            b.HasOne(x => x.Cuestionario).WithMany().HasForeignKey(x => x.CuestionarioId).OnDelete(DeleteBehavior.SetNull);
+            b.HasIndex(x => new { x.TenantId, x.Activo });
+        });
+
+        modelBuilder.Entity<CursoModulo>(b =>
+        {
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(1000);
+            b.HasOne(x => x.Curso).WithMany(c => c.Modulos).HasForeignKey(x => x.CursoId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.CursoId, x.Orden });
+        });
+
+        modelBuilder.Entity<CursoLeccion>(b =>
+        {
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(1000);
+            b.Property(x => x.Tipo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.ObjetoKey).HasMaxLength(400);
+            b.Property(x => x.Mime).HasMaxLength(120);
+            b.Property(x => x.Contenido).HasColumnType("text");
+            b.HasOne(x => x.Modulo).WithMany(m => m.Lecciones).HasForeignKey(x => x.CursoModuloId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.CursoModuloId, x.Orden });
+        });
+
+        modelBuilder.Entity<CursoProgreso>(b =>
+        {
+            b.HasOne(x => x.Curso).WithMany().HasForeignKey(x => x.CursoId).OnDelete(DeleteBehavior.Cascade);
+            // Un avance por (curso, dependencia): la compuerta del cliente es por dependencia.
+            b.HasIndex(x => new { x.CursoId, x.DependenciaId }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.CursoId });
+        });
+
+        modelBuilder.Entity<ConfiguracionCursoCliente>(b =>
+        {
+            b.HasOne(x => x.Curso).WithMany().HasForeignKey(x => x.CursoId).OnDelete(DeleteBehavior.Cascade);
+            // Un curso vigente por tenant.
+            b.HasIndex(x => x.TenantId).IsUnique();
         });
 
         modelBuilder.Entity<ProcesoNodo>(b =>

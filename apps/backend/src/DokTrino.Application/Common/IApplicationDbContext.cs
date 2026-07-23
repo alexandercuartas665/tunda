@@ -65,6 +65,11 @@ public interface IApplicationDbContext
     DbSet<CuestionarioCapacitacion> Cuestionarios { get; }
     DbSet<CuestionarioPregunta> CuestionarioPreguntas { get; }
     DbSet<CuestionarioIntento> CuestionarioIntentos { get; }
+    DbSet<Curso> Cursos { get; }
+    DbSet<CursoModulo> CursoModulos { get; }
+    DbSet<CursoLeccion> CursoLecciones { get; }
+    DbSet<CursoProgreso> CursoProgresos { get; }
+    DbSet<ConfiguracionCursoCliente> ConfiguracionesCursoCliente { get; }
     DbSet<ProcesoNodo> ProcesoNodos { get; }
     DbSet<ProcesoTransicion> ProcesoTransiciones { get; }
     DbSet<NivelTopografico> NivelesTopograficos { get; }
