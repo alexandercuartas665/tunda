@@ -1554,6 +1554,11 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 /* Dos columnas de la encuesta */
 .tcl-cols { display: flex; gap: 16px; align-items: flex-start; }
 .tcl-panel.fmt { flex: 0 0 300px; }
+/* Columna derecha del picker: formato arriba + propiedades debajo, apilados.
+   30% mas ancha que la de formato sola (300 -> 390px). */
+.est-right { flex: 0 0 390px; display: flex; flex-direction: column; gap: 14px; align-self: stretch; }
+.est-right .tcl-panel.fmt { flex: none; width: 100%; }
+.est-right .est-block { width: 100%; }
 .tcl-fmt-ayuda { font-size: 11px; color: #9aa3bd; margin-bottom: 10px; }
 .tcl-fmt-fila { padding: 9px 0; border-bottom: 1px solid #f4f6fb; }
 .tcl-fmt-nom { font-size: 12px; font-weight: 600; color: #37415c; margin-bottom: 6px; }

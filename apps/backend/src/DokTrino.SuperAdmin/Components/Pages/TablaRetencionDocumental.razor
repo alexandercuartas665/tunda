@@ -623,35 +623,36 @@
                     }
                 </div>
 
-                @* derecha: formato de los activos por tipologia marcada *@
-                @if (_pkMarcadas.Count > 0)
-                {
-                    <div class="tcl-panel fmt">
-                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                            <div class="tcl-panel-t" style="margin: 0;">Formato de los activos</div>
-                            <span class="tcl-count" style="margin-left: 8px;">@_pkMarcadas.Count</span>
-                        </div>
-                        <div class="tcl-fmt-ayuda">Marca uno o varios formatos por tipologia (papel, Word, Excel, PDF, multimedia...).</div>
-                        @foreach (var m in _pkMarcadas)
-                        {
-                            <div class="tcl-fmt-fila">
-                                <div class="tcl-fmt-nom">@m.Value</div>
-                                <div class="tcl-chips">
-                                    @foreach (var f in FormatosDisponibles)
-                                    {
-                                        var puesto = _pkFmt.TryGetValue(m.Key, out var set) && set.Contains(f);
-                                        <button class="tcl-chip @(puesto ? "on" : "")" @onclick="() => PkChip(m.Key, f)">@f</button>
-                                    }
-                                </div>
+                @* derecha: formato de los activos (arriba) + propiedades archivisticas (abajo),
+                   apiladas en una sola columna mas ancha *@
+                <div class="est-right">
+                    @if (_pkMarcadas.Count > 0)
+                    {
+                        <div class="tcl-panel fmt">
+                            <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                                <div class="tcl-panel-t" style="margin: 0;">Formato de los activos</div>
+                                <span class="tcl-count" style="margin-left: 8px;">@_pkMarcadas.Count</span>
                             </div>
-                        }
-                    </div>
-                }
-            </div>
+                            <div class="tcl-fmt-ayuda">Marca uno o varios formatos por tipologia (papel, Word, Excel, PDF, multimedia...).</div>
+                            @foreach (var m in _pkMarcadas)
+                            {
+                                <div class="tcl-fmt-fila">
+                                    <div class="tcl-fmt-nom">@m.Value</div>
+                                    <div class="tcl-chips">
+                                        @foreach (var f in FormatosDisponibles)
+                                        {
+                                            var puesto = _pkFmt.TryGetValue(m.Key, out var set) && set.Contains(f);
+                                            <button class="tcl-chip @(puesto ? "on" : "")" @onclick="() => PkChip(m.Key, f)">@f</button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
 
-            @* --- Propiedades archivisticas compartidas --- *@
-            <div class="est-block" style="margin-top: 14px;">
-                <div class="est-block-t">Propiedades archivisticas &middot; se aplican a las @_pkMarcadas.Count tipologia(s) marcada(s)</div>
+                    @* --- Propiedades archivisticas compartidas, debajo del formato --- *@
+                    <div class="est-block">
+                        <div class="est-block-t">Propiedades archivisticas &middot; se aplican a las @_pkMarcadas.Count tipologia(s) marcada(s)</div>
                 <div class="est-nums">
                     <div class="est-num"><span class="est-lbl">AG (anios)</span><input class="dep-in cod" type="number" min="0" step="0.5" @bind="_est.TiempoAg" /></div>
                     <div class="est-num"><span class="est-lbl">AC (anios)</span><input class="dep-in cod" type="number" min="0" step="0.5" @bind="_est.TiempoAc" /></div>
@@ -677,10 +678,12 @@
                     <label class="doc-chk"><input type="checkbox" @bind="_est.Val2Cientifica" /> Cientifica</label>
                     <label class="doc-chk"><input type="checkbox" @bind="_est.Val2Cultural" /> Cultural</label>
                 </div>
-                <small class="trd-muted" style="display: block; margin-top: 8px;">
-                    AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion (Ley 594/2000, AGN).
-                </small>
-            </div>
+                        <small class="trd-muted" style="display: block; margin-top: 8px;">
+                            AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion (Ley 594/2000, AGN).
+                        </small>
+                    </div>
+                </div>@* /est-right *@
+            </div>@* /tcl-cols *@
 
             <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
                 <button class="trx-btn ghost" @onclick="CerrarPicker">Cancelar</button>
