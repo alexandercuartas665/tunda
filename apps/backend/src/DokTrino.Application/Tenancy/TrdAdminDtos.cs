@@ -72,6 +72,50 @@ public sealed class GuardarDocumentoTrdRequest
     public bool Val2Cientifica { get; set; }
     public bool Val2Cultural { get; set; }
 }
+/// <summary>
+/// Alta multiple estilo "Cargar Estructura" (lado administrador): crea UNA fila de
+/// la TRD por cada tipologia marcada, todas con la misma dependencia, serie, subserie
+/// y las propiedades archivisticas compartidas. Los formatos se declaran por tipologia
+/// (FormatoSerie ligado a cada RespuestaId). Reusa RespuestaTablaDocumental / FormatoSerie.
+/// </summary>
+public sealed class GuardarEstructuraTrdRequest
+{
+    public Guid TrdId { get; set; }
+    public Guid DependenciaId { get; set; }
+    public Guid SerieId { get; set; }
+    public Guid? SubserieId { get; set; }
+
+    /// <summary>Una respuesta por cada tipologia marcada.</summary>
+    public List<Guid> TipologiaIds { get; set; } = new();
+
+    // --- Propiedades archivisticas compartidas por toda la tanda ---
+    public decimal? TiempoAg { get; set; }
+    public decimal? TiempoAc { get; set; }
+    public string? TiempoObserv { get; set; }
+
+    public bool DispCt { get; set; }
+    public bool DispS { get; set; }
+    public bool DispE { get; set; }
+    public bool DispD { get; set; }
+    public string? DispObserv { get; set; }
+
+    public bool Val1Admin { get; set; }
+    public bool Val1Tecnica { get; set; }
+    public bool Val1Legal { get; set; }
+    public bool Val1Contable { get; set; }
+    public bool Val1Fiscal { get; set; }
+
+    public bool Val2Historica { get; set; }
+    public bool Val2Cientifica { get; set; }
+    public bool Val2Cultural { get; set; }
+
+    /// <summary>
+    /// Formatos elegidos por tipologia (Papel/PDF/Word/Excel/Imagen/Video/Audio/Correo).
+    /// Clave: tipologiaId. Cada uno se guarda como FormatoSerie de la respuesta creada.
+    /// </summary>
+    public Dictionary<Guid, List<string>> FormatosPorTipologia { get; set; } = new();
+}
+
 public sealed record SerieDto(Guid Id, string Codigo, string Nombre, bool Activo, int Subseries);
 public sealed record SubserieDto(Guid Id, Guid SerieId, string Codigo, string Nombre);
 public sealed record TipologiaDocDto(Guid Id, Guid? SerieId, Guid? SubserieId, string Codigo, string Nombre, string Tipo, bool Activo);

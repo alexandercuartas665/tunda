@@ -460,6 +460,72 @@ public sealed class TrdAdminService : ITrdAdminService
         return fila.Id;
     }
 
+    /// <summary>El unico soporte fisico es el papel; el resto son digitales (mismo criterio que el cliente).</summary>
+    private static string SoporteDe(string formato) =>
+        formato.Trim().Equals("Papel", StringComparison.OrdinalIgnoreCase) ? "PAPEL" : "DIGITAL";
+
+    public async Task<int> GuardarEstructuraTrdAsync(GuardarEstructuraTrdRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return 0; }
+
+        var trd = await _db.TablasRetencionDocumental.AsNoTracking().FirstOrDefaultAsync(t => t.Id == req.TrdId, ct);
+        if (trd is null) { throw new InvalidOperationException("La TRD no existe."); }
+        // Misma regla que el resto: una TRD cerrada no se toca.
+        if (trd.Estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+
+        if (!await _db.Dependencias.AnyAsync(d => d.Id == req.DependenciaId && d.TrdId == req.TrdId, ct))
+        { throw new InvalidOperationException("Elige una dependencia del organigrama."); }
+        if (!await _db.Series.AnyAsync(s => s.Id == req.SerieId, ct))
+        { throw new InvalidOperationException("Elige una serie."); }
+
+        var tipologias = req.TipologiaIds.Distinct().ToList();
+        if (tipologias.Count == 0) { throw new InvalidOperationException("Marca al menos una tipologia."); }
+
+        var creadas = 0;
+        foreach (var tipologiaId in tipologias)
+        {
+            // El unique (trd, dependencia, serie, subserie, tipologia) impide repetir:
+            // si ya esta declarada, se salta (igual que el lado cliente).
+            var yaEsta = await _db.RespuestasTablaDocumental.AnyAsync(
+                r => r.TrdId == req.TrdId && r.DependenciaId == req.DependenciaId
+                     && r.SerieId == req.SerieId && r.SubserieId == req.SubserieId
+                     && r.TipologiaId == tipologiaId, ct);
+            if (yaEsta) { continue; }
+
+            var fila = new RespuestaTablaDocumental
+            {
+                TenantId = tenantId, TrdId = req.TrdId, DependenciaId = req.DependenciaId,
+                SerieId = req.SerieId, SubserieId = req.SubserieId, TipologiaId = tipologiaId,
+                SinSubserie = req.SubserieId is null,
+                TiempoAg = req.TiempoAg, TiempoAc = req.TiempoAc, TiempoObserv = req.TiempoObserv,
+                DispCt = req.DispCt, DispS = req.DispS, DispE = req.DispE, DispD = req.DispD,
+                DispObserv = req.DispObserv,
+                Val1Admin = req.Val1Admin, Val1Tecnica = req.Val1Tecnica, Val1Legal = req.Val1Legal,
+                Val1Contable = req.Val1Contable, Val1Fiscal = req.Val1Fiscal,
+                Val2Historica = req.Val2Historica, Val2Cientifica = req.Val2Cientifica, Val2Cultural = req.Val2Cultural,
+                Extension = "{}", FechaReg = _clock.GetUtcNow(), CreadoPor = actor
+            };
+
+            // Formatos de esta tipologia: se agregan por la navegacion, EF fija el
+            // RespuestaId al guardar (no hace falta un Id previo).
+            if (req.FormatosPorTipologia.TryGetValue(tipologiaId, out var formatos) && formatos is not null)
+            {
+                foreach (var f in formatos.Where(x => !string.IsNullOrWhiteSpace(x))
+                                          .Select(x => x.Trim())
+                                          .Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    fila.Formatos.Add(new FormatoSerie { TenantId = tenantId, Soporte = SoporteDe(f), Formato = f });
+                }
+            }
+
+            _db.RespuestasTablaDocumental.Add(fila);
+            creadas++;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return creadas;
+    }
+
     public async Task<bool> EliminarDocumentoTrdAsync(Guid id, Guid actor, CancellationToken ct = default)
     {
         var fila = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(r => r.Id == id, ct);

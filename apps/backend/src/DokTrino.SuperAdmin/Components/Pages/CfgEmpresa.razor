@@ -3,7 +3,9 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.Security.Claims
 @using DokTrino.Application.Tenancy
+@using DokTrino.Application.Admin
 @inject ISucursalService Svc
+@inject IModuloMenuService ModulosSvc
 
 <PageTitle>Configuracion de Empresa - Archimente</PageTitle>
 
@@ -49,16 +51,94 @@
     </div>
 </div>
 
+<div class="ase-card">
+    <div class="ase-card-h">Modulos del menu</div>
+    <p class="ase-modhint">Apaga los modulos que esta entidad no usa. Se ocultan del menu lateral para todos sus usuarios. Un modulo apagado no elimina datos: al volver a encenderlo reaparece.</p>
+
+    @foreach (var grupo in Modulos.GroupBy(m => m.Grupo))
+    {
+        <div class="ase-modgroup">@grupo.Key</div>
+        <div class="ase-modgrid">
+            @foreach (var m in grupo)
+            {
+                <label class="ase-modrow">
+                    <input type="checkbox" class="form-check-input"
+                           checked="@(!_deshabilitados.Contains(m.Clave))"
+                           @onchange="e => Toggle(m.Clave, e)" />
+                    <span>@m.Etiqueta</span>
+                </label>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .ase-modhint { color: #64748b; font-size: .85rem; margin: 0 0 1rem; }
+    .ase-modgroup { font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #475569; margin: 1rem 0 .5rem; }
+    .ase-modgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem .75rem; }
+    .ase-modrow { display: flex; align-items: center; gap: .5rem; padding: .3rem .1rem; margin: 0; cursor: pointer; }
+    .ase-modrow span { font-size: .9rem; }
+</style>
+
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     private List<Row> _items = new();
     private string? _error, _ok;
 
+    // Claves de modulos apagados por la entidad. Ausencia = habilitado (default encendido).
+    private HashSet<string> _deshabilitados = new(StringComparer.OrdinalIgnoreCase);
+
+    // Espejo de los modulos toggleables de NavMenu. La Clave es el href del modulo.
+    private sealed record Modulo(string Clave, string Etiqueta, string Grupo);
+
+    private static readonly Modulo[] Modulos =
+    [
+        new("radicacion", "Radicacion", "Documental"),
+        new("trd", "Encuesta Documental", "Documental"),
+        new("archivo-fisico", "Archivo fisico", "Documental"),
+        new("topografia-fisica", "Topografia fisica", "Documental"),
+        new("archivo-digital", "Archivo digital", "Documental"),
+        new("configuracion-documental", "Configuracion Documental", "Documental"),
+        new("procesos", "Procesos (BPMN)", "Documental"),
+        new("formularios", "Formularios", "Documental"),
+        new("clasificador-trd", "Clasificador TRD (IA)", "Documental"),
+        new("metricas", "Metricas", "Documental"),
+        new("bi-servicios", "Power BI Servicios", "Documental"),
+        new("cfg-tipologia-archivos", "Tipologia Archivos", "Documental"),
+
+        new("lineas", "Lineas WhatsApp", "Heredados / CRM"),
+        new("agentes", "Agentes IA", "Heredados / CRM"),
+        new("automatizaciones", "Automatizaciones", "Heredados / CRM"),
+        new("cfg-profesionales", "Colaboradores", "Heredados / CRM"),
+        new("cfg-tipos-profesional", "Tipos de Colaborador", "Heredados / CRM"),
+        new("cfg-subcategorias", "Subcategorias", "Heredados / CRM"),
+        new("relaciones-formularios", "Relaciones de formularios", "Heredados / CRM"),
+        new("plantillas", "Plantillas", "Heredados / CRM"),
+
+        new("admin/sql-console", "Consola SQL", "Administracion"),
+        new("cfg-roles", "Roles y Permisos", "Administracion"),
+        new("cfg-usuarios", "Administracion de Usuarios", "Administracion"),
+    ];
+
     protected override async Task OnInitializedAsync()
     {
         await Load();
+        _deshabilitados = new HashSet<string>(await ModulosSvc.DeshabilitadosAsync(), StringComparer.OrdinalIgnoreCase);
     }
     private async Task Load() => _items = (await Svc.ListAsync()).Select(Row.From).ToList();
+
+    private async Task Toggle(string clave, ChangeEventArgs e)
+    {
+        var habilitado = e.Value is bool b && b;
+        _error = _ok = null;
+        try
+        {
+            await ModulosSvc.AlternarAsync(clave, habilitado, await Actor());
+            if (habilitado) { _deshabilitados.Remove(clave); } else { _deshabilitados.Add(clave); }
+            _ok = "Modulo actualizado. Recarga la pagina para ver el menu actualizado.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
 
     private void Add() => _items.Add(new Row { Activo = true });
 

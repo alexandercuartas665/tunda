@@ -350,7 +350,7 @@
                                    value="@_fltDoc" @onchange="e => FiltrarDocs(null, e.Value?.ToString())" />
                             <button class="trx-btn ghost mini" @onclick="RecargarDocs">&#8635; Actualizar</button>
                             <a class="trx-btn ghost mini" href="@($"/api/doktrino/trd/{_sel.Id}/excel")" target="_blank">Excel AGN</a>
-                            <button class="trx-btn mini" style="margin-left: auto;" @onclick="() => AbrirDoc(null)">&#43; Agregar documento</button>
+                            <button class="trx-btn mini" style="margin-left: auto;" @onclick="AbrirPicker">&#43; Agregar documento</button>
                         </div>
 
                         <div class="doc-scroll">
@@ -515,6 +515,176 @@
                     <button class="trx-btn ghost" @onclick="CerrarDoc">Cancelar</button>
                     <button class="trx-btn" @onclick="GuardarDoc">Guardar documento</button>
                 </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===================== Alta multiple: "Cargar estructura" (picker) ===================== *@
+@if (_pickerAbierto)
+{
+    <div class="doktrino-drawer-scrim" style="display: block; z-index: 2000;" @onclick="CerrarPicker"></div>
+    <div style="position: fixed; inset: 0; z-index: 2005; display: flex; align-items: center; justify-content: center; padding: 18px; pointer-events: none;">
+        <div class="trx-modal-xl">
+
+            <div class="per-h" style="border-radius: 12px; margin-bottom: 14px;">
+                <div>
+                    <div class="per-t">Cargar estructura documental</div>
+                    <div class="per-sub">Elige la dependencia, marca tipologias por serie/subserie y declara su formato</div>
+                </div>
+                <span class="per-x" @onclick="CerrarPicker">&#10005;</span>
+            </div>
+
+            @if (_pkError is not null) { <div class="trx-error">@_pkError</div> }
+
+            @* --- Dependencia productora --- *@
+            <div class="est-hd">
+                <div style="min-width: 260px;">
+                    <div class="est-lbl">Dependencia productora</div>
+                    <select class="dep-in" @bind="_pkDep">
+                        <option value="">(elige una)</option>
+                        @foreach (var d in Jerarquia())
+                        {
+                            <option value="@d.Id">@d.Codigo @d.NombreCargo</option>
+                        }
+                    </select>
+                </div>
+                <div class="est-hd-hint">El administrador diligencia la TRD en nombre de esta oficina.</div>
+                <span class="est-badge">@_pkMarcadas.Count tipologia(s) marcada(s)</span>
+            </div>
+
+            @* --- Picker de 3 columnas (identico al cliente) --- *@
+            <div class="tcl-cols" style="margin-top: 14px;">
+
+                @* izquierda: serie *@
+                <div class="tcl-panel izq">
+                    <div class="tcl-panel-t">Serie documental</div>
+                    <input class="tcl-input" @bind="_pkBuscarSerie" @bind:event="oninput" placeholder="Buscar serie..." />
+                    <div class="tcl-lista">
+                        @foreach (var s in PkSeriesVisibles)
+                        {
+                            <div class="tcl-item @(_pkSerieSel?.Id == s.Id ? "on" : "")" @onclick="() => PkSeleccionarSerie(s)">
+                                <span>&#128193;</span>
+                                <span>@s.Nombre</span>
+                                @if (s.Subseries > 0) { <span class="tcl-count">@s.Subseries</span> }
+                                <span class="code">@s.Codigo</span>
+                            </div>
+                        }
+                        @if (PkSeriesVisibles.Count == 0)
+                        {
+                            <div class="dkd-empty">Sin series en el catalogo.</div>
+                        }
+                    </div>
+                </div>
+
+                @* centro: subserie + tipologias con checkbox multiple *@
+                <div class="tcl-panel der">
+                    @if (_pkSerieSel is null)
+                    {
+                        <div class="tcl-panel-t">Subserie</div>
+                        <div class="dkd-empty">Elige una serie a la izquierda para ver sus subseries.</div>
+                    }
+                    else
+                    {
+                        <div class="tcl-panel-t">Subserie &middot; <span style="color: var(--primary);">@_pkSerieSel.Nombre</span></div>
+                        <div class="tcl-tree">
+                            @if (_pkSubseries.Count == 0)
+                            {
+                                <div class="dkd-empty">Esta serie no tiene subseries en el catalogo.</div>
+                            }
+                            @foreach (var sub in _pkSubseries)
+                            {
+                                <div class="tcl-sub">
+                                    <div class="tcl-sub-h" @onclick="() => PkAlternarSubserie(sub)">
+                                        <span class="caret">@(_pkSubAbierta == sub.Id ? "▾" : "▸")</span>
+                                        <span>&#128194; @sub.Nombre</span>
+                                        <span class="code">@sub.Codigo</span>
+                                    </div>
+                                    @if (_pkSubAbierta == sub.Id)
+                                    {
+                                        <div class="tcl-tipos">
+                                            @foreach (var t in PkTiposDe(sub.Id))
+                                            {
+                                                <label class="tcl-tipo">
+                                                    <input type="checkbox" checked="@_pkMarcadas.ContainsKey(t.Id)"
+                                                           @onchange="e => PkMarcar(t, e)" />
+                                                    <span>@t.Nombre</span>
+                                                </label>
+                                            }
+                                            @if (!PkTiposDe(sub.Id).Any())
+                                            {
+                                                <div class="dkd-empty">Sin tipologias en esta subserie.</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* derecha: formato de los activos por tipologia marcada *@
+                @if (_pkMarcadas.Count > 0)
+                {
+                    <div class="tcl-panel fmt">
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <div class="tcl-panel-t" style="margin: 0;">Formato de los activos</div>
+                            <span class="tcl-count" style="margin-left: 8px;">@_pkMarcadas.Count</span>
+                        </div>
+                        <div class="tcl-fmt-ayuda">Marca uno o varios formatos por tipologia (papel, Word, Excel, PDF, multimedia...).</div>
+                        @foreach (var m in _pkMarcadas)
+                        {
+                            <div class="tcl-fmt-fila">
+                                <div class="tcl-fmt-nom">@m.Value</div>
+                                <div class="tcl-chips">
+                                    @foreach (var f in FormatosDisponibles)
+                                    {
+                                        var puesto = _pkFmt.TryGetValue(m.Key, out var set) && set.Contains(f);
+                                        <button class="tcl-chip @(puesto ? "on" : "")" @onclick="() => PkChip(m.Key, f)">@f</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @* --- Propiedades archivisticas compartidas --- *@
+            <div class="est-block" style="margin-top: 14px;">
+                <div class="est-block-t">Propiedades archivisticas &middot; se aplican a las @_pkMarcadas.Count tipologia(s) marcada(s)</div>
+                <div class="est-nums">
+                    <div class="est-num"><span class="est-lbl">AG (anios)</span><input class="dep-in cod" type="number" min="0" step="0.5" @bind="_est.TiempoAg" /></div>
+                    <div class="est-num"><span class="est-lbl">AC (anios)</span><input class="dep-in cod" type="number" min="0" step="0.5" @bind="_est.TiempoAc" /></div>
+                    <div class="doc-chks" style="margin-left: 6px;">
+                        <span class="est-cap">Disposicion:</span>
+                        <label class="doc-chk"><input type="checkbox" @bind="_est.DispCt" /> CT</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_est.DispS" /> S</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_est.DispE" /> E</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_est.DispD" /> D</label>
+                    </div>
+                </div>
+                <div class="doc-chks" style="margin-top: 10px;">
+                    <span class="est-cap">Valoracion primaria:</span>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val1Admin" /> Administrativa</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val1Tecnica" /> Tecnica</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val1Legal" /> Legal</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val1Contable" /> Contable</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val1Fiscal" /> Fiscal</label>
+                </div>
+                <div class="doc-chks" style="margin-top: 8px;">
+                    <span class="est-cap">Valoracion secundaria:</span>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val2Historica" /> Historica</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val2Cientifica" /> Cientifica</label>
+                    <label class="doc-chk"><input type="checkbox" @bind="_est.Val2Cultural" /> Cultural</label>
+                </div>
+                <small class="trd-muted" style="display: block; margin-top: 8px;">
+                    AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion (Ley 594/2000, AGN).
+                </small>
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                <button class="trx-btn ghost" @onclick="CerrarPicker">Cancelar</button>
+                <button class="trx-btn" @onclick="GuardarPicker">Cargar estructura</button>
             </div>
         </div>
     </div>
@@ -699,6 +869,23 @@
                 display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr auto; gap:8px; align-items:center; }
     @@media (max-width: 760px) { .per-alta, .per-campos { grid-template-columns:1fr; } }
 
+    /* Picker de alta multiple ("Cargar estructura"). Reusa .tcl-* y .dep-*; lo
+       propio va con prefijo est- para no chocar con otras clases. */
+    .est-hd { display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+              padding:11px 13px; background:#fff; border:1px solid #e6e9f2; border-radius:12px; }
+    .est-hd-hint { flex:1; font-size:11.5px; color:#8a93ad; }
+    .est-badge { font-size:10.5px; font-weight:800; padding:4px 11px; border-radius:20px;
+                 background:var(--primary-soft); color:var(--primary); white-space:nowrap; }
+    .est-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+               color:#8a93ad; margin-bottom:4px; }
+    .est-block { border:1px solid #e9ecf5; border-radius:12px; padding:13px 15px; background:#fff; }
+    .est-block-t { font-size:11px; font-weight:700; color:#1f2433; text-transform:uppercase;
+                   letter-spacing:.4px; margin-bottom:10px; }
+    .est-nums { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; }
+    .est-num { display:flex; flex-direction:column; gap:3px; }
+    .est-num input { width:78px; }
+    .est-cap { font-size:11px; font-weight:700; color:#8a93ad; align-self:center; }
+
     .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .trd-form .form-control, .trd-form .form-select { max-width:220px; }
     .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
@@ -748,6 +935,23 @@
     private List<SerieDto> _seriesDoc = new();
     private List<SubserieDto> _subseriesDoc = new();
     private List<TipologiaDocDto> _tiposDoc = new();
+
+    // --- Picker de alta multiple estilo "Cargar estructura" (copiado del cliente) ---
+    private bool _pickerAbierto;
+    private string _pkDep = "", _pkBuscarSerie = "";
+    private List<SerieDto> _pkSeries = new();
+    private SerieDto? _pkSerieSel;
+    private List<SubserieDto> _pkSubseries = new();
+    private Guid? _pkSubAbierta;
+    private List<TipologiaDocDto> _pkTiposAll = new();
+    private readonly Dictionary<Guid, string> _pkMarcadas = new();          // tipologiaId -> nombre
+    private readonly Dictionary<Guid, HashSet<string>> _pkFmt = new();       // tipologiaId -> formatos
+    private GuardarEstructuraTrdRequest _est = new();
+    private string? _pkError;
+
+    /// <summary>Vocabulario de formatos, el mismo del editor de series y del cliente.</summary>
+    private static readonly string[] FormatosDisponibles =
+        ["Papel", "PDF", "Word", "Excel", "Imagen", "Video", "Audio", "Correo"];
 
     // Modal de personas de una dependencia.
     private DependenciaDto? _personasDe;
@@ -1000,6 +1204,94 @@
         await Trd.EliminarDocumentoTrdAsync(id, await Actor());
         await RecargarDocs();
         await LoadAll();
+    }
+
+    // ---------- Alta multiple: picker "Cargar estructura" ----------
+
+    /// <summary>Series filtradas por el buscador de la columna izquierda.</summary>
+    private List<SerieDto> PkSeriesVisibles => string.IsNullOrWhiteSpace(_pkBuscarSerie)
+        ? _pkSeries
+        : _pkSeries.Where(s => s.Nombre.Contains(_pkBuscarSerie.Trim(), StringComparison.OrdinalIgnoreCase)
+                              || s.Codigo.Contains(_pkBuscarSerie.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+    /// <summary>Tipologias del catalogo que cuelgan de una subserie concreta.</summary>
+    private IEnumerable<TipologiaDocDto> PkTiposDe(Guid subserieId) =>
+        _pkTiposAll.Where(t => t.SubserieId == subserieId);
+
+    private async Task AbrirPicker()
+    {
+        if (_sel is null) { return; }
+        _pkError = null;
+        _pkSeries = (await Trd.ListSeriesAsync()).ToList();
+        _pkTiposAll = (await Trd.ListTipologiasAsync()).ToList();
+        _pkDep = _fltDep;   // si la tabla venia filtrada por dependencia, se preselecciona
+        _pkBuscarSerie = "";
+        _pkSerieSel = null;
+        _pkSubseries = new();
+        _pkSubAbierta = null;
+        _pkMarcadas.Clear();
+        _pkFmt.Clear();
+        _est = new GuardarEstructuraTrdRequest { TrdId = _sel.Id };
+        _pickerAbierto = true;
+    }
+
+    private void CerrarPicker() { _pickerAbierto = false; _pkError = null; }
+
+    private async Task PkSeleccionarSerie(SerieDto s)
+    {
+        _pkSerieSel = s;
+        _pkSubAbierta = null;
+        _pkSubseries = (await Trd.ListSubseriesAsync(s.Id)).ToList();
+    }
+
+    private void PkAlternarSubserie(SubserieDto sub) =>
+        _pkSubAbierta = _pkSubAbierta == sub.Id ? null : sub.Id;
+
+    private void PkMarcar(TipologiaDocDto t, ChangeEventArgs e)
+    {
+        if (e.Value is bool on && on)
+        {
+            _pkMarcadas[t.Id] = t.Nombre;
+            if (!_pkFmt.ContainsKey(t.Id)) { _pkFmt[t.Id] = new(); }
+        }
+        else
+        {
+            _pkMarcadas.Remove(t.Id);
+            _pkFmt.Remove(t.Id);
+        }
+    }
+
+    private void PkChip(Guid tipologiaId, string formato)
+    {
+        if (!_pkFmt.TryGetValue(tipologiaId, out var set)) { set = _pkFmt[tipologiaId] = new(); }
+        if (!set.Remove(formato)) { set.Add(formato); }
+    }
+
+    private async Task GuardarPicker()
+    {
+        _pkError = null;
+        if (!Guid.TryParse(_pkDep, out var dep)) { _pkError = "Elige la dependencia productora."; return; }
+        if (_pkSerieSel is null) { _pkError = "Elige una serie."; return; }
+        if (_pkMarcadas.Count == 0) { _pkError = "Marca al menos una tipologia."; return; }
+
+        _est.TrdId = _sel!.Id;
+        _est.DependenciaId = dep;
+        _est.SerieId = _pkSerieSel.Id;
+        _est.SubserieId = _pkSubAbierta;
+        _est.TipologiaIds = _pkMarcadas.Keys.ToList();
+        _est.FormatosPorTipologia = _pkFmt.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+
+        try
+        {
+            var n = await Trd.GuardarEstructuraTrdAsync(_est, await Actor());
+            _pickerAbierto = false;
+            _ok = n > 0
+                ? $"{n} tipologia(s) cargada(s) en la TRD."
+                : "Nada nuevo: esas tipologias ya estaban declaradas.";
+            await RecargarDocs();
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _pkError = ex.Message; }
     }
 
     private void AbrirAlta(Guid? padreId)

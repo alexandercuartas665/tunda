@@ -13,49 +13,73 @@
             <span>Inicio</span>
         </NavLink>
 
+        @if (!_deshabilitados.Contains("radicacion"))
+        {
         <NavLink class="doktrino-nav-link" href="radicacion">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
             <span>Radicacion</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("trd"))
+        {
         <NavLink class="doktrino-nav-link" href="trd">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v4H3z"/><path d="M3 7v14h18V7"/><path d="M8 11h8"/><path d="M8 15h8"/><path d="M8 19h5"/></svg>
             <span>Encuesta Documental</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("archivo-fisico"))
+        {
         <NavLink class="doktrino-nav-link" href="archivo-fisico">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
             <span>Archivo fisico</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("topografia-fisica"))
+        {
         <NavLink class="doktrino-nav-link" href="topografia-fisica">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="6" y="12" width="4" height="6"/><rect x="12" y="7" width="4" height="11"/></svg>
             <span>Topografia fisica</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("archivo-digital"))
+        {
         <NavLink class="doktrino-nav-link" href="archivo-digital">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
             <span>Archivo digital</span>
         </NavLink>
+        }
 
         <div class="doktrino-nav-label">Plataforma</div>
 
+        @if (!_deshabilitados.Contains("configuracion-documental"))
+        {
         <NavLink class="doktrino-nav-link" href="configuracion-documental">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="8" cy="17" r="2.2" fill="currentColor" stroke="none"/></svg>
             <span>Configuracion Documental</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("procesos"))
+        {
         <NavLink class="doktrino-nav-link" href="procesos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="1"/><rect width="8" height="8" x="13" y="13" rx="1"/><path d="M7 11v2a2 2 0 0 0 2 2h2"/><path d="M11 7h2a2 2 0 0 1 2 2v2"/></svg>
             <span>Procesos (BPMN)</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("formularios"))
+        {
         <NavLink class="doktrino-nav-link" href="formularios">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
             <span>Formularios</span>
         </NavLink>
+        }
 
-        @if (_crmHabilitado)
+        @if (_crmHabilitado && !_deshabilitados.Contains("lineas"))
         {
         <NavLink class="doktrino-nav-link" href="lineas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
@@ -63,7 +87,7 @@
         </NavLink>
         }
 
-        @if (_crmHabilitado)
+        @if (_crmHabilitado && !_deshabilitados.Contains("agentes"))
         {
         <NavLink class="doktrino-nav-link" href="agentes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
@@ -71,12 +95,15 @@
         </NavLink>
         }
 
+        @if (!_deshabilitados.Contains("clasificador-trd"))
+        {
         <NavLink class="doktrino-nav-link" href="clasificador-trd">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2"/></svg>
             <span>Clasificador TRD (IA)</span>
         </NavLink>
+        }
 
-        @if (_crmHabilitado)
+        @if (_crmHabilitado && !_deshabilitados.Contains("automatizaciones"))
         {
         <NavLink class="doktrino-nav-link" href="automatizaciones">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
@@ -84,64 +111,97 @@
         </NavLink>
         }
 
+        @if (!_deshabilitados.Contains("metricas"))
+        {
         <NavLink class="doktrino-nav-link" href="metricas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
             <span>Metricas</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("bi-servicios"))
+        {
         <NavLink class="doktrino-nav-link" href="bi-servicios">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect width="4" height="7" x="7" y="10"/><rect width="4" height="11" x="13" y="6"/></svg>
             <span>Power BI Servicios</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-profesionales"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-profesionales">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span>Colaboradores</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-tipos-profesional"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-tipos-profesional">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
             <span>Tipos de Colaborador</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-subcategorias"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-subcategorias">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
             <span>Subcategorias</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("relaciones-formularios"))
+        {
         <NavLink class="doktrino-nav-link" href="relaciones-formularios">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="6" x="2" y="4" rx="1"/><rect width="8" height="6" x="14" y="14" rx="1"/><path d="M10 7h4"/><path d="M14 7l-4 10"/></svg>
             <span>Relaciones de formularios</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-tipologia-archivos"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-tipologia-archivos">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             <span>Tipologia Archivos</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("admin/sql-console"))
+        {
         <NavLink class="doktrino-nav-link" href="admin/sql-console">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
             <span>Consola SQL</span>
         </NavLink>
+        }
 
         <div class="doktrino-nav-label">Otros</div>
 
+        @if (!_deshabilitados.Contains("cfg-empresa"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-empresa">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>
             <span>Configuracion de Empresa</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-roles"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-roles">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
             <span>Roles y Permisos</span>
         </NavLink>
+        }
 
+        @if (!_deshabilitados.Contains("cfg-usuarios"))
+        {
         <NavLink class="doktrino-nav-link" href="cfg-usuarios">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
             <span>Administracion de Usuarios</span>
         </NavLink>
+        }
 
-        @if (_crmHabilitado)
+        @if (_crmHabilitado && !_deshabilitados.Contains("plantillas"))
         {
         <NavLink class="doktrino-nav-link" href="plantillas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h2"/></svg>
@@ -252,10 +312,31 @@
     /// </summary>
     private bool _crmHabilitado;
 
+    /// <summary>
+    /// Claves (href) de los modulos apagados por el tenant activo. La ausencia de
+    /// una clave significa habilitado (default encendido). El menu es SSR: se carga
+    /// una sola vez en OnInitializedAsync.
+    /// </summary>
+    private IReadOnlySet<string> _deshabilitados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
         _crmHabilitado = Config.GetValue("Modulos:EnableCrm", false);
+
+        // Scope propio: el menu se inicializa en paralelo con la pagina y no puede
+        // compartir con ella el DbContext scoped. ITenantContext resuelve el tenant
+        // desde los claims del request, asi que funciona en un scope hijo.
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var modulos = scope.ServiceProvider.GetRequiredService<DokTrino.Application.Admin.IModuloMenuService>();
+            _deshabilitados = await modulos.DeshabilitadosAsync();
+        }
+        catch
+        {
+            // Sin estado disponible el menu muestra todos los modulos (default encendido).
+        }
 
         if (AuthState is null)
         {

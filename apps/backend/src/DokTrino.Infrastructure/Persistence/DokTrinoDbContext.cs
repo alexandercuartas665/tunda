@@ -76,6 +76,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<RolPermiso> RolPermisos => Set<RolPermiso>();
     public DbSet<Sucursal> Sucursales => Set<Sucursal>();
     public DbSet<TenantUserSucursal> TenantUserSucursales => Set<TenantUserSucursal>();
+    public DbSet<ModuloTenant> ModulosTenant => Set<ModuloTenant>();
     public DbSet<Pais> Paises => Set<Pais>();
     public DbSet<Departamento> Departamentos => Set<Departamento>();
     public DbSet<Municipio> Municipios => Set<Municipio>();
@@ -684,6 +685,12 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         {
             b.HasOne(x => x.Sucursal).WithMany().HasForeignKey(x => x.SucursalId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantUserId, x.SucursalId }).IsUnique();
+        });
+
+        modelBuilder.Entity<ModuloTenant>(b =>
+        {
+            b.Property(x => x.Clave).HasMaxLength(80).IsRequired();
+            b.HasIndex(x => new { x.TenantId, x.Clave }).IsUnique();
         });
 
 

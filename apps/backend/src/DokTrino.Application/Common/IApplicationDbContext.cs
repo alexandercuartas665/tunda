@@ -49,6 +49,7 @@ public interface IApplicationDbContext
     DbSet<Departamento> Departamentos { get; }
     DbSet<Municipio> Municipios { get; }
     DbSet<Segmento> Segmentos { get; }
+    DbSet<ModuloTenant> ModulosTenant { get; }
     DbSet<TablaRetencionDocumental> TablasRetencionDocumental { get; }
     DbSet<Dependencia> Dependencias { get; }
     DbSet<Serie> Series { get; }

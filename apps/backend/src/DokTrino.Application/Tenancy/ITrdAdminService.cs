@@ -43,6 +43,15 @@ public interface ITrdAdminService
     Task<IReadOnlyList<DocumentoTrdDto>> DocumentosTrdAsync(
         Guid trdId, Guid? dependenciaId = null, string? texto = null, CancellationToken ct = default);
     Task<Guid?> GuardarDocumentoTrdAsync(GuardarDocumentoTrdRequest req, Guid actor, CancellationToken ct = default);
+
+    /// <summary>
+    /// Alta multiple estilo "Cargar Estructura": una fila de la TRD por cada tipologia
+    /// marcada (misma dependencia/serie/subserie + propiedades archivisticas compartidas)
+    /// mas los formatos declarados por tipologia. Respeta el unique (trd, dependencia,
+    /// serie, subserie, tipologia): las ya declaradas se saltan. Devuelve cuantas creo.
+    /// </summary>
+    Task<int> GuardarEstructuraTrdAsync(GuardarEstructuraTrdRequest req, Guid actor, CancellationToken ct = default);
+
     Task<bool> EliminarDocumentoTrdAsync(Guid id, Guid actor, CancellationToken ct = default);
 
     // Invitacion por token (lo consume el visor cliente 2.D2)
