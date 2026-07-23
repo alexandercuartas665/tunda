@@ -17,7 +17,7 @@
     <!-- Toolbar -->
     <div class="fb-toolbar">
         <div class="fb-tb-left">
-            <span class="fb-eyebrow">Operacion Clinica</span>
+            <span class="fb-eyebrow">Gestion documental</span>
             <strong class="fb-tb-title">Motor de Formularios</strong>
         </div>
         @* Lado derecho: select arriba (fila 1) + botones de accion abajo (fila 2).
@@ -41,12 +41,18 @@
                     <button class="fb-btn fb-btn-danger" @onclick="DeleteFormAsync" disabled="@_busy"
                             title="Eliminar definitivamente este formulario">&#128465; Eliminar</button>
                 }
-                <button class="fb-btn" @onclick="AutoEnlazarPacienteAsync" disabled="@_busy"
-                        title="Recorre todos los formularios e infiere mapeos prefill desde el modulo Paciente segun el nombre/etiqueta de cada campo. No sobrescribe mapeos existentes.">&#128279; Auto-enlazar Paciente</button>
+                @* El auto-enlace inferia campos desde un modulo Paciente que no
+                   existe en el producto documental. Se oculta hasta reescribir la
+                   heuristica para modulos documentales (Dependencia, Colaborador). *@
                 <button class="fb-btn" @onclick="NewForm">Nuevo</button>
                 <button class="fb-btn fb-btn-primary" @onclick="SaveAsync" disabled="@_busy">@(_busy ? "Guardando..." : "Guardar")</button>
             </div>
         </div>
+    </div>
+
+    <div class="fb-purpose">
+        Construye los documentos del proceso TRD: encuestas, actas y formatos relacionados,
+        y el formulario de evaluacion de los usuarios del Cliente Encuesta.
     </div>
 
     @if (_error is not null)
@@ -62,19 +68,19 @@
     <div class="fb-meta">
         <div class="fb-meta-field">
             <label>Nombre</label>
-            <input class="fb-input" @bind="_nombre" @bind:event="oninput" placeholder="Historia Clinica General" />
+            <input class="fb-input" @bind="_nombre" @bind:event="oninput" placeholder="Encuesta de satisfaccion TRD" />
         </div>
         <div class="fb-meta-field" style="max-width:160px;">
             <label>Codigo</label>
-            <input class="fb-input fb-mono" @bind="_codigo" @bind:event="oninput" placeholder="HC-GENERAL" />
+            <input class="fb-input fb-mono" @bind="_codigo" @bind:event="oninput" placeholder="ENC-TRD" />
         </div>
         <div class="fb-meta-field" style="max-width:180px;" title="Identificador alternativo opcional (codigo legacy, prestador, integracion). Texto libre.">
             <label>Codigo formulario</label>
-            <input class="fb-input fb-mono" @bind="_codigoSecundario" @bind:event="oninput" placeholder="HC-001" />
+            <input class="fb-input fb-mono" @bind="_codigoSecundario" @bind:event="oninput" placeholder="ENC-001" />
         </div>
         <div class="fb-meta-field" style="max-width:160px;">
             <label>Tipo</label>
-            <input class="fb-input" @bind="_tipo" @bind:event="oninput" placeholder="historia" />
+            <input class="fb-input" @bind="_tipo" @bind:event="oninput" placeholder="encuesta" />
         </div>
         <div class="fb-meta-field" style="max-width:110px;">
             <label>Version</label>
@@ -204,8 +210,8 @@
             @if (_headerSel)
             {
                 <div class="fb-props-title">Encabezado del documento</div>
-                <div class="fb-prop"><label>Institucion</label><input class="fb-input" @bind="_schema.Header!.Institucion" @bind:event="oninput" placeholder="IPS DOKTRINO RT" /></div>
-                <div class="fb-prop"><label>Lema</label><input class="fb-input" @bind="_schema.Header!.Tagline" @bind:event="oninput" placeholder="Atencion Humana, Agil y Oportuna" /></div>
+                <div class="fb-prop"><label>Institucion</label><input class="fb-input" @bind="_schema.Header!.Institucion" @bind:event="oninput" placeholder="Nombre de la entidad" /></div>
+                <div class="fb-prop"><label>Lema</label><input class="fb-input" @bind="_schema.Header!.Tagline" @bind:event="oninput" placeholder="Gestion Documental Inteligente" /></div>
                 <div class="fb-prop"><label>Titulo del documento</label><input class="fb-input" @bind="_schema.Header!.Titulo" @bind:event="oninput" placeholder="(usa el nombre del formulario)" /></div>
 
                 <div class="fb-props-subtitle">Logo</div>
@@ -217,7 +223,7 @@
                 else
                 {
                     <InputFile class="fb-input" accept="image/*" OnChange="OnHeaderLogoSelected" />
-                    <div class="fb-hint">Sube el logo de la IPS (PNG/JPG, max 4 MB). Si no, se usa el icono por defecto.</div>
+                    <div class="fb-hint">Sube el logo de la entidad (PNG/JPG, max 4 MB). Si no, se usa el icono por defecto.</div>
                 }
 
                 <div class="fb-props-subtitle">Campos de cabecera</div>
@@ -504,7 +510,7 @@
 
             <div class="pr-info">
                 Define las <strong>rutas</strong> de prefill: cada ruta es un mapeo nombrado entre los campos
-                de un modulo origen (Paciente, Profesional...) y los campos de este formulario.
+                de un modulo origen (Dependencia, Colaborador...) y los campos de este formulario.
                 Cuando se inicia una instancia, los campos destino se llenan automaticamente con el dato del origen.
             </div>
 
@@ -517,7 +523,7 @@
                 {
                     <div class="pr-route">
                         <div class="pr-route-h">
-                            <input class="pr-name" @bind="route.Name" placeholder="Nombre de la ruta (ej. Paciente)" />
+                            <input class="pr-name" @bind="route.Name" placeholder="Nombre de la ruta (ej. Dependencia)" />
                             <select class="pr-source-sel" @bind="route.SourceModule">
                                 @foreach (var mod in PrefillSourceCatalog.Campos.Keys)
                                 {
@@ -763,12 +769,11 @@
     private static readonly Dictionary<string, string> Catalogs = new()
     {
         ["estatico"] = "Opciones fijas",
-        ["cie11"] = "CIE-11 (diagnosticos)",
-        ["cups"] = "CUPS (procedimientos)",
-        ["medicamentos"] = "Medicamentos",
-        ["profesionales"] = "Profesionales",
-        ["ips"] = "IPS / sedes",
-        ["generos"] = "Generos"
+        ["series"] = "Series documentales",
+        ["subseries"] = "Subseries",
+        ["tipologias"] = "Tipologias",
+        ["dependencias"] = "Dependencias",
+        ["colaboradores"] = "Colaboradores"
     };
 
     private List<FormDefinitionDto> _forms = new();
@@ -878,7 +883,7 @@
 
     private void ClosePrefillRoutesModal() => _showPrefillModal = false;
 
-    private void AddRoute() => _prefillRoutes.Routes.Add(new PrefillRoute { Name = "Paciente", SourceModule = "paciente" });
+    private void AddRoute() => _prefillRoutes.Routes.Add(new PrefillRoute { Name = "Dependencia", SourceModule = "dependencia" });
     private void RemoveRoute(PrefillRoute r) => _prefillRoutes.Routes.Remove(r);
     private void AddMapping(PrefillRoute r) => r.Mappings.Add(new PrefillFieldMap());
     private void RemoveMapping(PrefillRoute r, PrefillFieldMap m) => r.Mappings.Remove(m);

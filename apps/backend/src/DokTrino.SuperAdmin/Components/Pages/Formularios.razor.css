@@ -14,6 +14,7 @@
 }
 .fb-tb-left { display: flex; flex-direction: column; }
 .fb-eyebrow { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; color: var(--primary); }
+.fb-purpose { font-size: 12.5px; color: #6b7488; margin: -4px 0 14px; max-width: 720px; }
 .fb-tb-title { font-size: 20px; color: var(--foreground); }
 /* Lado derecho de la toolbar: dos filas verticales (select + botones de accion).
    Mantener filas separadas evita que la fila de botones cambie su ubicacion
