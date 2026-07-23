@@ -17,8 +17,8 @@ public sealed record PlatformBrandingDto(
         "Archimente",
         "Gestion Documental",
         "/img/marca/archimente-claro.png",
-        "Gestion documental, agil y trazable",
-        "Coordina tu archivo: TRD, radicacion, expedientes y retencion documental en una sola plataforma.");
+        "Gestion Documental Inteligente",
+        "Transformamos el caos en control con tecnologia de vanguardia.");
 }
 
 public sealed record SaveBrandingRequest(

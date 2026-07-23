@@ -471,14 +471,24 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 .auth-brand-logo-img { height: 34px; max-width: 230px; object-fit: contain; }
 .auth-brand-name { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; }
 .auth-aside-body { position: relative; z-index: 1; max-width: 420px; }
-.auth-aside-body h2 { font-size: 2.1rem; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 14px; }
+.auth-aside-body h2 { font-size: 2.9rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 16px; }
 .auth-aside-body p { font-size: 1rem; line-height: 1.6; color: rgba(255,255,255,.9); margin: 0 0 22px; }
-/* Mascota del login: ocupa el centro del panel azul, entre el logotipo y el
-   mensaje. Se esconde en pantallas bajas para no empujar el texto. */
-.auth-mascota { position: relative; z-index: 1; display: block; margin: 0 auto;
-                width: min(72%, 320px); height: auto;
-                filter: drop-shadow(0 18px 40px rgba(0,0,0,.28)); }
-@media (max-height: 720px) { .auth-mascota { display: none; } }
+/* Mascota del login: se asoma por el borde derecho del panel (overflow:hidden
+   del aside la recorta, de ahi el efecto "detras del panel"). Entra deslizando
+   desde la derecha al cargar. */
+.auth-mascota { position: absolute; z-index: 1; right: -40px; top: 0; bottom: 0; margin: auto 0;
+                width: min(50%, 390px); height: auto; pointer-events: none;
+                filter: drop-shadow(-14px 18px 34px rgba(0,0,0,.32));
+                animation: authMascotaSale .9s cubic-bezier(.22,1,.36,1) .15s both; }
+@keyframes authMascotaSale {
+  from { opacity: 0; transform: translateX(70px) rotate(6deg); }
+  to   { opacity: 1; transform: translateX(0) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) { .auth-mascota { animation: none; } }
+/* Franja mas oscura tras la mascota, como en la referencia. */
+.auth-aside::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0;
+  width: 120px; background: rgba(1,45,90,.28); pointer-events: none; z-index: 0; }
+@media (max-width: 1100px) { .auth-mascota { display: none; } .auth-aside::after { display: none; } }
 
 .auth-dots { display: flex; gap: 8px; }
 .auth-dots span { width: 8px; height: 8px; border-radius: 99px; background: rgba(255,255,255,.45); }
