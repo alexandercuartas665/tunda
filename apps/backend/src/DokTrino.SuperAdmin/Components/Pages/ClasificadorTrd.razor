@@ -3,14 +3,49 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using DokTrino.Application.Tenancy
 @inject IClasificadorTrdService Clasificador
+@inject IAiUsageService Consumo
 
 <PageTitle>Clasificador TRD - Archimente</PageTitle>
 
-<div class="ase-head">
-    <div>
-        <div class="ase-eyebrow">IA Documental</div>
-        <h1 class="ase-title">Clasificador TRD asistido</h1>
+@* --- Hero con la mascota: le da cara al agente de IA del modulo --- *@
+<div class="clia-hero">
+    <img class="clia-mascota" src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" />
+    <div class="clia-hero-txt">
+        <div class="clia-eyebrow">IA Documental &middot; Archimente</div>
+        <h1 class="clia-title">Clasificador TRD asistido</h1>
+        <p class="clia-sub">
+            El agente lee tu Tabla de Retencion en <b>solo lectura</b> para sugerir la serie, proponer
+            tiempos de retencion (AG/AC) y redactar el procedimiento. Sin proveedor de IA, sigue la
+            clasificacion heuristica.
+        </p>
     </div>
+</div>
+
+@* --- Consumo de IA del tenant (mismo modulo de tokens que usa toda la plataforma) --- *@
+<div class="clia-kpis">
+    <div class="clia-kpi">
+        <div class="k">Tokens consumidos</div>
+        <div class="v">@Tokens(_consumo.TotalTokens)</div>
+        <div class="h">@Tokens(_consumo.InputTokens) entrada &middot; @Tokens(_consumo.OutputTokens) salida</div>
+    </div>
+    <div class="clia-kpi">
+        <div class="k">Llamadas de IA</div>
+        <div class="v">@_consumo.TotalCalls</div>
+    </div>
+    <div class="clia-kpi">
+        <div class="k">Costo estimado</div>
+        <div class="v">$@_consumo.EstimatedCostUsd.ToString("0.####")</div>
+        <div class="h">USD, aproximado por tarifa del proveedor</div>
+    </div>
+    @if (_cupo.HasLimit)
+    {
+        <div class="clia-kpi">
+            <div class="k">Cupo mensual</div>
+            <div class="v">@_cupo.UsedPct%</div>
+            <div class="clia-bar"><span style="width:@(_cupo.UsedPct)%"></span></div>
+            <div class="h">@Tokens(_cupo.MonthlyUsedTokens) / @Tokens(_cupo.MonthlyLimitTokens) tokens</div>
+        </div>
+    }
 </div>
 
 @if (_error is not null) { <div class="ase-alert">@_error</div> }
@@ -53,6 +88,26 @@
 <style>
     .cls-score { font-weight: 800; color: var(--primary); background: var(--primary-soft); padding: 1px 9px; border-radius: 999px; }
     .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+
+    /* Hero con mascota */
+    .clia-hero { position: relative; overflow: hidden; display: flex; align-items: center; gap: 20px;
+                 background: linear-gradient(135deg, var(--primary-deep), var(--primary)); color: #fff;
+                 border-radius: 18px; padding: 20px 26px; margin-bottom: 16px; box-shadow: 0 14px 36px var(--primary-shadow); }
+    .clia-mascota { height: 118px; width: auto; flex-shrink: 0; filter: drop-shadow(0 8px 16px rgba(0,0,0,.28)); }
+    @@media (max-width: 640px) { .clia-mascota { display: none; } }
+    .clia-eyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
+    .clia-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin: 3px 0 6px; }
+    .clia-sub { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,.92); margin: 0; max-width: 720px; }
+
+    /* KPIs de consumo */
+    .clia-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+    @@media (max-width: 900px) { .clia-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    .clia-kpi { background: #fff; border: 1px solid #e6e9f2; border-radius: 12px; padding: 13px 15px; }
+    .clia-kpi .k { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #8a93ad; }
+    .clia-kpi .v { font-size: 1.5rem; font-weight: 800; color: #1f2433; letter-spacing: -.02em; margin: 2px 0; }
+    .clia-kpi .h { font-size: 11px; color: #9aa3bd; }
+    .clia-bar { height: 6px; border-radius: 6px; background: #eef1f7; overflow: hidden; margin: 4px 0; }
+    .clia-bar span { display: block; height: 100%; background: var(--primary); }
 </style>
 
 @code {
@@ -60,6 +115,19 @@
     private List<SugerenciaSerieDto> _sug = new();
     private bool _busy, _done;
     private string? _error;
+
+    private AiUsageSummaryDto _consumo = new(0, 0, 0, 0, 0m, []);
+    private AiQuotaDto _cupo = new(0, 0, false);
+
+    protected override async Task OnInitializedAsync() => await CargarConsumo();
+
+    private async Task CargarConsumo()
+    {
+        _consumo = await Consumo.GetSummaryAsync();
+        _cupo = await Consumo.GetQuotaAsync();
+    }
+
+    private static string Tokens(long n) => n >= 1000 ? $"{n / 1000.0:0.#}k" : n.ToString();
 
     private async Task Sugerir()
     {

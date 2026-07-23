@@ -56,6 +56,8 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IAiAgentService, Tenancy.AiAgentService>();
         services.AddScoped<Tenancy.IAiUsageService, Tenancy.AiUsageService>();
         services.AddScoped<Tenancy.IAiInferenceService, Tenancy.AiInferenceService>();
+        // Herramientas de agente (function calling). La TRD se expone en SOLO LECTURA.
+        services.AddScoped<Tenancy.IAgentToolset, Tenancy.TrdLecturaToolset>();
         services.AddScoped<Tenancy.IAutomationService, Tenancy.AutomationService>();
         services.AddScoped<Tenancy.IFormDefinitionService, Tenancy.FormDefinitionService>();
         services.AddScoped<Tenancy.IFormDefinitionVersionService, Tenancy.FormDefinitionVersionService>();

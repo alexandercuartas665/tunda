@@ -10,17 +10,86 @@ namespace DokTrino.Application.Tenancy;
 
 public sealed class AiInferenceService : IAiInferenceService
 {
+    private const int MaxToolRounds = 6;
+
     private readonly IApplicationDbContext _db;
     private readonly ISecretProtector _secretProtector;
     private readonly IAiProviderClient _client;
     private readonly IAiUsageService _usage;
+    private readonly IEnumerable<IAgentToolset> _toolsets;
 
-    public AiInferenceService(IApplicationDbContext db, ISecretProtector secretProtector, IAiProviderClient client, IAiUsageService usage)
+    public AiInferenceService(IApplicationDbContext db, ISecretProtector secretProtector, IAiProviderClient client,
+        IAiUsageService usage, IEnumerable<IAgentToolset> toolsets)
     {
         _db = db;
         _secretProtector = secretProtector;
         _client = client;
         _usage = usage;
+        _toolsets = toolsets;
+    }
+
+    public async Task<AiChatResult> ConsultarConHerramientasAsync(string systemPrompt, string pregunta, string source = "clasificador", CancellationToken cancellationToken = default)
+    {
+        // Primer proveedor habilitado con clave. Sin proveedor, el modulo cae a su heuristica.
+        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, cancellationToken);
+        if (providerCfg is null)
+        {
+            return new AiChatResult(false, null, "No hay un proveedor de IA habilitado. Configuralo en Servidores de IA.");
+        }
+
+        string apiKey;
+        try { apiKey = _secretProtector.Unprotect(providerCfg.ApiKeyEncrypted!); }
+        catch { return new AiChatResult(false, null, "La API key esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
+
+        var meta = AiProviderCatalog.For(providerCfg.Provider);
+        var model = !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model! : meta.DefaultModel;
+
+        var quota = await _usage.GetQuotaAsync(cancellationToken);
+        if (quota.Exceeded && quota.Hard)
+        {
+            return new AiChatResult(false, null, $"Alcanzaste el limite de tokens de IA de tu plan este mes ({quota.MonthlyLimitTokens:N0}).");
+        }
+
+        var specs = _toolsets.SelectMany(t => t.GetSpecs()).ToList();
+        var ownerByTool = _toolsets
+            .SelectMany(ts => ts.GetSpecs().Select(s => (s.Name, ts)))
+            .ToDictionary(x => x.Name, x => x.ts);
+
+        var messages = new List<AiToolMessage> { new("user", pregunta) };
+        int totalIn = 0, totalOut = 0;
+        string? lastText = null;
+
+        for (var round = 1; round <= MaxToolRounds; round++)
+        {
+            var completion = await _client.CompleteWithToolsAsync(
+                providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt, messages, specs, cancellationToken);
+            totalIn += completion.InputTokens;
+            totalOut += completion.OutputTokens;
+            if (!completion.Ok) { return new AiChatResult(false, null, completion.Error); }
+            lastText = completion.Text ?? lastText;
+
+            // Sin herramientas pedidas: respuesta final.
+            if (completion.ToolCalls.Count == 0)
+            {
+                await _usage.RecordAsync(null, providerCfg.Provider, model, totalIn, totalOut, source, true, cancellationToken);
+                return new AiChatResult(true, completion.Text, null, totalIn, totalOut);
+            }
+
+            messages.Add(new AiToolMessage("assistant", completion.Text, completion.ToolCalls));
+            foreach (var call in completion.ToolCalls)
+            {
+                var owner = ownerByTool.GetValueOrDefault(call.Name);
+                var exec = owner is null
+                    ? new AgentToolResult($"{{\"ok\":false,\"error\":\"Herramienta {call.Name} no disponible\"}}", false)
+                    : await owner.ExecuteAsync(call.Name, call.ArgumentsJson, cancellationToken);
+                messages.Add(new AiToolMessage("tool", exec.Json, null, call.Id, call.Name));
+            }
+        }
+
+        // Agoto las rondas de herramientas sin cerrar.
+        await _usage.RecordAsync(null, providerCfg.Provider, model, totalIn, totalOut, source, true, cancellationToken);
+        return new AiChatResult(true, lastText ?? "El analisis no pudo completarse; intenta reformular la pregunta.", null, totalIn, totalOut);
     }
 
     public async Task<AiChatResult> TestChatAsync(Guid agentId, IReadOnlyList<AiChatTurn> turns, string? systemPromptOverride = null, CancellationToken cancellationToken = default)
