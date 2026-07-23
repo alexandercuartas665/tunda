@@ -36,6 +36,10 @@ services:
       # Postgres por la red interna del compose.
       DOKTRINO_DB_CONNECTION: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
       DOKTRINO_RUN_MIGRATIONS: "true"
+      # Bootstrap del super admin cuando la base esta vacia. Se controla desde el
+      # .env (default false); las variables del .env NO llegan al contenedor si no
+      # se listan aqui explicitamente.
+      DOKTRINO_RUN_SEED: ${DOKTRINO_RUN_SEED:-false}
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       # MinIO por la red interna (servicio 'minio', puerto 9000). NO localhost.
       DOKTRINO_MINIO_ENDPOINT: "http://minio:9000"
