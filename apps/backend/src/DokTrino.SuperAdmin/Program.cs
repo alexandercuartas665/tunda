@@ -86,6 +86,18 @@ if (!app.Environment.IsDevelopment())
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DokTrinoDbContext>();
         await db.Database.MigrateAsync();
+
+        // Bootstrap del super admin en produccion, bajo flag EXPLICITO. SeedAsync
+        // solo crea si la base esta vacia (idempotente), asi que dejar el flag
+        // encendido no reinyecta ni pisa datos. Sin esto la base de prod queda sin
+        // ninguna cuenta y no hay como entrar. No corre el seed pesado de demo
+        // (usuarios homecare, geografia): solo super admin + agencia demo + roles.
+        if (string.Equals(Environment.GetEnvironmentVariable("DOKTRINO_RUN_SEED"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+            await seeder.SeedAsync();
+            await seeder.EnsureAdministradorRolAsync();
+        }
     }
 }
 else
