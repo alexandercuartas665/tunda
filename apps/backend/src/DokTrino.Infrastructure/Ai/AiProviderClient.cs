@@ -137,9 +137,12 @@ public sealed class AiProviderClient : IAiProviderClient
     {
         try
         {
-            return provider == AiProvider.Claude
-                ? await ClaudeWithTools(apiKey, baseUrl, model, systemPrompt, messages, tools, ct)
-                : await OpenAiWithTools(provider, apiKey, baseUrl, model, systemPrompt, messages, tools, ct);
+            return provider switch
+            {
+                AiProvider.Claude => await ClaudeWithTools(apiKey, baseUrl, model, systemPrompt, messages, tools, ct),
+                AiProvider.Gemini => await GeminiWithTools(apiKey, baseUrl, model, systemPrompt, messages, tools, ct),
+                _ => await OpenAiWithTools(provider, apiKey, baseUrl, model, systemPrompt, messages, tools, ct)
+            };
         }
         catch (Exception ex) { return AiCompletion.Failed($"No se pudo contactar al proveedor: {ex.Message}"); }
     }
@@ -213,6 +216,138 @@ public sealed class AiProviderClient : IAiProviderClient
         }
         var (inTok, outTok) = Tokens(doc.RootElement, "usage", "input_tokens", "output_tokens");
         return new AiCompletion(true, text.Length == 0 ? null : text.ToString(), calls, null, inTok, outTok);
+    }
+
+    /// <summary>
+    /// Gemini expone function calling con otra forma de cable: las herramientas van
+    /// en tools[0].functionDeclarations, la peticion del modelo llega como una parte
+    /// functionCall y el resultado se devuelve como functionResponse. No hay ids de
+    /// llamada, asi que el emparejamiento es por nombre de herramienta.
+    /// </summary>
+    private async Task<AiCompletion> GeminiWithTools(string apiKey, string? baseUrl, string model, string systemPrompt,
+        IReadOnlyList<AiToolMessage> history, IReadOnlyList<AiToolSpec> tools, CancellationToken ct)
+    {
+        var contents = new List<object>();
+        foreach (var m in history)
+        {
+            if (m.Role == "tool")
+            {
+                contents.Add(new { role = "user", parts = new object[] {
+                    new { functionResponse = new { name = m.ToolName ?? "", response = ToolResponse(m.Text) } } } });
+            }
+            else if (m.Role == "assistant" && m.ToolCalls is { Count: > 0 })
+            {
+                var parts = new List<object>();
+                if (!string.IsNullOrWhiteSpace(m.Text)) { parts.Add(new { text = m.Text }); }
+                foreach (var c in m.ToolCalls)
+                {
+                    parts.Add(new { functionCall = new { name = c.Name,
+                        args = Schema(string.IsNullOrWhiteSpace(c.ArgumentsJson) ? "{}" : c.ArgumentsJson) } });
+                }
+                contents.Add(new { role = "model", parts });
+            }
+            else
+            {
+                contents.Add(new { role = m.Role is "assistant" or "model" ? "model" : "user",
+                    parts = new object[] { new { text = m.Text ?? "" } } });
+            }
+        }
+
+        var decls = tools.Select(t => new { name = t.Name, description = t.Description,
+            parameters = GeminiSchema(t.ParametersJsonSchema) }).ToArray();
+
+        var body = new
+        {
+            systemInstruction = string.IsNullOrWhiteSpace(systemPrompt) ? null : new { parts = new[] { new { text = systemPrompt } } },
+            contents,
+            tools = new object[] { new { functionDeclarations = decls } }
+        };
+        var url = $"{Base(baseUrl, "https://generativelanguage.googleapis.com")}/v1beta/models/{model}:generateContent?key={apiKey}";
+        using var resp = await _http.PostAsync(url, JsonContent(body), ct);
+        var raw = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode) { return AiCompletion.Failed($"El proveedor respondio HTTP {(int)resp.StatusCode}."); }
+
+        using var doc = JsonDocument.Parse(raw);
+        if (!doc.RootElement.TryGetProperty("candidates", out var cands) || cands.GetArrayLength() == 0)
+        {
+            return AiCompletion.Failed("El proveedor no devolvio ninguna respuesta.");
+        }
+
+        var text = new StringBuilder();
+        var calls = new List<AiToolCall>();
+        if (cands[0].TryGetProperty("content", out var content) && content.TryGetProperty("parts", out var parts2))
+        {
+            var i = 0;
+            foreach (var p in parts2.EnumerateArray())
+            {
+                if (p.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String)
+                {
+                    text.Append(t.GetString());
+                }
+                else if (p.TryGetProperty("functionCall", out var fc))
+                {
+                    var name = fc.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    var args = fc.TryGetProperty("args", out var a) ? a.GetRawText() : "{}";
+                    calls.Add(new AiToolCall($"{name}-{i}", name, args));
+                }
+                i++;
+            }
+        }
+        var (inTok, outTok) = Tokens(doc.RootElement, "usageMetadata", "promptTokenCount", "candidatesTokenCount");
+        return new AiCompletion(true, text.Length == 0 ? null : text.ToString(), calls, null, inTok, outTok);
+    }
+
+    /// <summary>functionResponse.response tiene que ser un objeto JSON; envolvemos lo que no lo sea.</summary>
+    private static JsonElement ToolResponse(string? json)
+    {
+        try
+        {
+            var el = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json).RootElement;
+            if (el.ValueKind == JsonValueKind.Object) { return el.Clone(); }
+        }
+        catch { /* cae al envoltorio de abajo */ }
+        return JsonDocument.Parse(JsonSerializer.Serialize(new { resultado = json ?? "" })).RootElement.Clone();
+    }
+
+    /// <summary>
+    /// Gemini acepta un subconjunto de OpenAPI y rechaza la peticion completa si el
+    /// esquema trae claves que no conoce (additionalProperties es la tipica). Las
+    /// podamos de forma recursiva.
+    /// </summary>
+    private static JsonElement GeminiSchema(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var limpio = Podar(doc.RootElement);
+            return JsonDocument.Parse(JsonSerializer.Serialize(limpio)).RootElement.Clone();
+        }
+        catch { return JsonDocument.Parse("""{"type":"object","properties":{}}""").RootElement.Clone(); }
+    }
+
+    private static readonly string[] NoSoportadas = ["additionalProperties", "$schema", "definitions", "$defs"];
+
+    private static object? Podar(JsonElement el)
+    {
+        switch (el.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var dic = new Dictionary<string, object?>();
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (NoSoportadas.Contains(p.Name, StringComparer.OrdinalIgnoreCase)) { continue; }
+                    dic[p.Name] = Podar(p.Value);
+                }
+                return dic;
+            case JsonValueKind.Array:
+                return el.EnumerateArray().Select(Podar).ToArray();
+            case JsonValueKind.Number:
+                return el.GetDouble();
+            case JsonValueKind.True: return true;
+            case JsonValueKind.False: return false;
+            case JsonValueKind.Null: return null;
+            default: return el.GetString();
+        }
     }
 
     private async Task<AiCompletion> OpenAiWithTools(AiProvider provider, string apiKey, string? baseUrl, string model,

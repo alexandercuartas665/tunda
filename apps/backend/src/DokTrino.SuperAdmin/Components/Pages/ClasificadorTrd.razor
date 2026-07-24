@@ -4,6 +4,7 @@
 @using DokTrino.Application.Tenancy
 @inject IClasificadorTrdService Clasificador
 @inject IAiUsageService Consumo
+@inject IAiInferenceService Agente
 
 <PageTitle>Clasificador TRD - Archimente</PageTitle>
 
@@ -53,11 +54,36 @@
 <div class="ase-card">
     <div class="ase-card-h">Texto del documento (asunto / contenido)</div>
     <textarea class="form-control" rows="4" @bind="_texto" placeholder="Ej: Solicitud de certificado laboral y contrato de prestacion de servicios..."></textarea>
-    <div style="margin-top:8px;">
-        <button class="btn btn-primary btn-sm" @onclick="Sugerir" disabled="@_busy">@(_busy ? "Analizando..." : "Sugerir serie TRD")</button>
+    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" @onclick="Analizar" disabled="@(_busy || _busyIa)">
+            @(_busyIa ? "Consultando al agente..." : "Analizar con el agente")
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="Sugerir" disabled="@(_busy || _busyIa)">
+            @(_busy ? "Analizando..." : "Solo heuristica")
+        </button>
     </div>
-    <small class="text-muted">Version heuristica (coincidencia de terminos con las series y tipologias de tu TRD). Cuando configures un proveedor de IA en "Servidores de IA", esta sugerencia se podra enriquecer con el modelo.</small>
+    <small class="text-muted">El agente lee tu TRD con herramientas de solo lectura para ubicar la serie, proponer AG/AC y redactar el procedimiento. La heuristica (coincidencia de terminos) siempre queda disponible como respaldo.</small>
 </div>
+
+@if (_respuesta is not null)
+{
+    <div class="ase-card clia-respuesta">
+        <div class="ase-card-h">
+            <img src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" class="clia-avatar" />
+            Analisis del agente
+        </div>
+        <div class="clia-texto">@Formatear(_respuesta)</div>
+        <small class="text-muted">Generado por IA sobre tu TRD. Valida los tiempos antes de aprobar la tabla.</small>
+    </div>
+}
+
+@if (_avisoIa is not null)
+{
+    <div class="ase-card clia-aviso">
+        <b>El agente no pudo responder.</b> @_avisoIa
+        <div><small class="text-muted">Abajo quedan las coincidencias de la heuristica.</small></div>
+    </div>
+}
 
 @if (_done)
 {
@@ -108,13 +134,53 @@
     .clia-kpi .h { font-size: 11px; color: #9aa3bd; }
     .clia-bar { height: 6px; border-radius: 6px; background: #eef1f7; overflow: hidden; margin: 4px 0; }
     .clia-bar span { display: block; height: 100%; background: var(--primary); }
+
+    /* Respuesta del agente */
+    .clia-respuesta .ase-card-h { display: flex; align-items: center; gap: 9px; }
+    .clia-avatar { height: 30px; width: auto; }
+    .clia-texto { line-height: 1.65; font-size: 13.5px; color: #2a2f3d; margin: 6px 0 10px; }
+    .clia-texto p { margin: 0 0 9px; }
+    .clia-texto .clia-h { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
+                          color: var(--primary); margin: 16px 0 7px; }
+    .clia-texto .clia-h:first-child { margin-top: 4px; }
+    .clia-texto .clia-ul { margin: 0 0 10px; padding-left: 19px; }
+    .clia-texto .clia-ul li { margin-bottom: 4px; }
+    .clia-texto .clia-li-sub { list-style: circle; color: #59617a; }
+    .clia-aviso { border-left: 3px solid #e0a800; }
 </style>
 
 @code {
     private string _texto = "";
     private List<SugerenciaSerieDto> _sug = new();
-    private bool _busy, _done;
+    private bool _busy, _busyIa, _done;
     private string? _error;
+    private string? _respuesta;
+    private string? _avisoIa;
+
+    /// <summary>
+    /// Rol del agente. Se le insiste en usar las herramientas antes de opinar: sin
+    /// leer la TRD del tenant cualquier tiempo de retencion que proponga es inventado.
+    /// </summary>
+    private const string SystemPrompt = @"Eres un asistente experto en gestion documental publica colombiana (Ley 594 de 2000,
+        Acuerdos del Archivo General de la Nacion) que apoya la construccion de Tablas de
+        Retencion Documental.
+
+        Trabajas SIEMPRE sobre la TRD real del cliente. Antes de responder usa las herramientas
+        disponibles para leerla: primero listar_series_trd para ubicar candidatas, luego
+        detalle_serie sobre la que mejor encaje. Nunca cites una serie que no hayas leido con
+        una herramienta.
+
+        Estructura tu respuesta asi:
+        1. Serie y subserie sugeridas, con su codigo, y por que encajan.
+        2. Tiempos de retencion propuestos: AG (archivo de gestion) y AC (archivo central) en
+           anios, con la justificacion normativa o funcional de cada uno.
+        3. Disposicion final sugerida (CT conservacion total, S seleccion, E eliminacion,
+           D digitalizacion) y por que.
+        4. Procedimiento: pasos concretos de manejo del expediente.
+
+        Si la serie ya tiene tiempos declarados en la TRD, dilo y contrasta tu propuesta con
+        ellos. Si no encuentras una serie adecuada, dilo con franqueza y sugiere crearla en vez
+        de forzar una coincidencia. Responde en espanol, claro y sin relleno.";
 
     private AiUsageSummaryDto _consumo = new(0, 0, 0, 0, 0m, []);
     private AiQuotaDto _cupo = new(0, 0, false);
@@ -129,6 +195,76 @@
 
     private static string Tokens(long n) => n >= 1000 ? $"{n / 1000.0:0.#}k" : n.ToString();
 
+    /// <summary>
+    /// El modelo responde en markdown ligero. Renderizamos solo titulos, negrita y
+    /// vinetas; todo lo demas va escapado, porque el texto viene de un tercero y no
+    /// puede inyectar HTML en la pagina.
+    /// </summary>
+    private static MarkupString Formatear(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) { return new MarkupString(""); }
+
+        var sb = new System.Text.StringBuilder();
+        var enLista = false;
+
+        foreach (var linea in texto.Replace("\r\n", "\n").Split('\n'))
+        {
+            var l = linea.TrimEnd();
+            var sangria = l.Length - l.TrimStart().Length;
+            var t = l.TrimStart();
+
+            if (t.Length == 0) { CerrarLista(sb, ref enLista); continue; }
+
+            // Titulos: #, ##, ### -> siempre h4, no queremos competir con el h1 de la pagina.
+            if (t.StartsWith('#'))
+            {
+                CerrarLista(sb, ref enLista);
+                sb.Append("<h4 class=\"clia-h\">").Append(Negrita(t.TrimStart('#').Trim())).Append("</h4>");
+                continue;
+            }
+
+            // Vinetas (*, -) y listas numeradas (1., 2., ...).
+            var vineta = t.StartsWith("* ") || t.StartsWith("- ");
+            var numerada = !vineta && t.Length > 2 && char.IsDigit(t[0]) && (t[1] == '.' || (char.IsDigit(t[1]) && t.Length > 3 && t[2] == '.'));
+            if (vineta || numerada)
+            {
+                if (!enLista) { sb.Append("<ul class=\"clia-ul\">"); enLista = true; }
+                var cuerpo = vineta ? t[2..] : t[(t.IndexOf('.') + 1)..];
+                var clase = sangria >= 2 ? " class=\"clia-li-sub\"" : "";
+                sb.Append("<li").Append(clase).Append('>').Append(Negrita(cuerpo.Trim())).Append("</li>");
+                continue;
+            }
+
+            CerrarLista(sb, ref enLista);
+            sb.Append("<p>").Append(Negrita(t)).Append("</p>");
+        }
+
+        CerrarLista(sb, ref enLista);
+        return new MarkupString(sb.ToString());
+    }
+
+    private static void CerrarLista(System.Text.StringBuilder sb, ref bool enLista)
+    {
+        if (enLista) { sb.Append("</ul>"); enLista = false; }
+    }
+
+    /// <summary>Escapa el texto y solo despues convierte los pares **...** en negrita.</summary>
+    private static string Negrita(string crudo)
+    {
+        var s = System.Net.WebUtility.HtmlEncode(crudo);
+        var partes = s.Split("**");
+        if (partes.Length < 3) { return s; }
+
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < partes.Length; i++)
+        {
+            // Los indices impares quedan entre un par de marcadores: esos van en negrita.
+            var enfasis = i % 2 == 1 && i < partes.Length - 1;
+            sb.Append(enfasis ? $"<b>{partes[i]}</b>" : partes[i]);
+        }
+        return sb.ToString();
+    }
+
     private async Task Sugerir()
     {
         _error = null; _busy = true;
@@ -139,5 +275,33 @@
         }
         catch (Exception ex) { _error = ex.Message; }
         finally { _busy = false; }
+    }
+
+    /// <summary>
+    /// Corre las dos vias: la heuristica local (instantanea, siempre disponible) y el
+    /// agente con herramientas. Si el agente falla la heuristica ya quedo en pantalla.
+    /// </summary>
+    private async Task Analizar()
+    {
+        _respuesta = null; _avisoIa = null;
+
+        if (string.IsNullOrWhiteSpace(_texto))
+        {
+            _avisoIa = "Escribe primero el asunto o contenido del documento.";
+            return;
+        }
+
+        await Sugerir();
+
+        _busyIa = true;
+        try
+        {
+            var r = await Agente.ConsultarConHerramientasAsync(SystemPrompt, _texto);
+            if (r.Ok) { _respuesta = r.Text; }
+            else { _avisoIa = r.Error; }
+            await CargarConsumo();
+        }
+        catch (Exception ex) { _avisoIa = ex.Message; }
+        finally { _busyIa = false; }
     }
 }
