@@ -685,10 +685,31 @@
                 </div>@* /est-right *@
             </div>@* /tcl-cols *@
 
-            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
-                <button class="trx-btn ghost" @onclick="CerrarPicker">Cancelar</button>
-                <button class="trx-btn" @onclick="GuardarPicker">Cargar estructura</button>
-            </div>
+            @if (_pkGuardado is null)
+            {
+                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+                    <button class="trx-btn ghost" @onclick="CerrarPicker">Cancelar</button>
+                    <button class="trx-btn" @onclick="GuardarPicker">Cargar estructura</button>
+                </div>
+            }
+            else
+            {
+                @* Guardado hecho: el modal NO se cierra solo. El usuario decide si sigue
+                   en la misma serie (otra subserie) o vuelve al listado a elegir otra. *@
+                <div class="est-hecho">
+                    <div class="est-hecho-txt">
+                        <b>@_pkGuardado</b>
+                        <span>Que quieres hacer ahora?</span>
+                    </div>
+                    <div class="est-hecho-btns">
+                        <button class="trx-btn ghost" @onclick="CerrarPicker">Terminar</button>
+                        <button class="trx-btn ghost" @onclick="SeguirNuevaSerie">Nueva serie</button>
+                        <button class="trx-btn" @onclick="SeguirNuevaSubserie" disabled="@(_pkSerieSel is null)">
+                            Nueva subserie de @(_pkSerieSel?.Nombre ?? "esta serie")
+                        </button>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 }
@@ -889,6 +910,14 @@
     .est-num input { width:78px; }
     .est-cap { font-size:11px; font-weight:700; color:#8a93ad; align-self:center; }
 
+    /* Paso de decision tras cargar: el modal se queda y ofrece seguir */
+    .est-hecho { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:16px;
+                 padding:12px 15px; border-radius:12px; border:1px solid #bfe3c8; background:#f2fbf5; }
+    .est-hecho-txt { display:flex; flex-direction:column; gap:2px; flex:1; min-width:220px; }
+    .est-hecho-txt b { font-size:13px; color:#1d6b3a; }
+    .est-hecho-txt span { font-size:11.5px; color:#5d7a68; }
+    .est-hecho-btns { display:flex; gap:8px; flex-wrap:wrap; }
+
     .trd-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .trd-form .form-control, .trd-form .form-select { max-width:220px; }
     .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
@@ -951,6 +980,12 @@
     private readonly Dictionary<Guid, HashSet<string>> _pkFmt = new();       // tipologiaId -> formatos
     private GuardarEstructuraTrdRequest _est = new();
     private string? _pkError;
+
+    /// <summary>
+    /// Resultado de la ultima carga. Mientras no sea null el picker muestra el paso
+    /// de decision (nueva serie / nueva subserie) en vez del boton de guardar.
+    /// </summary>
+    private string? _pkGuardado;
 
     /// <summary>Vocabulario de formatos, el mismo del editor de series y del cliente.</summary>
     private static readonly string[] FormatosDisponibles =
@@ -1235,10 +1270,11 @@
         _pkMarcadas.Clear();
         _pkFmt.Clear();
         _est = new GuardarEstructuraTrdRequest { TrdId = _sel.Id };
+        _pkGuardado = null;
         _pickerAbierto = true;
     }
 
-    private void CerrarPicker() { _pickerAbierto = false; _pkError = null; }
+    private void CerrarPicker() { _pickerAbierto = false; _pkError = null; _pkGuardado = null; }
 
     private async Task PkSeleccionarSerie(SerieDto s)
     {
@@ -1287,14 +1323,47 @@
         try
         {
             var n = await Trd.GuardarEstructuraTrdAsync(_est, await Actor());
-            _pickerAbierto = false;
-            _ok = n > 0
+            // El modal se queda abierto: el usuario decide si sigue con otra subserie
+            // de la misma serie o vuelve al listado. Cargar la TRD es repetitivo y
+            // cerrar aqui obligaba a reabrir y reelegir dependencia y serie cada vez.
+            _pkGuardado = n > 0
                 ? $"{n} tipologia(s) cargada(s) en la TRD."
                 : "Nada nuevo: esas tipologias ya estaban declaradas.";
+            _ok = _pkGuardado;
             await RecargarDocs();
             await LoadAll();
         }
         catch (InvalidOperationException ex) { _pkError = ex.Message; }
+    }
+
+    /// <summary>Sigue en la misma serie: limpia lo marcado para declarar otra subserie.</summary>
+    private void SeguirNuevaSubserie()
+    {
+        LimpiarSeleccionPicker();
+        _pkSubAbierta = null;   // el arbol de subseries de la serie actual queda a la vista
+    }
+
+    /// <summary>Vuelve a la presentacion inicial del picker para elegir otra serie.</summary>
+    private void SeguirNuevaSerie()
+    {
+        LimpiarSeleccionPicker();
+        _pkSerieSel = null;
+        _pkSubseries = new();
+        _pkSubAbierta = null;
+        _pkBuscarSerie = "";
+    }
+
+    /// <summary>
+    /// Deja el picker listo para otra carga: suelta tipologias, formatos y propiedades
+    /// archivisticas, pero conserva la dependencia productora (casi siempre es la misma).
+    /// </summary>
+    private void LimpiarSeleccionPicker()
+    {
+        _pkGuardado = null;
+        _pkError = null;
+        _pkMarcadas.Clear();
+        _pkFmt.Clear();
+        _est = new GuardarEstructuraTrdRequest { TrdId = _sel!.Id };
     }
 
     private void AbrirAlta(Guid? padreId)
