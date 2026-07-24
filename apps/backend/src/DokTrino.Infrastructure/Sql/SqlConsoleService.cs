@@ -185,78 +185,80 @@ public sealed class SqlConsoleService(DokTrinoDbContext db, ITenantContext tenan
             "super_admin_audit_logs" => ("Auditoria de acciones del super admin.", "Plataforma"),
             "sql_console_logs" => ("Auditoria de TODA query ejecutada en esta consola.", "Plataforma"),
 
-            // ---- Catalogos clinicos ----
-            "pacientes" => ("Pacientes admitidos en la agencia. Datos demograficos + contactos.", "Pacientes y Catalogos"),
-            "catalogos_paciente" => ("Catalogos auxiliares de paciente (estado civil, regimen, etc.).", "Pacientes y Catalogos"),
-            "paises" => ("Catalogo de paises (api-colombia).", "Pacientes y Catalogos"),
-            "departamentos" => ("Departamentos de Colombia.", "Pacientes y Catalogos"),
-            "municipios" => ("Municipios de Colombia.", "Pacientes y Catalogos"),
-            "medicamentos" => ("Base CUM/INVIMA — catalogo maestro de medicamentos comerciales.", "Pacientes y Catalogos"),
-            "cups" => ("Codigos Unicos de Procedimientos en Salud (CUPS).", "Pacientes y Catalogos"),
-            "cie11_configs" => ("Configuracion de la API CIE-11 (WHO).", "Pacientes y Catalogos"),
-            "tipologia_archivos" => ("Categorias de archivos adjuntos (firma, RX, etc.).", "Pacientes y Catalogos"),
+            // ---- Tabla de Retencion Documental ----
+            "tablas_retencion_documental" => ("Cabecera de cada TRD (transaccion documental) del tenant.", "TRD"),
+            "series" => ("Series documentales del catalogo de la entidad.", "TRD"),
+            "subseries" => ("Subseries de cada serie, con sus tiempos AG/AC y disposicion.", "TRD"),
+            "tipologias_documentales" => ("Tipologias (documentos) de cada serie/subserie.", "TRD"),
+            "respuestas_tabla_documental" => ("Matriz TRD: que declara cada dependencia por serie/subserie.", "TRD"),
+            "dependencias" => ("Organigrama: oficinas productoras de la TRD.", "TRD"),
+            "tokens_dependencia" => ("Tokens de acceso por dependencia para diligenciar sin cuenta.", "TRD"),
+            "colaboradores_dependencia" => ("Personas asignadas a cada dependencia.", "TRD"),
+            "formaciones_dependencia" => ("Formacion completada por dependencia (compuerta).", "TRD"),
+            "cargos_serie" => ("Cargos responsables por serie.", "TRD"),
+            "directorios_serie" => ("Directorios asociados a una serie.", "TRD"),
+            "formatos_serie" => ("Formatos declarados (papel, PDF, Word...) por serie.", "TRD"),
+            "catalogo_caracteristicas" => ("Caracteristicas del catalogo documental.", "TRD"),
+            "funcionarios_cargo" => ("Funcionarios por cargo del organigrama.", "TRD"),
 
-            // ---- Aseguradoras / contratos ----
-            "aseguradoras" => ("EPS/aseguradoras con las que la IPS tiene contrato.", "Contratos"),
-            "contratos_aseguradora" => ("Contratos vigentes con cada aseguradora.", "Contratos"),
-            "servicios_contrato" => ("Catalogo de servicios prestables bajo cada contrato (tarifas).", "Contratos"),
+            // ---- Radicacion y archivo ----
+            "radicados" => ("Documentos radicados (ventanilla unica).", "Radicacion y Archivo"),
+            "expedientes" => ("Expedientes documentales conformados.", "Radicacion y Archivo"),
+            "archivos_digitales" => ("Archivo digital: documentos almacenados en MinIO.", "Radicacion y Archivo"),
+            "archivo_tags" => ("Etiquetas aplicadas a los archivos digitales.", "Radicacion y Archivo"),
+            "tags" => ("Catalogo de etiquetas del archivo.", "Radicacion y Archivo"),
+            "aprobaciones_documento" => ("Flujo de aprobacion de documentos del archivo.", "Radicacion y Archivo"),
+            "bodegas" => ("Archivo fisico: bodegas.", "Radicacion y Archivo"),
+            "cajas" => ("Archivo fisico: cajas dentro de una bodega.", "Radicacion y Archivo"),
+            "carpetas" => ("Archivo fisico: carpetas dentro de una caja.", "Radicacion y Archivo"),
+            "carpetas_archivo" => ("Relacion carpeta fisica <-> archivo digital.", "Radicacion y Archivo"),
+            "elementos_topograficos" => ("Topografia fisica: elementos (estante, entrepano...).", "Radicacion y Archivo"),
+            "niveles_topograficos" => ("Topografia fisica: niveles de la jerarquia.", "Radicacion y Archivo"),
 
-            // ---- Profesionales ----
-            "profesionales" => ("Profesionales asistenciales (medicos, terapeutas, enfermeria).", "Profesionales"),
-            "profesional_tipos" => ("Tipos de profesional (catalogo).", "Profesionales"),
-            "profesional_subcategorias" => ("Subcategorias dentro de cada tipo de profesional.", "Profesionales"),
-            "tenant_user_sucursales" => ("Relacion usuario tenant <-> sucursales habilitadas.", "Profesionales"),
+            // ---- Procesos (BPMN) ----
+            "procesos_definicion" => ("Definicion de procesos BPMN.", "Procesos"),
+            "proceso_nodos" => ("Nodos del diagrama de un proceso.", "Procesos"),
+            "proceso_transiciones" => ("Transiciones entre nodos.", "Procesos"),
+            "proceso_instancias" => ("Instancias en ejecucion de un proceso.", "Procesos"),
+            "proceso_actividades" => ("Actividades/tareas de cada instancia.", "Procesos"),
+            "tareas" => ("Tareas asignadas a usuarios.", "Procesos"),
+
+            // ---- Formularios y capacitaciones ----
+            "form_definitions" => ("Disenos de formularios (encuestas, actas, evaluaciones).", "Formularios y Capacitacion"),
+            "form_definition_snapshots" => ("Versiones historicas de cada formulario.", "Formularios y Capacitacion"),
+            "relaciones_formulario" => ("Que formularios aplican a cada contexto.", "Formularios y Capacitacion"),
+            "cursos" => ("Cursos de capacitacion.", "Formularios y Capacitacion"),
+            "curso_modulos" => ("Modulos de cada curso.", "Formularios y Capacitacion"),
+            "curso_lecciones" => ("Lecciones (video, PDF, imagen) de cada modulo.", "Formularios y Capacitacion"),
+            "curso_progresos" => ("Avance, intentos y aprobacion por usuario.", "Formularios y Capacitacion"),
+            "configuraciones_curso_cliente" => ("Curso asociado y si es obligatorio por entidad.", "Formularios y Capacitacion"),
+            "cuestionarios" => ("Cuestionarios de evaluacion.", "Formularios y Capacitacion"),
+            "cuestionario_preguntas" => ("Preguntas de cada cuestionario.", "Formularios y Capacitacion"),
+            "cuestionario_intentos" => ("Intentos de evaluacion por usuario.", "Formularios y Capacitacion"),
+
+            // ---- Catalogos geograficos ----
+            "paises" => ("Catalogo de paises.", "Catalogos"),
+            "departamentos" => ("Departamentos de Colombia.", "Catalogos"),
+            "municipios" => ("Municipios de Colombia.", "Catalogos"),
+            "tipologia_archivos" => ("Categorias de archivos adjuntos.", "Catalogos"),
 
             // ---- Roles y permisos ----
-            "roles" => ("Roles del tenant (coordinador, asistencial, admin).", "Roles y Permisos"),
+            "roles" => ("Roles del tenant.", "Roles y Permisos"),
             "rol_permisos" => ("Permisos por rol y modulo.", "Roles y Permisos"),
-
-            // ---- Asignacion y coordinacion ----
-            "asignacion_lotes" => ("Lotes de asignacion (cabecera de programacion).", "Asignacion y Turnos"),
-            "asignaciones" => ("Asignaciones de servicios a pacientes con cantidades y fechas.", "Asignacion y Turnos"),
-            "asignacion_turnos" => ("Turnos individuales generados desde una asignacion.", "Asignacion y Turnos"),
-            "asignacion_turno_sesiones" => ("Sesiones reales ejecutadas de cada turno.", "Asignacion y Turnos"),
-
-            // ---- Historia clinica ----
-            "form_definitions" => ("Disenos de formularios (HC, escalas, evoluciones, consentimientos).", "Historia Clinica"),
-            "historias_clinicas" => ("Cabecera de cada historia clinica abierta por un paciente.", "Historia Clinica"),
-            "historia_clinica_medicamentos" => ("Items de medicamentos prescritos en una HC.", "Historia Clinica"),
-            "historia_clinica_ordenes_servicio" => ("Items de servicios propios solicitados en la HC.", "Historia Clinica"),
-            "historia_clinica_remisiones" => ("Items de remision a especialista en la HC.", "Historia Clinica"),
-            "historia_clinica_incapacidades" => ("Items de incapacidad emitidos en la HC.", "Historia Clinica"),
-            "historia_clinica_certificaciones" => ("Items de certificacion emitidos en la HC.", "Historia Clinica"),
-            "historia_clinica_insumos" => ("Items de insumos consumidos durante la atencion.", "Historia Clinica"),
-            "historia_clinica_escalas" => ("Formularios de escalas (Barthel, Morse, etc.) atados a la HC.", "Historia Clinica"),
-            "historia_clinica_documentos" => ("Documentos PDF/imagen anexos a la HC.", "Historia Clinica"),
-            "relaciones_formulario" => ("Que escalas/evoluciones/consentimientos aplican a cada HC.", "Historia Clinica"),
-
-            // ---- Notas medicas ----
-            "notas_medicas" => ("Notas medicas/seguimiento del paciente entre HCs.", "Notas Medicas"),
-            "nota_medica_documentos" => ("Adjuntos a las notas medicas.", "Notas Medicas"),
-            "firma_paciente_requests" => ("Solicitudes de firma remota del paciente via WhatsApp.", "Notas Medicas"),
-
-            // ---- Interoperabilidad RDA / MinSalud ----
-            "rda_eventos" => ("Eventos RDA generados/enviados al sandbox de MinSalud.", "Interoperabilidad"),
-            "interoperabilidad_configs" => ("Configuracion endpoints MinSalud (singleton por tenant).", "Interoperabilidad"),
-            "interoperabilidad_credenciales_sede" => ("Credenciales OAuth IHCE por sede x ambiente.", "Interoperabilidad"),
+            "modulos_tenant" => ("Modulos encendidos/apagados por cada entidad.", "Roles y Permisos"),
 
             // ---- IA / Agentes ----
-            "ai_agents" => ("Agentes IA configurados (clasificador, copiloto, monitor de notas).", "IA y Automatizacion"),
+            "ai_agents" => ("Agentes IA configurados (incluye el del Clasificador TRD).", "IA y Automatizacion"),
             "ai_agent_prompts" => ("Versiones de prompts por agente.", "IA y Automatizacion"),
-            "ai_provider_configs" => ("Configuracion proveedores IA (OpenAI, Anthropic, etc.).", "IA y Automatizacion"),
+            "ai_agent_resources" => ("Recursos que el agente puede entregar.", "IA y Automatizacion"),
+            "ai_provider_configs" => ("Proveedores de IA y su API key cifrada.", "IA y Automatizacion"),
             "ai_usage_logs" => ("Tokens consumidos y costo por ejecucion IA.", "IA y Automatizacion"),
             "automation_rules" => ("Reglas de automatizacion (trigger -> accion).", "IA y Automatizacion"),
-            "asistente_chat_mensajes" => ("Historial del chat IA Asistente de Notas por paciente.", "IA y Automatizacion"),
 
-            // ---- WhatsApp / mensajeria ----
-            "whats_app_lines" => ("Lineas/numeros WhatsApp activos del tenant.", "WhatsApp"),
-            "whats_app_messages" => ("Historial de mensajes WhatsApp del tenant.", "WhatsApp"),
-            "whats_app_contacts" => ("Contactos/destinatarios WhatsApp.", "WhatsApp"),
-            "evolution_master_configs" => ("Configuracion master del servidor Evolution API.", "WhatsApp"),
-            "tenant_evolution_configs" => ("Configuracion Evolution por tenant.", "WhatsApp"),
-            "message_templates" => ("Plantillas pre-grabadas de mensajes.", "WhatsApp"),
-            "message_template_media" => ("Adjuntos de plantillas de mensaje.", "WhatsApp"),
-            "webhook_configs" => ("Webhooks configurados para integraciones externas.", "WhatsApp"),
+            // ---- Inteligencia de negocio ----
+            "bi_servicios" => ("Servicios Power BI publicados.", "Power BI"),
+            "bi_tokens_uso" => ("Tokens de acceso a los tableros.", "Power BI"),
+            "bi_logs" => ("Consultas ejecutadas contra los servicios BI.", "Power BI"),
 
             // ---- Billing / Wompi ----
             "subscriptions" => ("Suscripciones SaaS de cada tenant.", "Billing"),

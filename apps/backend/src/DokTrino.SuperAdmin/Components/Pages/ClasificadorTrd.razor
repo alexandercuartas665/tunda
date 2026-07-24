@@ -2,9 +2,11 @@
 @attribute [Authorize]
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using DokTrino.Application.Tenancy
+@using System.Security.Claims
 @inject IClasificadorTrdService Clasificador
 @inject IAiUsageService Consumo
 @inject IAiInferenceService Agente
+@inject IAiAgentService Agentes
 
 <PageTitle>Clasificador TRD - Archimente</PageTitle>
 
@@ -63,6 +65,49 @@
         </button>
     </div>
     <small class="text-muted">El agente lee tu TRD con herramientas de solo lectura para ubicar la serie, proponer AG/AC y redactar el procedimiento. La heuristica (coincidencia de terminos) siempre queda disponible como respaldo.</small>
+</div>
+
+@* --- Configuracion del agente: aqui vive lo que antes era el modulo "Agentes IA" --- *@
+<div class="ase-card">
+    <div class="ase-card-h clia-cfg-h" @onclick="() => _cfgAbierta = !_cfgAbierta">
+        @* MarkupString: Razor escaparia la entidad y la pintaria como texto literal. *@
+        <span class="clia-caret">@((MarkupString)(_cfgAbierta ? "&#9662;" : "&#9656;"))</span>
+        Configuracion del agente
+        <small class="text-muted" style="margin-left:auto; font-weight:400;">
+            @(_promptGuardado ? "Prompt propio de la entidad" : "Usando el prompt por defecto")
+        </small>
+    </div>
+
+    @if (_cfgAbierta)
+    {
+        <div class="clia-cfg">
+            <div class="clia-tools">
+                <div class="est-block-t2">Herramientas del agente &middot; solo lectura</div>
+                <ul>
+                    <li><code>listar_series_trd</code> &mdash; recorre el catalogo de series de tu TRD</li>
+                    <li><code>detalle_serie</code> &mdash; abre una serie con sus subseries, tipologias y tiempos</li>
+                </ul>
+                <small class="text-muted">
+                    El agente consulta la TRD de tu entidad; no puede crear, modificar ni borrar nada.
+                </small>
+            </div>
+
+            <div>
+                <div class="est-block-t2">Instrucciones (prompt de sistema)</div>
+                <textarea class="form-control" rows="10" @bind="_prompt"></textarea>
+                <div class="clia-cfg-btns">
+                    <button class="btn btn-primary btn-sm" @onclick="GuardarPrompt" disabled="@_busyCfg">
+                        @(_busyCfg ? "Guardando..." : "Guardar instrucciones")
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="RestaurarPrompt" disabled="@_busyCfg">
+                        Restaurar el de por defecto
+                    </button>
+                </div>
+                @if (_cfgOk is not null) { <div class="ase-ok" style="margin-top:8px;">@_cfgOk</div> }
+                @if (_cfgError is not null) { <div class="ase-alert" style="margin-top:8px;">@_cfgError</div> }
+            </div>
+        </div>
+    }
 </div>
 
 @if (_respuesta is not null)
@@ -147,6 +192,19 @@
     .clia-texto .clia-ul li { margin-bottom: 4px; }
     .clia-texto .clia-li-sub { list-style: circle; color: #59617a; }
     .clia-aviso { border-left: 3px solid #e0a800; }
+
+    /* Configuracion del agente */
+    .clia-cfg-h { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+    .clia-caret { color: var(--primary); font-size: 11px; }
+    .clia-cfg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 18px; margin-top: 12px; }
+    @@media (max-width: 900px) { .clia-cfg { grid-template-columns: 1fr; } }
+    .est-block-t2 { font-size: 11px; font-weight: 700; color: #1f2433; text-transform: uppercase;
+                    letter-spacing: .4px; margin-bottom: 8px; }
+    .clia-tools ul { margin: 0 0 8px; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: #59617a; }
+    .clia-tools code { background: var(--primary-soft); color: var(--primary); padding: 1px 6px;
+                       border-radius: 5px; font-size: 11.5px; }
+    .clia-cfg textarea { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 12px; line-height: 1.6; }
+    .clia-cfg-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 </style>
 
 @code {
@@ -161,7 +219,7 @@
     /// Rol del agente. Se le insiste en usar las herramientas antes de opinar: sin
     /// leer la TRD del tenant cualquier tiempo de retencion que proponga es inventado.
     /// </summary>
-    private const string SystemPrompt = @"Eres un asistente experto en gestion documental publica colombiana (Ley 594 de 2000,
+    private const string PromptPorDefecto = @"Eres un asistente experto en gestion documental publica colombiana (Ley 594 de 2000,
         Acuerdos del Archivo General de la Nacion) que apoya la construccion de Tablas de
         Retencion Documental.
 
@@ -185,7 +243,84 @@
     private AiUsageSummaryDto _consumo = new(0, 0, 0, 0, 0m, []);
     private AiQuotaDto _cupo = new(0, 0, false);
 
-    protected override async Task OnInitializedAsync() => await CargarConsumo();
+    // --- Configuracion del agente (lo que antes era el modulo "Agentes IA") ---
+    private bool _cfgAbierta, _busyCfg, _promptGuardado;
+    private string _prompt = PromptPorDefecto;
+    private string? _cfgOk, _cfgError;
+    private Guid? _agenteId;
+
+    /// <summary>Rol reservado con el que se identifica al agente de este modulo.</summary>
+    private const string RolAgente = "clasificador-trd";
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarConsumo();
+        await CargarAgente();
+    }
+
+    /// <summary>
+    /// Busca el agente de este modulo entre los del tenant. Si no existe todavia,
+    /// la pagina trabaja con el prompt por defecto y solo lo crea al guardar.
+    /// </summary>
+    private async Task CargarAgente()
+    {
+        try
+        {
+            var mio = (await Agentes.ListAsync()).FirstOrDefault(a => a.Role == RolAgente);
+            if (mio is null) { return; }
+            _agenteId = mio.Id;
+            var det = await Agentes.GetAsync(mio.Id);
+            if (det is not null && !string.IsNullOrWhiteSpace(det.Agent.SystemPrompt))
+            {
+                _prompt = det.Agent.SystemPrompt;
+                _promptGuardado = true;
+            }
+        }
+        catch { /* sin agente configurado se sigue con el prompt por defecto */ }
+    }
+
+    private async Task GuardarPrompt()
+    {
+        _cfgOk = _cfgError = null;
+        if (string.IsNullOrWhiteSpace(_prompt)) { _cfgError = "Las instrucciones no pueden quedar vacias."; return; }
+
+        _busyCfg = true;
+        try
+        {
+            var actor = await Actor();
+            if (_agenteId is Guid id)
+            {
+                await Agentes.UpdateAsync(id, new UpdateAiAgentRequest(
+                    "Clasificador TRD", RolAgente, AiProvider.Gemini, null, _prompt), actor);
+            }
+            else
+            {
+                var creado = await Agentes.CreateAsync(new CreateAiAgentRequest(
+                    "Clasificador TRD", RolAgente, AiProvider.Gemini, null, _prompt), actor);
+                _agenteId = creado?.Id;
+            }
+            _promptGuardado = true;
+            _cfgOk = "Instrucciones guardadas. El agente las usara en la proxima consulta.";
+        }
+        catch (Exception ex) { _cfgError = ex.Message; }
+        finally { _busyCfg = false; }
+    }
+
+    private void RestaurarPrompt()
+    {
+        _prompt = PromptPorDefecto;
+        _cfgOk = "Instrucciones por defecto cargadas. Guarda para aplicarlas.";
+        _cfgError = null;
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
 
     private async Task CargarConsumo()
     {
@@ -296,7 +431,7 @@
         _busyIa = true;
         try
         {
-            var r = await Agente.ConsultarConHerramientasAsync(SystemPrompt, _texto);
+            var r = await Agente.ConsultarConHerramientasAsync(_prompt, _texto);
             if (r.Ok) { _respuesta = r.Text; }
             else { _avisoIa = r.Error; }
             await CargarConsumo();
