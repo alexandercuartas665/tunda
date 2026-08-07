@@ -19,7 +19,28 @@ public sealed record TrdDto(
     DateTimeOffset? Fecha = null);
 /// <summary><paramref name="Personas"/> es cuanta gente tiene asignada, que es lo
 /// que la tabla del organigrama muestra sin tener que abrir cada dependencia.</summary>
-public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado, int Personas = 0);
+public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado, int Personas = 0,
+    string? CodigoRaizDocumental = null, string? GerenteNombre = null, string? GerenteEmail = null, string? Observaciones = null);
+
+/// <summary>Propiedades editables de una dependencia (distintas del organigrama: codigo raiz, gerente, observaciones).</summary>
+public sealed record GuardarPropiedadesDependenciaRequest(Guid Id, string? CodigoRaizDocumental, string? GerenteNombre, string? GerenteEmail, string? Observaciones);
+
+/// <summary>Un punto de una serie temporal por mes (para las barras del modal).</summary>
+public sealed record PuntoMensualDto(string Mes, int Valor);
+
+/// <summary>
+/// Indicadores de una dependencia para el modal: lo que se cargo, quien paso la
+/// evaluacion y cuantas veces entraron sus colaboradores. Todo acotado a la dependencia.
+/// </summary>
+public sealed record IndicadoresDependenciaDto(
+    int Personas,
+    int DocumentosCargados,
+    int SeriesDistintas,
+    IReadOnlyList<PuntoMensualDto> DocumentosPorMes,
+    int EvaluacionIntentos,
+    int EvaluacionAprobados,
+    int IngresosTotales,
+    int ColaboradoresQueIngresaron);
 public sealed record ColaboradorDto(Guid Id, Guid DependenciaId, string Nombre, string Email, string Rol,
     string? Telefono = null, string? TokenUrl = null);
 

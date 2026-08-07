@@ -729,10 +729,89 @@
             </div>
 
             <div class="per-b">
+
+                @* --- Propiedades de la dependencia (informativas, aparte de las personas) --- *@
+                <div class="dep-prop">
+                    <div class="dep-sec-t">Propiedades de la dependencia</div>
+                    <div class="dep-prop-grid">
+                        <label class="dep-f">
+                            <span>Codigo raiz documental</span>
+                            <input class="dep-in" @bind="_prop.CodigoRaizDocumental" placeholder="Ej: 100" />
+                        </label>
+                        <label class="dep-f">
+                            <span>Gerente / responsable</span>
+                            <input class="dep-in" @bind="_prop.GerenteNombre" placeholder="Nombre del gerente del area" />
+                        </label>
+                        <label class="dep-f">
+                            <span>Correo del gerente</span>
+                            <input class="dep-in" @bind="_prop.GerenteEmail" placeholder="correo@entidad.gov.co" />
+                        </label>
+                    </div>
+                    <label class="dep-f dep-f-full">
+                        <span>Observaciones</span>
+                        <textarea class="dep-in" rows="2" @bind="_prop.Observaciones" placeholder="Notas sobre la dependencia..."></textarea>
+                    </label>
+                    <div class="dep-prop-acc">
+                        <button class="trx-btn" @onclick="GuardarPropiedades">Guardar propiedades</button>
+                        @if (_propOk is not null) { <span class="dep-ok">@_propOk</span> }
+                        @if (_propError is not null) { <span class="dep-err">@_propError</span> }
+                    </div>
+                </div>
+
+                @* --- Indicadores de la dependencia --- *@
+                @if (_ind is IndicadoresDependenciaDto ind)
+                {
+                    <div class="dep-ind">
+                        <div class="dep-sec-t">Indicadores de esta dependencia</div>
+                        <div class="dep-kpis">
+                            <div class="dep-kpi">
+                                <div class="v">@ind.DocumentosCargados</div>
+                                <div class="k">Documentos cargados</div>
+                                <div class="h">@ind.SeriesDistintas serie(s) distinta(s)</div>
+                            </div>
+                            <div class="dep-kpi">
+                                <div class="v">@ind.EvaluacionAprobados<span class="den">/@ind.EvaluacionIntentos</span></div>
+                                <div class="k">Pasaron la evaluacion</div>
+                                <div class="dep-bar"><span style="width:@(Pct(ind.EvaluacionAprobados, ind.EvaluacionIntentos))%"></span></div>
+                            </div>
+                            <div class="dep-kpi">
+                                <div class="v">@ind.IngresosTotales</div>
+                                <div class="k">Ingresos al sistema</div>
+                                <div class="h">@ind.ColaboradoresQueIngresaron de @ind.Personas persona(s)</div>
+                            </div>
+                        </div>
+
+                        @if (ind.DocumentosPorMes.Count > 0)
+                        {
+                            <div class="dep-chart">
+                                <div class="dep-chart-t">Documentos cargados por mes</div>
+                                <div class="dep-bars">
+                                    @{ var maxMes = ind.DocumentosPorMes.Max(p => p.Valor); }
+                                    @foreach (var p in ind.DocumentosPorMes)
+                                    {
+                                        <div class="dep-barcol" title="@p.Mes: @p.Valor">
+                                            <div class="dep-barval">@p.Valor</div>
+                                            <div class="dep-bar-track">
+                                                <div class="dep-bar-fill" style="height:@(Pct(p.Valor, maxMes))%"></div>
+                                            </div>
+                                            <div class="dep-barlbl">@p.Mes</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="dep-ind-load">Cargando indicadores...</div>
+                }
+
                 @if (_perError is not null)
                 {
                     <div class="trx-error">@_perError</div>
                 }
+                <div class="dep-sec-t">Personas</div>
                 <div class="per-nota">
                     Puedes asignar varias personas a la misma dependencia. Cada una entra con su
                     propio enlace y su cuenta nace con la clave <b>12345</b>.
@@ -923,6 +1002,43 @@
     .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
     .trd-row { padding:5px 0; border-bottom:1px solid var(--chrome-border); font-size:13px; }
     .trd-muted { color:var(--muted-foreground); font-size:11px; }
+
+    /* --- Modal dependencia: propiedades + indicadores --- */
+    .dep-sec-t { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px;
+                 color:#1f2433; margin:4px 0 10px; }
+    .dep-prop { border:1px solid #e6e9f2; border-radius:12px; padding:13px 15px; background:#fff; margin-bottom:14px; }
+    .dep-prop-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+    @@media (max-width: 760px) { .dep-prop-grid { grid-template-columns:1fr; } }
+    .dep-f { display:flex; flex-direction:column; gap:4px; }
+    .dep-f > span { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#8a93ad; }
+    .dep-f-full { margin-top:10px; }
+    .dep-f textarea.dep-in { resize:vertical; min-height:38px; font-family:inherit; }
+    .dep-prop-acc { display:flex; align-items:center; gap:10px; margin-top:12px; }
+    .dep-ok { font-size:12px; font-weight:700; color:#1d6b3a; }
+    .dep-err { font-size:12px; font-weight:700; color:#c0392b; }
+
+    .dep-ind { border:1px solid #e6e9f2; border-radius:12px; padding:13px 15px; background:#fbfcff; margin-bottom:14px; }
+    .dep-ind-load { font-size:12px; color:#8a93ad; margin-bottom:14px; }
+    .dep-kpis { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
+    @@media (max-width: 760px) { .dep-kpis { grid-template-columns:1fr; } }
+    .dep-kpi { background:#fff; border:1px solid #e9ecf5; border-radius:10px; padding:11px 13px; }
+    .dep-kpi .v { font-size:1.55rem; font-weight:800; color:var(--primary); letter-spacing:-.02em; line-height:1; }
+    .dep-kpi .v .den { font-size:1rem; font-weight:700; color:#b9c0d4; }
+    .dep-kpi .k { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#8a93ad; margin-top:5px; }
+    .dep-kpi .h { font-size:11px; color:#9aa3bd; margin-top:2px; }
+    .dep-bar { height:6px; border-radius:6px; background:#eef1f7; overflow:hidden; margin-top:6px; }
+    .dep-bar > span { display:block; height:100%; background:var(--primary); }
+
+    .dep-chart { margin-top:14px; }
+    .dep-chart-t { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#8a93ad; margin-bottom:8px; }
+    .dep-bars { display:flex; align-items:flex-end; gap:10px; height:120px; padding-top:6px; }
+    .dep-barcol { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; }
+    .dep-barval { font-size:11px; font-weight:800; color:#1f2433; }
+    .dep-bar-track { flex:1; width:100%; max-width:46px; display:flex; align-items:flex-end;
+                     background:#eef1f7; border-radius:6px 6px 0 0; overflow:hidden; }
+    .dep-bar-fill { width:100%; background:linear-gradient(180deg, var(--primary), var(--primary-deep));
+                    border-radius:6px 6px 0 0; min-height:3px; }
+    .dep-barlbl { font-size:10px; color:#9aa3bd; font-family:'IBM Plex Mono','Consolas',monospace; }
 </style>
 
 @code {
@@ -997,6 +1113,20 @@
     private CrearColaboradorRequest _np = new();
     private string? _perError;
     private string? _error, _ok;
+
+    // Propiedades editables de la dependencia (se editan en el mismo modal, aparte de las personas).
+    // Modelo mutable para el @bind; el request (record init-only) se arma al guardar.
+    private sealed class PropForm
+    {
+        public string? CodigoRaizDocumental { get; set; }
+        public string? GerenteNombre { get; set; }
+        public string? GerenteEmail { get; set; }
+        public string? Observaciones { get; set; }
+    }
+    private PropForm _prop = new();
+    private string? _propOk, _propError;
+    // Indicadores de la dependencia (se cargan al abrir el modal).
+    private IndicadoresDependenciaDto? _ind;
 
     /// <summary>Lo que se pinta: la lista filtrada por numero, fecha y estado.</summary>
     private List<TrdDto> _filtradas => _trds
@@ -1414,9 +1544,30 @@
     {
         _depSel = d;
         _personasDe = d;
-        _perError = null;
+        _perError = _propOk = _propError = null;
         _np = new CrearColaboradorRequest();
+        _prop = new PropForm { CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones };
+        _ind = null;
         _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
+        _ind = await Trd.IndicadoresDependenciaAsync(d.Id);
+    }
+
+    private async Task GuardarPropiedades()
+    {
+        _propOk = _propError = null;
+        if (_personasDe is null) { return; }
+        var depId = _personasDe.Id;
+        try
+        {
+            await Trd.GuardarPropiedadesDependenciaAsync(
+                new GuardarPropiedadesDependenciaRequest(depId, _prop.CodigoRaizDocumental, _prop.GerenteNombre, _prop.GerenteEmail, _prop.Observaciones),
+                await Actor());
+            _propOk = "Propiedades guardadas.";
+            await LoadAll();
+            // Refrescar la referencia del modal con los valores ya guardados.
+            _personasDe = _deps.FirstOrDefault(x => x.Id == depId) ?? _personasDe;
+        }
+        catch (InvalidOperationException ex) { _propError = ex.Message; }
     }
 
     private async Task RecargarPersonas()
@@ -1456,7 +1607,10 @@
         catch (InvalidOperationException ex) { _perError = ex.Message; }
     }
 
-    private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = null; }
+    private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = _propOk = _propError = null; _ind = null; }
+
+    /// <summary>Porcentaje entero de parte/total, acotado a [0,100]. 0 si el total es 0.</summary>
+    private static int Pct(int parte, int total) => total <= 0 ? 0 : Math.Clamp((int)Math.Round(parte * 100.0 / total), 0, 100);
 
     private async Task AddPersona()
     {

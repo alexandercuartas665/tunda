@@ -111,7 +111,8 @@ public sealed class TrdAdminService : ITrdAdminService
         await _db.Dependencias.AsNoTracking().Where(d => d.TrdId == trdId)
             .OrderBy(d => d.Nivel).ThenBy(d => d.Orden)
             .Select(d => new DependenciaDto(d.Id, d.PadreId, d.Nivel, d.Orden, d.NombreCargo, d.Codigo, d.Estado,
-                _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id)))
+                _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id),
+                d.CodigoRaizDocumental, d.GerenteNombre, d.GerenteEmail, d.Observaciones))
             .ToListAsync(ct);
 
     public async Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default)
@@ -158,6 +159,66 @@ public sealed class TrdAdminService : ITrdAdminService
         dep.NombreCargo = nom;
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task<bool> GuardarPropiedadesDependenciaAsync(GuardarPropiedadesDependenciaRequest req, Guid actor, CancellationToken ct = default)
+    {
+        var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == req.Id, ct);
+        if (dep is null) { return false; }
+
+        static string? Limpio(string? s, int max)
+        {
+            s = s?.Trim();
+            if (string.IsNullOrEmpty(s)) { return null; }
+            return s.Length > max ? s[..max] : s;
+        }
+
+        var email = Limpio(req.GerenteEmail, 200);
+        if (email is not null && !email.Contains('@')) { throw new InvalidOperationException("El correo del gerente no es valido."); }
+
+        dep.CodigoRaizDocumental = Limpio(req.CodigoRaizDocumental, 60);
+        dep.GerenteNombre = Limpio(req.GerenteNombre, 200);
+        dep.GerenteEmail = email;
+        dep.Observaciones = Limpio(req.Observaciones, 2000);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid depId, CancellationToken ct = default)
+    {
+        // Documentos que esta dependencia declaro en la TRD (matriz).
+        var docsQ = _db.RespuestasTablaDocumental.AsNoTracking().Where(r => r.DependenciaId == depId);
+        var docsCargados = await docsQ.CountAsync(ct);
+        var seriesDistintas = await docsQ.Select(r => r.SerieId).Distinct().CountAsync(ct);
+
+        // Documentos por mes (ultimos 6 meses con actividad), a partir de fecha_reg.
+        var porMesRaw = await docsQ
+            .GroupBy(r => new { r.FechaReg.Year, r.FechaReg.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Total = g.Count() })
+            .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
+            .Take(6)
+            .ToListAsync(ct);
+        var porMes = porMesRaw
+            .OrderBy(x => x.Year).ThenBy(x => x.Month)
+            .Select(x => new PuntoMensualDto($"{x.Month:00}/{x.Year % 100:00}", x.Total))
+            .ToList();
+
+        // Evaluacion de formacion: intentos y aprobados de esta dependencia.
+        var intentosQ = _db.CuestionarioIntentos.AsNoTracking().Where(i => i.DependenciaId == depId);
+        var evalIntentos = await intentosQ.CountAsync(ct);
+        var evalAprobados = await intentosQ.CountAsync(i => i.Aprobado, ct);
+
+        // Ingresos: tokens de la dependencia efectivamente consumidos (cada colaborador
+        // entra por su enlace; consumido_en marca cuando ingreso).
+        var tokensQ = _db.TokensDependencia.AsNoTracking().Where(t => t.DependenciaId == depId && t.ConsumidoEn != null);
+        var ingresos = await tokensQ.CountAsync(ct);
+        var colabQueIngresaron = await tokensQ.Select(t => t.ColaboradorId).Distinct().CountAsync(ct);
+
+        var personas = await _db.ColaboradoresDependencia.AsNoTracking().CountAsync(c => c.DependenciaId == depId, ct);
+
+        return new IndicadoresDependenciaDto(
+            personas, docsCargados, seriesDistintas, porMes,
+            evalIntentos, evalAprobados, ingresos, colabQueIngresaron);
     }
 
     public async Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default)

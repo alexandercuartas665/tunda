@@ -17,6 +17,13 @@ public interface ITrdAdminService
     Task<IReadOnlyList<DependenciaDto>> ArbolDependenciasAsync(Guid trdId, CancellationToken ct = default);
     Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> ActualizarDependenciaAsync(Guid id, string codigo, string nombreCargo, Guid actor, CancellationToken ct = default);
+
+    /// <summary>Guarda las propiedades informativas de la dependencia (codigo raiz documental, gerente, correo, observaciones).</summary>
+    Task<bool> GuardarPropiedadesDependenciaAsync(GuardarPropiedadesDependenciaRequest req, Guid actor, CancellationToken ct = default);
+
+    /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
+    Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
+
     Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default);
 
     // Personas asignadas a una dependencia. Varias por dependencia: es lo normal
