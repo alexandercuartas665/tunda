@@ -16,59 +16,61 @@
             <div class="trx-title">Capacitaciones</div>
             <div class="trx-sub">Arma cursos con modulos y lecciones (video, imagen, PDF, texto) y su evaluacion final.</div>
         </div>
-        @if (_detalle is null && !_nuevo)
-        {
-            <div class="trx-head-actions">
-                <button class="trx-btn" @onclick="NuevoCurso">&#65291; Nuevo curso</button>
-            </div>
-        }
+        <div class="trx-head-actions">
+            <button class="trx-btn" @onclick="NuevoCurso">&#65291; Nuevo curso</button>
+        </div>
     </div>
 
     @if (_error is not null) { <div class="ase-alert">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-    @if (_detalle is null && !_nuevo)
+    @* ---------- Lista de cursos (siempre visible) ---------- *@
+    @if (_cursos.Count == 0)
     {
-        @* ---------- Lista de cursos ---------- *@
-        @if (_cursos.Count == 0)
-        {
-            <div class="cap-vacio">Aun no hay cursos. Crea el primero con "Nuevo curso".</div>
-        }
-        else
-        {
-            <div class="cap-grid">
-                @foreach (var c in _cursos)
-                {
-                    <div class="cap-card" @onclick="() => AbrirCurso(c.Id)">
-                        <div class="cap-card-h">
-                            <div class="cap-card-t">@c.Titulo</div>
-                            @if (c.EsVigente) { <span class="cap-badge">Vigente</span> }
-                            @if (!c.Activo) { <span class="cap-badge off">Inactivo</span> }
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(c.Descripcion))
-                        {
-                            <div class="cap-card-d">@c.Descripcion</div>
-                        }
-                        <div class="cap-card-m">
-                            <span>&#128218; @c.Modulos modulos</span>
-                            <span>&#127909; @c.Lecciones lecciones</span>
-                            <span>&#128221; @(c.CuestionarioTitulo ?? "sin evaluacion")</span>
-                        </div>
-                    </div>
-                }
-            </div>
-        }
+        <div class="cap-vacio">Aun no hay cursos. Crea el primero con "Nuevo curso".</div>
     }
     else
     {
-        @* ---------- Editor de curso ---------- *@
-        <div class="cap-editor">
-            <div class="cap-toolbar">
-                <button class="trx-btn ghost" @onclick="Cerrar">&#8592; Volver a la lista</button>
+        <div class="cap-grid">
+            @foreach (var c in _cursos)
+            {
+                <div class="cap-card">
+                    <div class="cap-card-h">
+                        <div class="cap-card-t">@c.Titulo</div>
+                        @if (c.EsVigente) { <span class="cap-badge">Vigente</span> }
+                        @if (!c.Activo) { <span class="cap-badge off">Inactivo</span> }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(c.Descripcion))
+                    {
+                        <div class="cap-card-d">@c.Descripcion</div>
+                    }
+                    <div class="cap-card-m">
+                        <span>&#128218; @c.Modulos modulos</span>
+                        <span>&#127909; @c.Lecciones lecciones</span>
+                        <span>&#128221; @(c.CuestionarioTitulo ?? "sin evaluacion")</span>
+                    </div>
+                    <div class="cap-card-acc">
+                        <button class="trx-btn ghost mini" @onclick="() => AbrirPreview(c.Id)">&#128065; Previsualizar</button>
+                        <button class="trx-btn mini" @onclick="() => AbrirCurso(c.Id)">&#9998; Editar</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---------- Editor de curso (modal) ---------- *@
+    @if (_nuevo || _detalle is not null)
+    {
+        <div class="cap-modal-scrim" @onclick="Cerrar"></div>
+        <div class="cap-modal-wrap">
+        <div class="cap-modal cap-editor" @onclick:stopPropagation="true">
+            <div class="cap-modal-h">
+                <div class="cap-modal-t">@(_form.Id is null ? "Nuevo curso" : "Editar curso")</div>
                 @if (_form.Id is Guid)
                 {
-                    <button class="btn btn-outline-danger btn-sm" @onclick="EliminarCurso">Eliminar curso</button>
+                    <button class="btn btn-outline-danger btn-sm" @onclick="EliminarCurso">Eliminar</button>
                 }
+                <span class="cap-modal-x" @onclick="Cerrar">&#10005;</span>
             </div>
 
             <div class="cap-panel">
@@ -202,6 +204,80 @@
                 </div>
             }
         </div>
+        </div>@* /cap-modal-wrap *@
+    }
+
+    @* ---------- Previsualizacion del curso (modal, solo lectura) ---------- *@
+    @if (_preview is CursoDetalleDto pv)
+    {
+        <div class="cap-modal-scrim" @onclick="CerrarPreview"></div>
+        <div class="cap-modal-wrap">
+        <div class="cap-modal cap-prev" @onclick:stopPropagation="true">
+            <div class="cap-modal-h">
+                <div class="cap-modal-t">&#128065; Previsualizacion &middot; @pv.Titulo</div>
+                <span class="cap-modal-x" @onclick="CerrarPreview">&#10005;</span>
+            </div>
+
+            <div class="cap-prev-body">
+                @if (!string.IsNullOrWhiteSpace(pv.Descripcion))
+                {
+                    <p class="cap-prev-desc">@pv.Descripcion</p>
+                }
+
+                @if (pv.Modulos.Count == 0)
+                {
+                    <div class="cap-sin">Este curso todavia no tiene modulos.</div>
+                }
+                @foreach (var m in pv.Modulos)
+                {
+                    <div class="cap-prev-mod">
+                        <div class="cap-prev-mod-t">&#128218; @m.Titulo</div>
+                        @if (m.Lecciones.Count == 0)
+                        {
+                            <div class="cap-sin sub">Sin lecciones.</div>
+                        }
+                        @foreach (var l in m.Lecciones)
+                        {
+                            <div class="cap-prev-lec">
+                                <div class="cap-prev-lec-t">@IconoTipo(l.Tipo) @l.Titulo</div>
+                                @if (!string.IsNullOrWhiteSpace(l.Descripcion))
+                                {
+                                    <div class="cap-prev-lec-d">@l.Descripcion</div>
+                                }
+                                @{ var url = $"/capacitaciones/leccion/{l.Id}/recurso"; }
+                                @if (l.Tipo == "TEXTO")
+                                {
+                                    <div class="cap-prev-texto">@l.Contenido</div>
+                                }
+                                else if (string.IsNullOrWhiteSpace(l.ObjetoKey))
+                                {
+                                    <div class="cap-prev-falta">Esta leccion aun no tiene su archivo cargado.</div>
+                                }
+                                else if (l.Tipo == "VIDEO")
+                                {
+                                    <video class="cap-preview" controls src="@url"></video>
+                                }
+                                else if (l.Tipo == "IMAGEN")
+                                {
+                                    <img class="cap-preview" src="@url" alt="@l.Titulo" />
+                                }
+                                else if (l.Tipo == "PDF")
+                                {
+                                    <iframe class="cap-preview" src="@url" title="@l.Titulo"></iframe>
+                                    <a class="cap-link" href="@url" target="_blank">Abrir PDF en pestana nueva</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="cap-prev-eval">
+                    <span class="cap-prev-eval-k">Evaluacion final</span>
+                    <span class="cap-prev-eval-v">@(NombreCuestionario(pv.CuestionarioId) ?? "Sin evaluacion")</span>
+                </div>
+            </div>
+        </div>
+        </div>@* /cap-modal-wrap *@
     }
 </div>
 
@@ -256,6 +332,40 @@
     .cap-link { font-size:11.5px; font-weight:700; color:var(--primary); text-decoration:none; }
     .cap-link:hover { text-decoration:underline; }
     @@media (max-width: 720px) { .cap-f-row { flex-direction:column; align-items:stretch; gap:10px; } }
+
+    /* Acciones al pie de la tarjeta */
+    .cap-card { cursor:default; }
+    .cap-card-acc { display:flex; gap:8px; margin-top:12px; padding-top:11px; border-top:1px solid #eef1f7; }
+    .trx-btn.mini { padding:6px 11px; font-size:11.5px; }
+
+    /* Modal (editor y preview) */
+    .cap-modal-scrim { position:fixed; inset:0; background:rgba(20,26,45,.45); z-index:1990; }
+    .cap-modal-wrap { position:fixed; inset:0; z-index:1995; display:flex; align-items:flex-start;
+                      justify-content:center; padding:26px 18px; pointer-events:none; overflow-y:auto; }
+    .cap-modal { pointer-events:auto; width:100%; max-width:860px; max-height:90vh; overflow-y:auto;
+                 background:#f7f8fb; border-radius:18px; box-shadow:0 24px 70px rgba(0,0,0,.3); padding:18px 20px 22px; }
+    .cap-modal-h { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+    .cap-modal-t { font-size:15px; font-weight:800; color:#1f2433; flex:1; }
+    .cap-modal-x { cursor:pointer; font-size:18px; color:#8a93a8; line-height:1; padding:2px 6px; }
+    .cap-modal-x:hover { color:#e5484d; }
+
+    /* Preview solo lectura */
+    .cap-prev-body { display:flex; flex-direction:column; gap:14px; }
+    .cap-prev-desc { font-size:12.5px; color:#5b6478; line-height:1.6; margin:0; }
+    .cap-prev-mod { background:#fff; border:1px solid #e9ecf5; border-radius:13px; padding:13px 15px; }
+    .cap-prev-mod-t { font-size:13px; font-weight:800; color:#1f2433; margin-bottom:10px; }
+    .cap-prev-lec { border-top:1px dashed #eef1f7; padding-top:11px; margin-top:11px; }
+    .cap-prev-lec:first-of-type { border-top:0; padding-top:0; margin-top:0; }
+    .cap-prev-lec-t { font-size:12.5px; font-weight:700; color:#37415c; margin-bottom:3px; }
+    .cap-prev-lec-d { font-size:11.5px; color:#8a93a8; margin-bottom:8px; }
+    .cap-prev-texto { white-space:pre-wrap; font-size:12.5px; line-height:1.6; color:#37415c;
+                      background:#fbfcff; border:1px solid #eef1f7; border-radius:9px; padding:11px 13px; }
+    .cap-prev-falta { font-size:11.5px; font-style:italic; color:#b08900; background:#fdf8ec;
+                      border:1px solid #f0e6c8; border-radius:8px; padding:8px 11px; }
+    .cap-prev-eval { display:flex; align-items:center; gap:10px; background:var(--primary-soft);
+                     border-radius:11px; padding:11px 15px; }
+    .cap-prev-eval-k { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--primary); }
+    .cap-prev-eval-v { font-size:13px; font-weight:700; color:#1f2433; }
 </style>
 
 @code {
@@ -270,6 +380,9 @@
     private GuardarCursoRequest _form = new();
     private bool _nuevo;
     private string? _error, _ok;
+
+    // Previsualizacion (solo lectura) del curso, independiente del editor.
+    private CursoDetalleDto? _preview;
 
     protected override async Task OnInitializedAsync()
     {
@@ -314,6 +427,19 @@
         _nuevo = false;
         _error = _ok = null;
     }
+
+    private async Task AbrirPreview(Guid id)
+    {
+        _error = null;
+        _preview = await Curso.DetalleAsync(id);
+        if (_preview is null) { _error = "El curso ya no existe."; await RecargarLista(); }
+    }
+
+    private void CerrarPreview() => _preview = null;
+
+    /// <summary>Nombre de la evaluacion a partir de su id, para el pie del preview.</summary>
+    private string? NombreCuestionario(Guid? id) =>
+        id is Guid g ? _cuestionarios.FirstOrDefault(q => q.Id == g).Titulo : null;
 
     private void OnCuestionarioChange(ChangeEventArgs e) =>
         _form.CuestionarioId = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
