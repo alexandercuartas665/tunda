@@ -124,15 +124,19 @@
 
                     @foreach (var m in _detalle.Modulos)
                     {
-                        <div class="cap-modulo">
+                        <div class="cap-modulo @(_modAbiertos.Contains(m.Id) ? "on" : "")">
                             <div class="cap-modulo-h">
+                                <span class="cap-caret" title="@(_modAbiertos.Contains(m.Id) ? "Contraer" : "Expandir")" @onclick="() => ToggleModulo(m.Id)">@(_modAbiertos.Contains(m.Id) ? "▾" : "▸")</span>
                                 <span class="cap-modulo-ico">&#128218;</span>
                                 <input class="cap-modulo-nom" value="@m.Titulo"
                                        @onchange="e => RenombrarModulo(m, e.Value?.ToString() ?? string.Empty)" />
+                                <span class="cap-modulo-cta">@m.Lecciones.Count leccion(es)</span>
                                 <button class="cap-add ghost" @onclick="() => AgregarLeccion(m)">&#65291; Leccion</button>
                                 <span class="cap-quitar" title="Eliminar modulo" @onclick="() => EliminarModulo(m)">&#10005;</span>
                             </div>
 
+                            @if (_modAbiertos.Contains(m.Id))
+                            {
                             @if (m.Lecciones.Count == 0)
                             {
                                 <div class="cap-sin sub">Sin lecciones en este modulo.</div>
@@ -199,6 +203,7 @@
                                     }
                                 </div>
                             }
+                            }@* /if abierto *@
                         </div>
                     }
                 </div>
@@ -313,7 +318,11 @@
     .cap-sin { text-align:center; padding:16px; color:#c2bca8; font-size:12px; font-weight:500; border:1px dashed #e3ddcd; border-radius:11px; }
     .cap-sin.sub { padding:11px; font-size:11.5px; margin-top:8px; }
     .cap-modulo { border:1px solid #e9ecf5; border-radius:13px; padding:12px 14px; margin-bottom:12px; background:#fbfaf7; }
+    .cap-modulo.on { background:#fff; }
     .cap-modulo-h { display:flex; align-items:center; gap:9px; }
+    .cap-caret { cursor:pointer; color:var(--primary); font-size:12px; width:16px; text-align:center; flex-shrink:0;
+                 user-select:none; }
+    .cap-modulo-cta { font-size:11px; font-weight:700; color:#8a93a8; white-space:nowrap; margin-left:auto; }
     .cap-modulo-ico { font-size:16px; flex-shrink:0; }
     .cap-modulo-nom { flex:1; min-width:0; border:0; background:transparent; font-size:13.5px; font-weight:700; color:#1f2433; outline:none; padding:4px 6px; border-radius:6px; }
     .cap-modulo-nom:focus { background:#fff; box-shadow:0 0 0 2px var(--primary-tint); }
@@ -383,6 +392,10 @@
 
     // Previsualizacion (solo lectura) del curso, independiente del editor.
     private CursoDetalleDto? _preview;
+
+    // Modulos expandidos en el editor. Vacio = todos cerrados (acordeon).
+    private readonly HashSet<Guid> _modAbiertos = new();
+    private void ToggleModulo(Guid id) { if (!_modAbiertos.Remove(id)) { _modAbiertos.Add(id); } }
 
     protected override async Task OnInitializedAsync()
     {
@@ -501,6 +514,7 @@
     private async Task AgregarLeccion(CursoModuloConLeccionesDto m)
     {
         if (_form.Id is not Guid cursoId) { return; }
+        _modAbiertos.Add(m.Id);   // al anadir una leccion, abre el modulo para verla
         await EjecutarDetalle(async () => await Curso.GuardarLeccionAsync(
             new GuardarLeccionRequest { CursoModuloId = m.Id, Titulo = "Nueva leccion", Tipo = "VIDEO" },
             await Actor()), cursoId);
