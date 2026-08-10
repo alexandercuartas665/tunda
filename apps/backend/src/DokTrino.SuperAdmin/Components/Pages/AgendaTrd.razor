@@ -24,6 +24,7 @@
                 <a class="@(_vista == "cal" ? "on" : "")" @onclick='() => _vista = "cal"'>&#128197; Calendario</a>
             </div>
             <button class="trx-btn" @onclick="() => _editOpen = true" disabled="@(_agenda.Count == 0)">&#9998; Editar fechas</button>
+            <a class="trx-btn ghost @(_trdSelId == Guid.Empty ? "disabled" : "")" href="@($"/api/doktrino/agenda/{_trdSelId}/excel")" target="_blank">&#8681; Excel</a>
         </div>
     </div>
 
@@ -40,43 +41,52 @@
         {
             @* ---------- Gantt ---------- *@
             <div class="ase-card">
-                <div class="ase-card-h">Cronograma (Gantt)</div>
-                @if (_rango is null)
-                {
-                    <div class="ag-vacio">Asigna fechas a las dependencias para ver el cronograma.</div>
-                }
-                else
-                {
-                    var (ini, fin, total) = _rango.Value;
-                    <div class="ag-gantt">
-                        <div class="ag-axis">
-                            @foreach (var m in MesesEje(ini, fin))
-                            {
-                                <div class="ag-axis-m" style="left:@(Pct(m.Item1.DayNumber - ini.DayNumber, total))%;">@m.Item2</div>
-                            }
+                <div class="ase-card-h">
+                    Cronograma (Gantt)
+                    <div class="ag-gtools">
+                        <div class="trx-toggle">
+                            <a class="@(_escala == "dia" ? "on" : "")" @onclick='() => _escala = "dia"'>Dias</a>
+                            <a class="@(_escala == "semana" ? "on" : "")" @onclick='() => _escala = "semana"'>Semanas</a>
+                            <a class="@(_escala == "mes" ? "on" : "")" @onclick='() => _escala = "mes"'>Meses</a>
                         </div>
-                        @foreach (var d in _agenda)
+                        <button class="trx-btn ghost mini" title="Mes anterior" @onclick="() => _ganttRef = _ganttRef.AddMonths(-1)">&#8592;</button>
+                        <span class="ag-gtools-per">@NombreMes(_ganttRef)</span>
+                        <button class="trx-btn ghost mini" title="Mes siguiente" @onclick="() => _ganttRef = _ganttRef.AddMonths(1)">&#8594;</button>
+                        <button class="trx-btn ghost mini" @onclick="IrHoy">Hoy</button>
+                    </div>
+                </div>
+
+                <div class="ag-gantt">
+                    <div class="ag-axis">
+                        @foreach (var (pos, etiqueta) in EjeTicks(VentanaIni, VentanaFin, VentanaDias))
                         {
-                            <div class="ag-fila">
-                                <div class="ag-fila-lbl" title="@d.NombreCargo"><span class="mono">@d.Codigo</span> @d.NombreCargo</div>
-                                <div class="ag-track">
-                                    @if (d.FechaInicioEstimada is DateOnly di && d.FechaFinEstimada is DateOnly df)
-                                    {
-                                        <div class="ag-bar @EstadoClase(d)"
-                                             style="left:@(Pct(di.DayNumber - ini.DayNumber, total))%; width:@(Math.Max(1.5, PctD(df.DayNumber - di.DayNumber + 1, total)))%;"
-                                             title="@d.Codigo: @Fmt(di) a @Fmt(df)">
-                                            <span>@Fmt(di) &ndash; @Fmt(df)</span>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="ag-sinfecha">sin fechas</div>
-                                    }
-                                </div>
-                            </div>
+                            <div class="ag-axis-m" style="left:@pos%;">@etiqueta</div>
                         }
                     </div>
-                }
+                    @foreach (var d in _agenda)
+                    {
+                        <div class="ag-fila">
+                            <div class="ag-fila-lbl" title="@d.NombreCargo"><span class="mono">@d.Codigo</span> @d.NombreCargo</div>
+                            <div class="ag-track">
+                                @if (d.FechaInicioEstimada is DateOnly di && d.FechaFinEstimada is DateOnly df && df >= VentanaIni && di < VentanaFin)
+                                {
+                                    var ci = di < VentanaIni ? VentanaIni : di;
+                                    var cf = df >= VentanaFin ? VentanaFin.AddDays(-1) : df;
+                                    <div class="ag-bar @EstadoClase(d)"
+                                         style="left:@(PctD(ci.DayNumber - VentanaIni.DayNumber, VentanaDias))%; width:@(Math.Max(1.5, PctD(cf.DayNumber - ci.DayNumber + 1, VentanaDias)))%;"
+                                         title="@d.Codigo: @Fmt(di) a @Fmt(df)">
+                                        <span>@Fmt(di) &ndash; @Fmt(df)</span>
+                                    </div>
+                                }
+                                else if (d.FechaInicioEstimada is null)
+                                {
+                                    <div class="ag-sinfecha">sin fechas</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="ag-nota">Ventana: @Fmt(VentanaIni) a @Fmt(VentanaFin.AddDays(-1)). Usa las flechas para moverte un mes; cambia la escala con Dias / Semanas / Meses.</div>
             </div>
         }
         else
@@ -197,6 +207,10 @@
     .ag-estado.late { background:#fdecec; color:#c0392b; }
 
     /* Gantt */
+    .ag-gtools { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ag-gtools-per { font-size:12px; font-weight:800; color:#1f2433; min-width:110px; text-align:center; }
+    .ag-nota { font-size:11px; color:#8a93ad; margin-top:10px; }
+    .trx-btn.disabled { opacity:.5; pointer-events:none; }
     .ag-gantt { position:relative; }
     .ag-axis { position:relative; height:22px; margin-left:230px; border-bottom:1px solid #eef1f7; margin-bottom:6px; }
     .ag-axis-m { position:absolute; top:0; font-size:10.5px; font-weight:700; color:#8a93ad; transform:translateX(-2px); white-space:nowrap; }
@@ -254,6 +268,8 @@
     private Guid _trdSelId;
     private List<AgendaDependenciaDto> _agenda = new();
     private string _vista = "gantt";
+    private string _escala = "semana";           // dia | semana | mes
+    private DateOnly _ganttRef;                    // mes de referencia (inicio de la ventana)
     private string? _error, _ok;
     private bool _editOpen;
     private string _copiaOrigen = "";
@@ -283,6 +299,54 @@
         if (_trdSelId == Guid.Empty) { _agenda = new(); return; }
         _agenda = (await Trd.AgendaTrdAsync(_trdSelId)).ToList();
         _cargadoDe = _trdSelId;
+        // Ubicar la ventana del Gantt en el mes de la primera fecha, o el mes actual.
+        var primera = _agenda.Where(d => d.FechaInicioEstimada is not null).Select(d => d.FechaInicioEstimada!.Value).DefaultIfEmpty(_hoy).Min();
+        _ganttRef = new DateOnly(primera.Year, primera.Month, 1);
+    }
+
+    private void IrHoy() => _ganttRef = new DateOnly(_hoy.Year, _hoy.Month, 1);
+
+    /// <summary>Inicio de la ventana visible del Gantt (siempre el 1 del mes de referencia).</summary>
+    private DateOnly VentanaIni => _ganttRef;
+
+    /// <summary>Fin exclusivo de la ventana visible del Gantt.</summary>
+    private DateOnly VentanaFin => _ganttRef.AddDays(VentanaDias);
+
+    /// <summary>Dias que abarca la ventana segun la escala.</summary>
+    private int VentanaDias => _escala switch
+    {
+        "dia" => DateTime.DaysInMonth(_ganttRef.Year, _ganttRef.Month),   // un mes
+        "mes" => _ganttRef.AddMonths(8).DayNumber - _ganttRef.DayNumber,   // ocho meses
+        _ => 84                                                            // semanas: 12 semanas
+    };
+
+    /// <summary>Marcas del eje (posicion %, etiqueta) segun la escala.</summary>
+    private IEnumerable<(double, string)> EjeTicks(DateOnly vi, DateOnly vf, int vd)
+    {
+        if (_escala == "dia")
+        {
+            for (var d = vi; d < vf; d = d.AddDays(1))
+            {
+                yield return (PctD(d.DayNumber - vi.DayNumber, vd), d.Day.ToString());
+            }
+        }
+        else if (_escala == "semana")
+        {
+            var lunes = vi.AddDays(-(((int)vi.DayOfWeek + 6) % 7));
+            for (var w = lunes; w < vf; w = w.AddDays(7))
+            {
+                if (w >= vi) { yield return (PctD(w.DayNumber - vi.DayNumber, vd), w.ToString("dd/MM")); }
+            }
+        }
+        else
+        {
+            var m = new DateOnly(vi.Year, vi.Month, 1);
+            while (m < vf)
+            {
+                yield return (PctD(m.DayNumber - vi.DayNumber, vd), $"{Mes3(m.Month)} {m.Year % 100:00}");
+                m = m.AddMonths(1);
+            }
+        }
     }
 
     /// <summary>Rango total (inicio, fin, dias) que cubren todas las dependencias con ambas fechas.</summary>

@@ -694,6 +694,20 @@ app.MapGet("/api/doktrino/trd/{id:guid}/excel", async (
             archivo.Value.FileName);
 }).RequireAuthorization();
 
+app.MapGet("/api/doktrino/agenda/{id:guid}/excel", async (
+    Guid id,
+    DokTrino.Application.Trd.IAgendaExcelExporter exporter,
+    CancellationToken ct) =>
+{
+    var archivo = await exporter.ExportarAsync(id, ct);
+    return archivo is null
+        ? Results.NotFound()
+        : Results.File(
+            archivo.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            archivo.Value.FileName);
+}).RequireAuthorization();
+
 app.MapGet("/api/public/bi/{token}", async (
     string token,
     HttpRequest request,
