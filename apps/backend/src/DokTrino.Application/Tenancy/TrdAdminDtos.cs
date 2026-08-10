@@ -20,10 +20,16 @@ public sealed record TrdDto(
 /// <summary><paramref name="Personas"/> es cuanta gente tiene asignada, que es lo
 /// que la tabla del organigrama muestra sin tener que abrir cada dependencia.</summary>
 public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado, int Personas = 0,
-    string? CodigoRaizDocumental = null, string? GerenteNombre = null, string? GerenteEmail = null, string? Observaciones = null);
+    string? CodigoRaizDocumental = null, string? GerenteNombre = null, string? GerenteEmail = null, string? Observaciones = null,
+    DateOnly? FechaInicioEstimada = null, DateOnly? FechaFinEstimada = null);
 
-/// <summary>Propiedades editables de una dependencia (distintas del organigrama: codigo raiz, gerente, observaciones).</summary>
-public sealed record GuardarPropiedadesDependenciaRequest(Guid Id, string? CodigoRaizDocumental, string? GerenteNombre, string? GerenteEmail, string? Observaciones);
+/// <summary>Propiedades editables de una dependencia (distintas del organigrama: codigo raiz, gerente, observaciones, fechas de agenda).</summary>
+public sealed record GuardarPropiedadesDependenciaRequest(Guid Id, string? CodigoRaizDocumental, string? GerenteNombre, string? GerenteEmail, string? Observaciones,
+    DateOnly? FechaInicioEstimada = null, DateOnly? FechaFinEstimada = null);
+
+/// <summary>Una fila de la agenda de trabajo TRD: la dependencia con su ventana estimada de trabajo.</summary>
+public sealed record AgendaDependenciaDto(Guid Id, string Codigo, string NombreCargo, short Nivel,
+    DateOnly? FechaInicioEstimada, DateOnly? FechaFinEstimada, int Personas, int Documentos, bool Aprobo);
 
 /// <summary>Un punto de una serie temporal por mes (para las barras del modal).</summary>
 public sealed record PuntoMensualDto(string Mes, int Valor);

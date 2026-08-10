@@ -16,6 +16,7 @@ public static class ModuloCatalogo
         new("trd", "Encuesta Documental (TRD)", "Gestion Documental"),
         new("trd.aprobar", "TRD - Aprobar y cerrar la tabla", "Gestion Documental"),
         new("configuracion-documental", "Configuracion Documental", "Gestion Documental"),
+        new("agenda-trd", "Agenda de trabajo TRD", "Gestion Documental"),
         new("radicacion", "Radicacion", "Gestion Documental"),
         new("archivo-fisico", "Archivo fisico", "Gestion Documental"),
         new("topografia-fisica", "Topografia fisica", "Gestion Documental"),

@@ -1,0 +1,319 @@
+@page "/agenda-trd"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Security.Claims
+@using DokTrino.Application.Tenancy
+@inject ITrdAdminService Trd
+
+<PageTitle>Agenda de trabajo TRD - Archimente</PageTitle>
+
+<div class="trx">
+    <div class="trx-breadcrumb">Inicio &middot; Documental &middot; Agenda de trabajo TRD</div>
+
+    <div class="trx-head">
+        <div>
+            <div class="trx-title">Agenda de trabajo TRD</div>
+            <div class="trx-sub">Cuando cada dependencia debe diligenciar su Tabla de Retencion</div>
+        </div>
+        <div class="trx-head-actions">
+            <select class="dep-in" style="max-width:260px;" @bind="_trdSelId">
+                @foreach (var t in _trds) { <option value="@t.Id">@t.Consecutivo &middot; @t.Titulo</option> }
+            </select>
+            <div class="trx-toggle">
+                <a class="@(_vista == "gantt" ? "on" : "")" @onclick='() => _vista = "gantt"'>&#9636; Gantt</a>
+                <a class="@(_vista == "cal" ? "on" : "")" @onclick='() => _vista = "cal"'>&#128197; Calendario</a>
+            </div>
+        </div>
+    </div>
+
+    @if (_error is not null) { <div class="ase-alert">@_error</div> }
+
+    @if (_agenda.Count == 0)
+    {
+        <div class="ag-vacio">Esta TRD no tiene dependencias. Agregalas desde Encuesta Documental.</div>
+    }
+    else
+    {
+        @* ---------- Tabla editable de fechas ---------- *@
+        <div class="ase-card">
+            <div class="ase-card-h">Fechas por dependencia</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle ag-tabla">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th><th>Dependencia</th>
+                            <th style="width:160px;">Inicio estimado</th>
+                            <th style="width:160px;">Fin estimado</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _agenda)
+                        {
+                            <tr>
+                                <td><span class="mono">@d.Codigo</span></td>
+                                <td>@d.NombreCargo</td>
+                                <td>
+                                    <input class="dep-in" type="date" value="@Fmt(d.FechaInicioEstimada)"
+                                           @onchange="e => SetFecha(d, true, e.Value?.ToString())" />
+                                </td>
+                                <td>
+                                    <input class="dep-in" type="date" value="@Fmt(d.FechaFinEstimada)"
+                                           @onchange="e => SetFecha(d, false, e.Value?.ToString())" />
+                                </td>
+                                <td class="text-center"><span class="ag-estado @EstadoClase(d)">@EstadoTexto(d)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (_vista == "gantt")
+        {
+            @* ---------- Gantt ---------- *@
+            <div class="ase-card">
+                <div class="ase-card-h">Cronograma (Gantt)</div>
+                @if (_rango is null)
+                {
+                    <div class="ag-vacio">Asigna fechas a las dependencias para ver el cronograma.</div>
+                }
+                else
+                {
+                    var (ini, fin, total) = _rango.Value;
+                    <div class="ag-gantt">
+                        <div class="ag-axis">
+                            @foreach (var m in MesesEje(ini, fin))
+                            {
+                                <div class="ag-axis-m" style="left:@(Pct(m.Item1.DayNumber - ini.DayNumber, total))%;">@m.Item2</div>
+                            }
+                        </div>
+                        @foreach (var d in _agenda)
+                        {
+                            <div class="ag-fila">
+                                <div class="ag-fila-lbl" title="@d.NombreCargo"><span class="mono">@d.Codigo</span> @d.NombreCargo</div>
+                                <div class="ag-track">
+                                    @if (d.FechaInicioEstimada is DateOnly di && d.FechaFinEstimada is DateOnly df)
+                                    {
+                                        <div class="ag-bar @EstadoClase(d)"
+                                             style="left:@(Pct(di.DayNumber - ini.DayNumber, total))%; width:@(Math.Max(1.5, PctD(df.DayNumber - di.DayNumber + 1, total)))%;"
+                                             title="@d.Codigo: @Fmt(di) a @Fmt(df)">
+                                            <span>@Fmt(di) &ndash; @Fmt(df)</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="ag-sinfecha">sin fechas</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            @* ---------- Calendario mensual ---------- *@
+            <div class="ase-card">
+                <div class="ase-card-h">
+                    Calendario
+                    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                        <button class="trx-btn ghost mini" @onclick="() => _mes = _mes.AddMonths(-1)">&#8592;</button>
+                        <span class="ag-mes-t">@NombreMes(_mes)</span>
+                        <button class="trx-btn ghost mini" @onclick="() => _mes = _mes.AddMonths(1)">&#8594;</button>
+                    </div>
+                </div>
+                <div class="ag-cal-head">
+                    @foreach (var dn in new[] { "Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom" }) { <div>@dn</div> }
+                </div>
+                <div class="ag-cal">
+                    @foreach (var celda in DiasDelMes(_mes))
+                    {
+                        <div class="ag-cel @(celda is null ? "vacia" : "") @(celda == _hoy ? "hoy" : "")">
+                            @if (celda is DateOnly dia)
+                            {
+                                <div class="ag-cel-n">@dia.Day</div>
+                                @foreach (var d in _agenda.Where(x => CubreDia(x, dia)))
+                                {
+                                    <div class="ag-chip @EstadoClase(d) @(d.FechaInicioEstimada == dia ? "ini" : "") @(d.FechaFinEstimada == dia ? "fin" : "")"
+                                         title="@d.Codigo @d.NombreCargo">@d.Codigo</div>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="ag-leyenda">
+                    <span><i class="ag-dot pend"></i> Pendiente</span>
+                    <span><i class="ag-dot prog"></i> En proceso</span>
+                    <span><i class="ag-dot ok"></i> Aprobo</span>
+                    <span><i class="ag-dot late"></i> Atrasada</span>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .ag-vacio { padding:30px; text-align:center; font-size:13px; color:#8a93ad;
+                border:1px dashed #e3e7f2; border-radius:12px; }
+    .mono { font-family:'IBM Plex Mono','Consolas',monospace; }
+    .ag-tabla td { vertical-align:middle; }
+    .ag-estado { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.3px; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+    .ag-estado.pend { background:#fdf3e3; color:#a86a12; }
+    .ag-estado.prog { background:#e8f1ff; color:#1f5fb8; }
+    .ag-estado.ok   { background:#e7f6ec; color:#1f8a4c; }
+    .ag-estado.late { background:#fdecec; color:#c0392b; }
+
+    /* Gantt */
+    .ag-gantt { position:relative; }
+    .ag-axis { position:relative; height:22px; margin-left:230px; border-bottom:1px solid #eef1f7; margin-bottom:6px; }
+    .ag-axis-m { position:absolute; top:0; font-size:10.5px; font-weight:700; color:#8a93ad; transform:translateX(-2px); white-space:nowrap; }
+    .ag-fila { display:flex; align-items:center; height:34px; }
+    .ag-fila-lbl { width:230px; flex-shrink:0; font-size:12px; color:#37415c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px; }
+    .ag-track { position:relative; flex:1; height:22px; background:linear-gradient(90deg,#f6f8fc 0 1px,transparent 1px) ; border-radius:6px; }
+    .ag-bar { position:absolute; top:1px; height:20px; border-radius:6px; display:flex; align-items:center; padding:0 8px; overflow:hidden; }
+    .ag-bar span { font-size:10px; font-weight:700; color:#fff; white-space:nowrap; text-shadow:0 1px 1px rgba(0,0,0,.25); }
+    .ag-bar.pend { background:linear-gradient(180deg,#f0a850,#e0902f); }
+    .ag-bar.prog { background:linear-gradient(180deg,#4a90e2,#2f6fc0); }
+    .ag-bar.ok   { background:linear-gradient(180deg,#48b06a,#2f8a4c); }
+    .ag-bar.late { background:linear-gradient(180deg,#e56b6b,#c0392b); }
+    .ag-sinfecha { position:absolute; left:8px; top:3px; font-size:10.5px; font-style:italic; color:#b9c0d4; }
+
+    /* Calendario */
+    .ag-mes-t { font-size:13px; font-weight:800; color:#1f2433; min-width:150px; text-align:center; }
+    .ag-cal-head { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin:10px 0 6px; }
+    .ag-cal-head > div { font-size:10.5px; font-weight:800; text-transform:uppercase; color:#8a93ad; text-align:center; }
+    .ag-cal { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+    .ag-cel { min-height:78px; border:1px solid #eef1f7; border-radius:9px; padding:5px; background:#fff; }
+    .ag-cel.vacia { background:#fafbfe; border-style:dashed; }
+    .ag-cel.hoy { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
+    .ag-cel-n { font-size:11px; font-weight:700; color:#8a93ad; margin-bottom:3px; }
+    .ag-chip { font-size:9.5px; font-weight:800; color:#fff; border-radius:5px; padding:2px 5px; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ag-chip.pend { background:#e0902f; } .ag-chip.prog { background:#2f6fc0; }
+    .ag-chip.ok { background:#2f8a4c; } .ag-chip.late { background:#c0392b; }
+    .ag-chip.ini { border-left:3px solid #fff; }
+    .ag-chip.fin { border-right:3px solid #fff; }
+    .ag-leyenda { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:11px; color:#6b7488; }
+    .ag-dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+    .ag-dot.pend { background:#e0902f; } .ag-dot.prog { background:#2f6fc0; }
+    .ag-dot.ok { background:#2f8a4c; } .ag-dot.late { background:#c0392b; }
+    .trx-btn.mini { padding:5px 10px; font-size:12px; }
+</style>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<TrdDto> _trds = new();
+    private Guid _trdSelId;
+    private List<AgendaDependenciaDto> _agenda = new();
+    private string _vista = "gantt";
+    private string? _error;
+    private DateOnly _mes;
+    private readonly DateOnly _hoy = DateOnly.FromDateTime(DateTime.Today);
+
+    private Guid _cargadoDe;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _mes = new DateOnly(_hoy.Year, _hoy.Month, 1);
+        _trds = (await Trd.ListarTrdAsync()).ToList();
+        // Preferir la TRD activa; si no, la primera.
+        var activa = _trds.FirstOrDefault(t => t.Estado == "ACTIVO") ?? _trds.FirstOrDefault();
+        if (activa is not null) { _trdSelId = activa.Id; }
+        await CargarAgenda();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_trdSelId != Guid.Empty && _trdSelId != _cargadoDe) { await CargarAgenda(); }
+    }
+
+    private async Task CargarAgenda()
+    {
+        if (_trdSelId == Guid.Empty) { _agenda = new(); return; }
+        _agenda = (await Trd.AgendaTrdAsync(_trdSelId)).ToList();
+        _cargadoDe = _trdSelId;
+    }
+
+    /// <summary>Rango total (inicio, fin, dias) que cubren todas las dependencias con ambas fechas.</summary>
+    private (DateOnly, DateOnly, int)? _rango
+    {
+        get
+        {
+            var conFechas = _agenda.Where(d => d.FechaInicioEstimada is not null && d.FechaFinEstimada is not null).ToList();
+            if (conFechas.Count == 0) { return null; }
+            var ini = conFechas.Min(d => d.FechaInicioEstimada!.Value);
+            var fin = conFechas.Max(d => d.FechaFinEstimada!.Value);
+            var total = Math.Max(1, fin.DayNumber - ini.DayNumber + 1);
+            return (ini, fin, total);
+        }
+    }
+
+    private async Task SetFecha(AgendaDependenciaDto d, bool esInicio, string? valor)
+    {
+        _error = null;
+        DateOnly? nueva = DateOnly.TryParse(valor, out var f) ? f : null;
+        var ini = esInicio ? nueva : d.FechaInicioEstimada;
+        var fin = esInicio ? d.FechaFinEstimada : nueva;
+        try
+        {
+            await Trd.ActualizarFechasDependenciaAsync(d.Id, ini, fin, await Actor());
+            await CargarAgenda();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // ----- Estado de la dependencia para colorear -----
+    private string EstadoClase(AgendaDependenciaDto d)
+    {
+        if (d.Aprobo) { return "ok"; }
+        if (d.FechaFinEstimada is DateOnly f && f < _hoy) { return "late"; }
+        if (d.Documentos > 0) { return "prog"; }
+        return "pend";
+    }
+    private string EstadoTexto(AgendaDependenciaDto d) => EstadoClase(d) switch
+    {
+        "ok" => "Aprobo", "late" => "Atrasada", "prog" => "En proceso", _ => "Pendiente"
+    };
+
+    private static string Fmt(DateOnly? d) => d?.ToString("yyyy-MM-dd") ?? "";
+    private static int Pct(int parte, int total) => total <= 0 ? 0 : (int)Math.Round(parte * 100.0 / total);
+    private static double PctD(int parte, int total) => total <= 0 ? 0 : Math.Round(parte * 100.0 / total, 2);
+
+    /// <summary>Marcadores de mes para el eje del Gantt.</summary>
+    private static IEnumerable<(DateOnly, string)> MesesEje(DateOnly ini, DateOnly fin)
+    {
+        var cur = new DateOnly(ini.Year, ini.Month, 1);
+        while (cur <= fin)
+        {
+            var etiqueta = cur < ini ? ini : cur;
+            yield return (etiqueta, $"{Mes3(cur.Month)} {cur.Year % 100:00}");
+            cur = cur.AddMonths(1);
+        }
+    }
+
+    private static string Mes3(int m) => new[] { "", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic" }[m];
+    private static string NombreMes(DateOnly d) =>
+        $"{new[] { "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre" }[d.Month]} {d.Year}";
+
+    private bool CubreDia(AgendaDependenciaDto d, DateOnly dia) =>
+        d.FechaInicioEstimada is DateOnly i && d.FechaFinEstimada is DateOnly f && dia >= i && dia <= f;
+
+    /// <summary>Celdas del mes: nulls de relleno al inicio (lunes primero) + los dias.</summary>
+    private static IEnumerable<DateOnly?> DiasDelMes(DateOnly mes)
+    {
+        var primero = new DateOnly(mes.Year, mes.Month, 1);
+        int offset = ((int)primero.DayOfWeek + 6) % 7; // lunes = 0
+        for (var k = 0; k < offset; k++) { yield return null; }
+        int dias = DateTime.DaysInMonth(mes.Year, mes.Month);
+        for (var day = 1; day <= dias; day++) { yield return new DateOnly(mes.Year, mes.Month, day); }
+    }
+
+    private async Task<Guid> Actor()
+    {
+        if (AuthState is null) { return Guid.Empty; }
+        var st = await AuthState;
+        return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
+    }
+}

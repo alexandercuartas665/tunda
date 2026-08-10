@@ -112,7 +112,8 @@ public sealed class TrdAdminService : ITrdAdminService
             .OrderBy(d => d.Nivel).ThenBy(d => d.Orden)
             .Select(d => new DependenciaDto(d.Id, d.PadreId, d.Nivel, d.Orden, d.NombreCargo, d.Codigo, d.Estado,
                 _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id),
-                d.CodigoRaizDocumental, d.GerenteNombre, d.GerenteEmail, d.Observaciones))
+                d.CodigoRaizDocumental, d.GerenteNombre, d.GerenteEmail, d.Observaciones,
+                d.FechaInicioEstimada, d.FechaFinEstimada))
             .ToListAsync(ct);
 
     public async Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default)
@@ -176,10 +177,46 @@ public sealed class TrdAdminService : ITrdAdminService
         var email = Limpio(req.GerenteEmail, 200);
         if (email is not null && !email.Contains('@')) { throw new InvalidOperationException("El correo del gerente no es valido."); }
 
+        if (req.FechaInicioEstimada is DateOnly ini && req.FechaFinEstimada is DateOnly fin && fin < ini)
+        {
+            throw new InvalidOperationException("La fecha de fin no puede ser anterior a la de inicio.");
+        }
+
         dep.CodigoRaizDocumental = Limpio(req.CodigoRaizDocumental, 60);
         dep.GerenteNombre = Limpio(req.GerenteNombre, 200);
         dep.GerenteEmail = email;
         dep.Observaciones = Limpio(req.Observaciones, 2000);
+        dep.FechaInicioEstimada = req.FechaInicioEstimada;
+        dep.FechaFinEstimada = req.FechaFinEstimada;
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<AgendaDependenciaDto>> AgendaTrdAsync(Guid trdId, CancellationToken ct = default)
+    {
+        // El curso vigente sirve para marcar quien ya aprobo la capacitacion.
+        return await _db.Dependencias.AsNoTracking()
+            .Where(d => d.TrdId == trdId)
+            .OrderBy(d => d.Nivel).ThenBy(d => d.Orden)
+            .Select(d => new AgendaDependenciaDto(
+                d.Id, d.Codigo, d.NombreCargo, d.Nivel,
+                d.FechaInicioEstimada, d.FechaFinEstimada,
+                _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id),
+                _db.RespuestasTablaDocumental.Count(r => r.DependenciaId == d.Id),
+                _db.CuestionarioIntentos.Any(i => i.DependenciaId == d.Id && i.Aprobado)))
+            .ToListAsync(ct);
+    }
+
+    public async Task<bool> ActualizarFechasDependenciaAsync(Guid id, DateOnly? inicio, DateOnly? fin, Guid actor, CancellationToken ct = default)
+    {
+        var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (dep is null) { return false; }
+        if (inicio is DateOnly i && fin is DateOnly f && f < i)
+        {
+            throw new InvalidOperationException("La fecha de fin no puede ser anterior a la de inicio.");
+        }
+        dep.FechaInicioEstimada = inicio;
+        dep.FechaFinEstimada = fin;
         await _db.SaveChangesAsync(ct);
         return true;
     }

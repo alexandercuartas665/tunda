@@ -18,8 +18,14 @@ public interface ITrdAdminService
     Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> ActualizarDependenciaAsync(Guid id, string codigo, string nombreCargo, Guid actor, CancellationToken ct = default);
 
-    /// <summary>Guarda las propiedades informativas de la dependencia (codigo raiz documental, gerente, correo, observaciones).</summary>
+    /// <summary>Guarda las propiedades informativas de la dependencia (codigo raiz documental, gerente, correo, observaciones, fechas de agenda).</summary>
     Task<bool> GuardarPropiedadesDependenciaAsync(GuardarPropiedadesDependenciaRequest req, Guid actor, CancellationToken ct = default);
+
+    /// <summary>Agenda de trabajo de una TRD: dependencias con su ventana estimada, para las vistas calendario/Gantt.</summary>
+    Task<IReadOnlyList<AgendaDependenciaDto>> AgendaTrdAsync(Guid trdId, CancellationToken ct = default);
+
+    /// <summary>Actualiza solo las fechas de agenda (inicio/fin) de una dependencia. Usado por el modulo Agenda.</summary>
+    Task<bool> ActualizarFechasDependenciaAsync(Guid id, DateOnly? inicio, DateOnly? fin, Guid actor, CancellationToken ct = default);
 
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);

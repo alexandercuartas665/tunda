@@ -5,6 +5,7 @@
 @using System.Security.Claims
 @using DokTrino.Application.Tenancy
 @inject ITrdAdminService Trd
+@inject ICursoService Cursos
 @inject NavigationManager Nav
 
 <PageTitle>Transacciones documentales - Archimente</PageTitle>
@@ -32,6 +33,45 @@
 
     @if (_error is not null) { <div class="ase-alert">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
+
+    @* --- Capacitacion obligatoria del Cliente Encuesta (se configura aqui y en Config. Documental) --- *@
+    <div class="cap-box">
+        <div class="cap-box-h" @onclick="() => _capOpen = !_capOpen">
+            <span class="cap-box-caret">@((MarkupString)(_capOpen ? "&#9662;" : "&#9656;"))</span>
+            <span class="cap-box-t">Capacitacion obligatoria</span>
+            <span class="cap-box-sub">
+                @(_capCursoSel == "" ? "Sin curso: el colaborador diligencia sin restriccion"
+                                     : $"{NombreCurso(_capCursoSel)} - {_capIntentos} intento(s)" + (_capObligatorio ? " - obligatorio" : ""))
+            </span>
+        </div>
+        @if (_capOpen)
+        {
+            <div class="cap-box-b">
+                <div class="cap-box-nota">
+                    El colaborador debe aprobar este curso antes de diligenciar la TRD de su dependencia.
+                    Al agotar los intentos queda bloqueado; lo desbloqueas en Configuracion Documental &rarr; Formacion.
+                </div>
+                <div class="cap-box-fila">
+                    <div style="flex:1; min-width:220px;">
+                        <label class="trx-lbl">Curso</label>
+                        <select class="dep-in" @bind="_capCursoSel">
+                            <option value="">Ninguno (sin curso obligatorio)</option>
+                            @foreach (var c in _capCursos) { <option value="@c.Id">@c.Titulo</option> }
+                        </select>
+                    </div>
+                    <div style="width:120px; flex-shrink:0;">
+                        <label class="trx-lbl">Intentos</label>
+                        <input class="dep-in" type="number" min="1" @bind="_capIntentos" />
+                    </div>
+                    <label class="doc-chk" style="align-self:flex-end; padding-bottom:9px;">
+                        <input type="checkbox" @bind="_capObligatorio" /> Obligatorio
+                    </label>
+                    <button class="trx-btn" style="align-self:flex-end;" @onclick="GuardarCapacitacion">Guardar</button>
+                </div>
+                @if (_capOk is not null) { <div class="dep-ok" style="margin-top:8px;">@_capOk</div> }
+            </div>
+        }
+    </div>
 
     @* --- Alta de transaccion --- *@
     @if (_nuevaOpen)
@@ -596,7 +636,7 @@
                             {
                                 <div class="tcl-sub">
                                     <div class="tcl-sub-h" @onclick="() => PkAlternarSubserie(sub)">
-                                        <span class="caret">@(_pkSubAbierta == sub.Id ? "▾" : "▸")</span>
+                                        <span class="caret">@(_pkSubAbierta == sub.Id ? "&#9662;" : "&#9656;")</span>
                                         <span>&#128194; @sub.Nombre</span>
                                         <span class="code">@sub.Codigo</span>
                                     </div>
@@ -751,6 +791,20 @@
                         <span>Observaciones</span>
                         <textarea class="dep-in" rows="2" @bind="_prop.Observaciones" placeholder="Notas sobre la dependencia..."></textarea>
                     </label>
+                    <div class="dep-prop-grid" style="margin-top:10px;">
+                        <label class="dep-f">
+                            <span>Fecha estimada de inicio</span>
+                            <input class="dep-in" type="date" @bind="_prop.FechaInicio" />
+                        </label>
+                        <label class="dep-f">
+                            <span>Fecha estimada de fin</span>
+                            <input class="dep-in" type="date" @bind="_prop.FechaFin" />
+                        </label>
+                        <div class="dep-f">
+                            <span>&nbsp;</span>
+                            <div class="dep-fecha-hint">Estas fechas alimentan la <b>Agenda de trabajo TRD</b>.</div>
+                        </div>
+                    </div>
                     <div class="dep-prop-acc">
                         <button class="trx-btn" @onclick="GuardarPropiedades">Guardar propiedades</button>
                         @if (_propOk is not null) { <span class="dep-ok">@_propOk</span> }
@@ -1016,6 +1070,18 @@
     .dep-prop-acc { display:flex; align-items:center; gap:10px; margin-top:12px; }
     .dep-ok { font-size:12px; font-weight:700; color:#1d6b3a; }
     .dep-err { font-size:12px; font-weight:700; color:#c0392b; }
+    .dep-fecha-hint { font-size:11px; color:#8a93ad; line-height:1.5; padding-top:8px; }
+
+    /* Capacitacion obligatoria (tarjeta plegable en Encuesta Documental) */
+    .cap-box { border:1px solid #e6e9f2; border-radius:12px; background:#fff; margin-bottom:14px; overflow:hidden; }
+    .cap-box-h { display:flex; align-items:center; gap:9px; padding:12px 15px; cursor:pointer; user-select:none; }
+    .cap-box-caret { color:var(--primary); font-size:11px; }
+    .cap-box-t { font-size:12.5px; font-weight:800; color:#1f2433; }
+    .cap-box-sub { font-size:11.5px; color:#8a93ad; margin-left:auto; text-align:right; }
+    .cap-box-b { padding:0 15px 15px; }
+    .cap-box-nota { font-size:11.5px; color:#8a93ad; line-height:1.5; margin-bottom:12px; }
+    .cap-box-fila { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+    .trx-lbl { display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#8a93ad; margin-bottom:4px; }
 
     .dep-ind { border:1px solid #e6e9f2; border-radius:12px; padding:13px 15px; background:#fbfcff; margin-bottom:14px; }
     .dep-ind-load { font-size:12px; color:#8a93ad; margin-bottom:14px; }
@@ -1122,6 +1188,8 @@
         public string? GerenteNombre { get; set; }
         public string? GerenteEmail { get; set; }
         public string? Observaciones { get; set; }
+        public DateOnly? FechaInicio { get; set; }
+        public DateOnly? FechaFin { get; set; }
     }
     private PropForm _prop = new();
     private string? _propOk, _propError;
@@ -1138,7 +1206,44 @@
                     || (t.FechaInicio is DateOnly fi && fi >= DateOnly.FromDateTime(_fltFecha.Value)))
         .ToList();
 
-    protected override async Task OnInitializedAsync() => await LoadAll();
+    // --- Capacitacion obligatoria (misma config que Configuracion Documental -> Formacion) ---
+    private bool _capOpen;
+    private List<CursoDto> _capCursos = new();
+    private string _capCursoSel = "";
+    private int _capIntentos = 1;
+    private bool _capObligatorio;
+    private string? _capOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAll();
+        await CargarCapacitacion();
+    }
+
+    private async Task CargarCapacitacion()
+    {
+        _capCursos = (await Cursos.ListarCursosAsync()).ToList();
+        var cfg = await Cursos.ConfigClienteAsync();
+        _capCursoSel = cfg.CursoId?.ToString() ?? "";
+        _capIntentos = cfg.IntentosMax < 1 ? 1 : cfg.IntentosMax;
+        _capObligatorio = cfg.Obligatorio;
+    }
+
+    private string NombreCurso(string id) =>
+        _capCursos.FirstOrDefault(c => c.Id.ToString() == id)?.Titulo ?? "Curso";
+
+    private async Task GuardarCapacitacion()
+    {
+        _capOk = _error = null;
+        try
+        {
+            Guid? cursoId = Guid.TryParse(_capCursoSel, out var id) ? id : null;
+            await Cursos.GuardarConfigClienteAsync(cursoId, _capObligatorio, _capIntentos < 1 ? 1 : _capIntentos, await Actor());
+            _capOk = cursoId is null ? "Se quito el curso obligatorio." : "Capacitacion guardada.";
+            await CargarCapacitacion();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
 
     private async Task LoadAll()
     {
@@ -1546,7 +1651,8 @@
         _personasDe = d;
         _perError = _propOk = _propError = null;
         _np = new CrearColaboradorRequest();
-        _prop = new PropForm { CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones };
+        _prop = new PropForm { CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones,
+                               FechaInicio = d.FechaInicioEstimada, FechaFin = d.FechaFinEstimada };
         _ind = null;
         _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
         _ind = await Trd.IndicadoresDependenciaAsync(d.Id);
@@ -1560,7 +1666,8 @@
         try
         {
             await Trd.GuardarPropiedadesDependenciaAsync(
-                new GuardarPropiedadesDependenciaRequest(depId, _prop.CodigoRaizDocumental, _prop.GerenteNombre, _prop.GerenteEmail, _prop.Observaciones),
+                new GuardarPropiedadesDependenciaRequest(depId, _prop.CodigoRaizDocumental, _prop.GerenteNombre, _prop.GerenteEmail, _prop.Observaciones,
+                    _prop.FechaInicio, _prop.FechaFin),
                 await Actor());
             _propOk = "Propiedades guardadas.";
             await LoadAll();

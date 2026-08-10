@@ -34,5 +34,11 @@ public class Dependencia : TenantEntity
     /// <summary>Observaciones libres sobre la dependencia.</summary>
     public string? Observaciones { get; set; }
 
+    /// <summary>Fecha estimada en que la dependencia debe empezar a diligenciar su TRD (agenda de trabajo).</summary>
+    public DateOnly? FechaInicioEstimada { get; set; }
+
+    /// <summary>Fecha estimada en que la dependencia debe terminar su TRD (agenda de trabajo).</summary>
+    public DateOnly? FechaFinEstimada { get; set; }
+
     public ICollection<Dependencia> Hijos { get; set; } = new List<Dependencia>();
 }
