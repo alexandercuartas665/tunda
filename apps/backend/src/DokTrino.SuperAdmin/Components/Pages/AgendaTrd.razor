@@ -16,17 +16,19 @@
             <div class="trx-sub">Cuando cada dependencia debe diligenciar su Tabla de Retencion</div>
         </div>
         <div class="trx-head-actions">
-            <select class="dep-in" style="max-width:260px;" @bind="_trdSelId">
-                @foreach (var t in _trds) { <option value="@t.Id">@t.Consecutivo &middot; @t.Titulo</option> }
+            <select class="dep-in" style="max-width:280px;" @bind="_trdSelId" @bind:after="CargarAgenda">
+                @foreach (var t in _trds) { <option value="@t.Id">@t.Consecutivo &middot; @t.Titulo@(t.Estado == "ACTIVO" ? " (activa)" : "")</option> }
             </select>
             <div class="trx-toggle">
                 <a class="@(_vista == "gantt" ? "on" : "")" @onclick='() => _vista = "gantt"'>&#9636; Gantt</a>
                 <a class="@(_vista == "cal" ? "on" : "")" @onclick='() => _vista = "cal"'>&#128197; Calendario</a>
             </div>
+            <button class="trx-btn" @onclick="() => _editOpen = true" disabled="@(_agenda.Count == 0)">&#9998; Editar fechas</button>
         </div>
     </div>
 
     @if (_error is not null) { <div class="ase-alert">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
     @if (_agenda.Count == 0)
     {
@@ -34,41 +36,6 @@
     }
     else
     {
-        @* ---------- Tabla editable de fechas ---------- *@
-        <div class="ase-card">
-            <div class="ase-card-h">Fechas por dependencia</div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle ag-tabla">
-                    <thead>
-                        <tr>
-                            <th>Codigo</th><th>Dependencia</th>
-                            <th style="width:160px;">Inicio estimado</th>
-                            <th style="width:160px;">Fin estimado</th>
-                            <th class="text-center">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var d in _agenda)
-                        {
-                            <tr>
-                                <td><span class="mono">@d.Codigo</span></td>
-                                <td>@d.NombreCargo</td>
-                                <td>
-                                    <input class="dep-in" type="date" value="@Fmt(d.FechaInicioEstimada)"
-                                           @onchange="e => SetFecha(d, true, e.Value?.ToString())" />
-                                </td>
-                                <td>
-                                    <input class="dep-in" type="date" value="@Fmt(d.FechaFinEstimada)"
-                                           @onchange="e => SetFecha(d, false, e.Value?.ToString())" />
-                                </td>
-                                <td class="text-center"><span class="ag-estado @EstadoClase(d)">@EstadoTexto(d)</span></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         @if (_vista == "gantt")
         {
             @* ---------- Gantt ---------- *@
@@ -152,6 +119,70 @@
             </div>
         }
     }
+
+    @* ---------- Modal: edicion de fechas del cronograma ---------- *@
+    @if (_editOpen)
+    {
+        <div class="ag-modal-scrim" @onclick="() => _editOpen = false"></div>
+        <div class="ag-modal-wrap">
+        <div class="ag-modal" @onclick:stopPropagation="true">
+            <div class="ag-modal-h">
+                <div class="ag-modal-t">Editar fechas del cronograma</div>
+                <span class="ag-modal-x" @onclick="() => _editOpen = false">&#10005;</span>
+            </div>
+
+            @if (_copiaOk is not null) { <div class="ase-ok" style="margin-bottom:10px;">@_copiaOk</div> }
+
+            @* Copiar la agenda de otra encuesta a esta *@
+            <div class="ag-copia">
+                <span class="ag-copia-lbl">Copiar fechas desde otra encuesta:</span>
+                <select class="dep-in" style="max-width:230px;" @bind="_copiaOrigen">
+                    <option value="">(elige encuesta origen)</option>
+                    @foreach (var t in _trds.Where(t => t.Id != _trdSelId))
+                    {
+                        <option value="@t.Id">@t.Consecutivo &middot; @t.Titulo</option>
+                    }
+                </select>
+                <button class="trx-btn ghost mini" @onclick="CopiarDesde" disabled="@(_copiaOrigen == "")">Copiar aqui</button>
+            </div>
+
+            <div class="table-responsive" style="max-height:56vh; overflow-y:auto;">
+                <table class="table table-sm align-middle ag-tabla">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th><th>Dependencia</th>
+                            <th style="width:160px;">Inicio estimado</th>
+                            <th style="width:160px;">Fin estimado</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _agenda)
+                        {
+                            <tr>
+                                <td><span class="mono">@d.Codigo</span></td>
+                                <td>@d.NombreCargo</td>
+                                <td>
+                                    <input class="dep-in" type="date" value="@Fmt(d.FechaInicioEstimada)"
+                                           @onchange="e => SetFecha(d, true, e.Value?.ToString())" />
+                                </td>
+                                <td>
+                                    <input class="dep-in" type="date" value="@Fmt(d.FechaFinEstimada)"
+                                           @onchange="e => SetFecha(d, false, e.Value?.ToString())" />
+                                </td>
+                                <td class="text-center"><span class="ag-estado @EstadoClase(d)">@EstadoTexto(d)</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ag-modal-foot">
+                <button class="trx-btn" @onclick="() => _editOpen = false">Listo</button>
+            </div>
+        </div>
+        </div>
+    }
 </div>
 
 <style>
@@ -199,6 +230,21 @@
     .ag-dot.pend { background:#e0902f; } .ag-dot.prog { background:#2f6fc0; }
     .ag-dot.ok { background:#2f8a4c; } .ag-dot.late { background:#c0392b; }
     .trx-btn.mini { padding:5px 10px; font-size:12px; }
+
+    /* Modal de edicion de fechas */
+    .ag-modal-scrim { position:fixed; inset:0; background:rgba(20,26,45,.45); z-index:1990; }
+    .ag-modal-wrap { position:fixed; inset:0; z-index:1995; display:flex; align-items:flex-start; justify-content:center;
+                     padding:26px 18px; pointer-events:none; overflow-y:auto; }
+    .ag-modal { pointer-events:auto; width:100%; max-width:820px; background:#fff; border-radius:16px;
+                box-shadow:0 24px 70px rgba(0,0,0,.3); padding:18px 20px 20px; }
+    .ag-modal-h { display:flex; align-items:center; margin-bottom:14px; }
+    .ag-modal-t { font-size:15px; font-weight:800; color:#1f2433; flex:1; }
+    .ag-modal-x { cursor:pointer; font-size:18px; color:#8a93a8; line-height:1; padding:2px 6px; }
+    .ag-modal-x:hover { color:#e5484d; }
+    .ag-copia { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#f7f8fb; border:1px solid #eef1f7;
+                border-radius:10px; padding:10px 13px; margin-bottom:12px; }
+    .ag-copia-lbl { font-size:12px; font-weight:700; color:#59617a; }
+    .ag-modal-foot { display:flex; justify-content:flex-end; margin-top:14px; }
 </style>
 
 @code {
@@ -208,7 +254,10 @@
     private Guid _trdSelId;
     private List<AgendaDependenciaDto> _agenda = new();
     private string _vista = "gantt";
-    private string? _error;
+    private string? _error, _ok;
+    private bool _editOpen;
+    private string _copiaOrigen = "";
+    private string? _copiaOk;
     private DateOnly _mes;
     private readonly DateOnly _hoy = DateOnly.FromDateTime(DateTime.Today);
 
@@ -259,6 +308,20 @@
         try
         {
             await Trd.ActualizarFechasDependenciaAsync(d.Id, ini, fin, await Actor());
+            await CargarAgenda();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task CopiarDesde()
+    {
+        _copiaOk = _error = null;
+        if (!Guid.TryParse(_copiaOrigen, out var origen) || _trdSelId == Guid.Empty) { return; }
+        try
+        {
+            var n = await Trd.CopiarAgendaAsync(origen, _trdSelId, await Actor());
+            _copiaOk = n > 0 ? $"Se copiaron las fechas de {n} dependencia(s) que coinciden por codigo." : "Ninguna dependencia coincidio por codigo.";
+            _copiaOrigen = "";
             await CargarAgenda();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }

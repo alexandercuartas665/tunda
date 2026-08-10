@@ -221,6 +221,31 @@ public sealed class TrdAdminService : ITrdAdminService
         return true;
     }
 
+    public async Task<int> CopiarAgendaAsync(Guid origenTrdId, Guid destinoTrdId, Guid actor, CancellationToken ct = default)
+    {
+        if (origenTrdId == destinoTrdId) { return 0; }
+        var origen = await _db.Dependencias.AsNoTracking()
+            .Where(d => d.TrdId == origenTrdId && d.FechaInicioEstimada != null)
+            .Select(d => new { d.Codigo, d.FechaInicioEstimada, d.FechaFinEstimada })
+            .ToListAsync(ct);
+        if (origen.Count == 0) { return 0; }
+        var porCodigo = origen.GroupBy(o => o.Codigo).ToDictionary(g => g.Key, g => g.First());
+
+        var destino = await _db.Dependencias.Where(d => d.TrdId == destinoTrdId).ToListAsync(ct);
+        var copiadas = 0;
+        foreach (var d in destino)
+        {
+            if (porCodigo.TryGetValue(d.Codigo, out var src))
+            {
+                d.FechaInicioEstimada = src.FechaInicioEstimada;
+                d.FechaFinEstimada = src.FechaFinEstimada;
+                copiadas++;
+            }
+        }
+        if (copiadas > 0) { await _db.SaveChangesAsync(ct); }
+        return copiadas;
+    }
+
     public async Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid depId, CancellationToken ct = default)
     {
         // Documentos que esta dependencia declaro en la TRD (matriz).

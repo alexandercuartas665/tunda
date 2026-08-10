@@ -27,6 +27,9 @@ public interface ITrdAdminService
     /// <summary>Actualiza solo las fechas de agenda (inicio/fin) de una dependencia. Usado por el modulo Agenda.</summary>
     Task<bool> ActualizarFechasDependenciaAsync(Guid id, DateOnly? inicio, DateOnly? fin, Guid actor, CancellationToken ct = default);
 
+    /// <summary>Copia las fechas de agenda de una TRD a otra, emparejando dependencias por su codigo. Devuelve cuantas copio.</summary>
+    Task<int> CopiarAgendaAsync(Guid origenTrdId, Guid destinoTrdId, Guid actor, CancellationToken ct = default);
+
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
 
