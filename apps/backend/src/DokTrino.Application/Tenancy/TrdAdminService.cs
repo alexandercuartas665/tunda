@@ -597,7 +597,9 @@ public sealed class TrdAdminService : ITrdAdminService
             !string.IsNullOrWhiteSpace(r.Representativo), r.SerieDdhh, !string.IsNullOrWhiteSpace(r.RelacionSig),
             r.Procedimiento,
             r.ProcQueEs, r.ProcElimina, r.ProcConserva,
-            string.Join(", ", r.Formatos), r.FechaReg));
+            string.Join(", ", r.Formatos), r.FechaReg,
+            r.Formatos.Any(f => f.Equals("Papel", StringComparison.OrdinalIgnoreCase)),
+            string.Join(", ", r.Formatos.Where(f => !f.Equals("Papel", StringComparison.OrdinalIgnoreCase)))));
 
         if (busca.Length > 0)
         {

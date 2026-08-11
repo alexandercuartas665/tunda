@@ -70,7 +70,11 @@ public sealed record DocumentoTrdDto(
     string? Procedimiento,
     string? ProcQueEs, string? ProcElimina, string? ProcConserva,
     string Formatos,
-    DateTimeOffset FechaReg);
+    DateTimeOffset FechaReg,
+    // Soporte desglosado (como el formato oficial 0-FR-28-001): si maneja papel y
+    // que extension(es) electronica(s) declaro la dependencia para esta tipologia.
+    bool FormatoPapel = false,
+    string FormatoElectronico = "");
 
 /// <summary>Alta o edicion de una fila de la TRD desde el lado administrador.</summary>
 public sealed class GuardarDocumentoTrdRequest

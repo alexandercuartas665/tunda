@@ -181,21 +181,25 @@ public sealed class AiInferenceService : IAiInferenceService
 
         var textos = new List<string> { quees.Texto };
         string? elimina = null, conserva = null;
+        var faltaron = new List<string>();
 
-        // 2) POR QUE ELIMINA (solo si la disposicion es Eliminacion)
+        // 2) POR QUE ELIMINA (solo si la disposicion es Eliminacion). Obligatorio si DispE:
+        // se reintenta y, si aun asi no sale, se avisa; nunca se traga en silencio.
         if (r.DispE)
         {
-            var e = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            var e = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
                 prompts[ProcedimientoPrompts.NElimina].Replace("@@PLANTILLA@@", plantilla), ct);
             if (e.Ok) { elimina = e.Texto; textos.Add(e.Texto); }
+            else { faltaron.Add("Por que se elimina"); }
         }
 
-        // 3) POR QUE CONSERVA (solo si es Conservacion Total)
+        // 3) POR QUE CONSERVA (solo si es Conservacion Total). Mismo trato que Eliminacion.
         if (r.DispCt)
         {
-            var c = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            var c = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
                 prompts[ProcedimientoPrompts.NConserva].Replace("@@PLANTILLA@@", plantilla), ct);
             if (c.Ok) { conserva = c.Texto; textos.Add(c.Texto); }
+            else { faltaron.Add("Por que se conserva"); }
         }
 
         // 4) UNIFICADOR
@@ -211,7 +215,12 @@ public sealed class AiInferenceService : IAiInferenceService
         r.ProcConserva = conserva;
         await _db.SaveChangesAsync(ct);
 
-        return new ProcedimientoGeneradoDto(true, null, quees.Texto, elimina, conserva, unificado);
+        // Se guarda lo que si salio, pero si un segmento obligatorio no se genero se
+        // reporta como fallo para que el usuario reintente (no un "generado" enganoso).
+        var error = faltaron.Count > 0
+            ? $"No se pudo generar el segmento: {string.Join(" y ", faltaron)}. Se guardo el resto; reintenta para completarlo."
+            : null;
+        return new ProcedimientoGeneradoDto(faltaron.Count == 0, error, quees.Texto, elimina, conserva, unificado);
     }
 
     // Siembra (una vez por tenant) el agente "Procedimientos TRD" con sus 5 prompts y los devuelve por nombre.
@@ -282,7 +291,18 @@ public sealed class AiInferenceService : IAiInferenceService
             new[] { new AiChatTurn("user", "Genera unicamente el XML solicitado.") }, ct);
         if (!res.Ok) { return (false, "", res.Error ?? "Fallo la generacion con el modelo."); }
         await _usage.RecordAsync(null, provider, model, res.InputTokens, res.OutputTokens, "procedimiento", true, ct);
-        return (true, ExtraerProcedimiento(res.Text ?? ""), "");
+        var texto = ExtraerProcedimiento(res.Text ?? "");
+        // Un XML vacio (el modelo respondio pero sin contenido util) cuenta como fallo del paso.
+        if (string.IsNullOrWhiteSpace(texto)) { return (false, "", "El modelo no devolvio contenido para este segmento."); }
+        return (true, texto, "");
+    }
+
+    // Igual que PasoAsync pero reintenta una vez ante un fallo transitorio (rate limit / XML vacio).
+    private async Task<(bool Ok, string Texto, string Error)> PasoConReintentoAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
+    {
+        var primero = await PasoAsync(provider, apiKey, baseUrl, model, systemPrompt, ct);
+        if (primero.Ok) { return primero; }
+        return await PasoAsync(provider, apiKey, baseUrl, model, systemPrompt, ct);
     }
 
     // Saca el contenido de <PROCEDIMIENTO>...</PROCEDIMIENTO> (tolera espacios en el cierre); si no hay XML, usa el texto tal cual.

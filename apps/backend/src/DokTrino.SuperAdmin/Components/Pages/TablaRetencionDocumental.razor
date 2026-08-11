@@ -405,7 +405,7 @@
                                     <col style="width:120px" />
                                     <col style="width:140px" /><col style="width:210px" /><col style="width:150px" />
                                     <col style="width:60px" /><col style="width:60px" /><col style="width:200px" />
-                                    <col style="width:44px" />
+                                    <col style="width:88px" />
                                     <col style="width:34px" /><col style="width:30px" /><col style="width:30px" /><col style="width:30px" /><col style="width:220px" />
                                     <col style="width:40px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
                                     <col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
@@ -419,7 +419,7 @@
                                         <th rowspan="2" class="fix fx2" style="width: 210px;">Serie / Subserie</th>
                                         <th rowspan="2" class="fix fx3" style="width: 150px;">Tipologia</th>
                                         <th colspan="3" class="grp g-tiempo">Tiempo</th>
-                                        <th rowspan="2" class="c" style="width: 44px;">No Sub</th>
+                                        <th rowspan="2" class="c" style="width: 88px;">No Sub</th>
                                         <th colspan="5" class="grp g-disp">Disposicion</th>
                                         <th colspan="5" class="grp g-val1">Valoracion primaria</th>
                                         <th colspan="3" class="grp g-val2">Val. secundaria</th>
@@ -469,9 +469,24 @@
                                                     <div class="doc-sub">@d.SubserieNombre</div>
                                                 }
                                             </td>
-                                            <td class="fix fx3" @onclick="() => AbrirDoc(d)">@(d.TipologiaNombre ?? "-")</td>
-                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAg" @onchange="e => GuardarNum(d, nameof(d.TiempoAg), e.Value)" /></td>
-                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAc" @onchange="e => GuardarNum(d, nameof(d.TiempoAc), e.Value)" /></td>
+                                            <td class="fix fx3" @onclick="() => AbrirDoc(d)">
+                                                <div class="tip-nom">@(d.TipologiaNombre ?? "-")</div>
+                                                @if (d.FormatoPapel || !string.IsNullOrWhiteSpace(d.FormatoElectronico))
+                                                {
+                                                    <div class="tip-sop">
+                                                        @if (d.FormatoPapel)
+                                                        {
+                                                            <span class="sop-chip papel" title="Soporte fisico">Papel</span>
+                                                        }
+                                                        @if (!string.IsNullOrWhiteSpace(d.FormatoElectronico))
+                                                        {
+                                                            <span class="sop-chip elec" title="Extension electronica capturada por la dependencia">@d.FormatoElectronico</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="1" value="@(d.TiempoAg?.ToString("0"))" @onchange="e => GuardarNum(d, nameof(d.TiempoAg), e.Value)" /></td>
+                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="1" value="@(d.TiempoAc?.ToString("0"))" @onchange="e => GuardarNum(d, nameof(d.TiempoAc), e.Value)" /></td>
                                             <td class="c-tiempo desc"><textarea class="cell-ta" placeholder="Observacion del tiempo..." @onchange="e => GuardarTexto(d, nameof(d.TiempoObserv), e.Value)">@d.TiempoObserv</textarea></td>
                                             <td class="mk" title="Sin subserie" @onclick="() => AlternarFlag(d, nameof(d.SinSubserie))">@(d.SinSubserie ? "X" : "")</td>
                                             <td class="mk c-disp" title="Conservacion total" @onclick="() => AlternarFlag(d, nameof(d.DispCt))">@(d.DispCt ? "X" : "")</td>
@@ -658,11 +673,11 @@
                 <div class="proc-tabs">
                     <button class="proc-tab @(_procTab == "uni" ? "on" : "")" @onclick='() => _procTab = "uni"'>Procedimiento</button>
                     <button class="proc-tab @(_procTab == "quees" ? "on" : "")" @onclick='() => _procTab = "quees"'>Que es</button>
-                    @if (!string.IsNullOrWhiteSpace(_procDoc.ProcElimina))
+                    @if (_procDoc.DispE || !string.IsNullOrWhiteSpace(_procDoc.ProcElimina))
                     {
                         <button class="proc-tab @(_procTab == "elimina" ? "on" : "")" @onclick='() => _procTab = "elimina"'>Por que se elimina</button>
                     }
-                    @if (!string.IsNullOrWhiteSpace(_procDoc.ProcConserva))
+                    @if (_procDoc.DispCt || !string.IsNullOrWhiteSpace(_procDoc.ProcConserva))
                     {
                         <button class="proc-tab @(_procTab == "conserva" ? "on" : "")" @onclick='() => _procTab = "conserva"'>Por que se conserva</button>
                     }
@@ -1121,7 +1136,12 @@
     .dep-tb tbody tr:hover { background:#f6f8fc; }
     .dep-tb tbody tr.on { background:var(--primary-soft); }
     .dep-tb tr.tok td { font-size:11px; color:#8a93ad; background:#fbfcfe; cursor:default; }
-    .dep-tb td.acc { display:flex; gap:5px; justify-content:flex-end; }
+    .dep-tb td.acc { text-align:center; vertical-align:middle; white-space:nowrap; }
+    .tip-nom { font-weight:600; }
+    .tip-sop { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+    .sop-chip { font-size:10px; font-weight:700; line-height:1.4; padding:1px 7px; border-radius:20px; white-space:normal; }
+    .sop-chip.papel { background:#fdeede; color:#a8620f; }
+    .sop-chip.elec { background:#e7f0ff; color:#1f5bb5; }
     .dep-tb td.vacio { text-align:center; color:#a8b0c4; padding:22px; }
     .dep-badge { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 7px;
                  border-radius:20px; background:#e8f5ee; color:#2f7d54; }
