@@ -223,6 +223,69 @@ public sealed class AiInferenceService : IAiInferenceService
         return new ProcedimientoGeneradoDto(faltaron.Count == 0, error, quees.Texto, elimina, conserva, unificado);
     }
 
+    public async Task<ProcedimientoGeneradoDto> GenerarSegmentoAsync(Guid respuestaId, string paso, CancellationToken ct = default)
+    {
+        paso = (paso ?? "").Trim().ToLowerInvariant();
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { return ProcedimientoGeneradoDto.Fail("El documento ya no existe; recarga la tabla."); }
+
+        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        if (providerCfg is null) { return ProcedimientoGeneradoDto.Fail("No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
+
+        string apiKey;
+        try { apiKey = _secretProtector.Unprotect(providerCfg.ApiKeyEncrypted!); }
+        catch { return ProcedimientoGeneradoDto.Fail("La API key esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
+
+        var meta = AiProviderCatalog.For(providerCfg.Provider);
+        var model = !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model! : meta.DefaultModel;
+
+        var quota = await _usage.GetQuotaAsync(ct);
+        if (quota.Exceeded && quota.Hard)
+        { return ProcedimientoGeneradoDto.Fail($"Alcanzaste el limite de tokens de IA de tu plan este mes ({quota.MonthlyLimitTokens:N0})."); }
+
+        var prompts = await AsegurarPromptsProcedimientoAsync(r.TenantId, providerCfg.Provider, ct);
+        var plantilla = await LlenarPlantillaAsync(prompts[ProcedimientoPrompts.NPlantilla], r, ct);
+
+        if (paso == "unificar")
+        {
+            // Recompone el texto final a partir de los segmentos ya guardados.
+            var textos = new[] { r.ProcQueEs, r.ProcElimina, r.ProcConserva }
+                .Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t!).ToList();
+            if (textos.Count == 0) { return ProcedimientoGeneradoDto.Fail("Aun no hay segmentos que unificar; genera primero 'Que es'."); }
+            var uniPrompt = prompts[ProcedimientoPrompts.NUnificador]
+                .Replace("@@PLANTILLA@@", plantilla)
+                .Replace("@@TEXTOS@@", string.Join("\n\n", textos));
+            var uni = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
+            if (!uni.Ok) { return ProcedimientoGeneradoDto.Fail("No se pudo unificar; reintenta."); }
+            r.Procedimiento = uni.Texto;
+            await _db.SaveChangesAsync(ct);
+            return new ProcedimientoGeneradoDto(true, null, r.ProcQueEs, r.ProcElimina, r.ProcConserva, r.Procedimiento);
+        }
+
+        var nombrePrompt = paso switch
+        {
+            "quees" => ProcedimientoPrompts.NQueEs,
+            "elimina" => ProcedimientoPrompts.NElimina,
+            "conserva" => ProcedimientoPrompts.NConserva,
+            _ => null
+        };
+        if (nombrePrompt is null) { return ProcedimientoGeneradoDto.Fail("Paso desconocido."); }
+
+        var res = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            prompts[nombrePrompt].Replace("@@PLANTILLA@@", plantilla), ct);
+        if (!res.Ok) { return ProcedimientoGeneradoDto.Fail($"No se pudo generar el segmento; {res.Error}"); }
+
+        switch (paso)
+        {
+            case "quees": r.ProcQueEs = res.Texto; break;
+            case "elimina": r.ProcElimina = res.Texto; break;
+            case "conserva": r.ProcConserva = res.Texto; break;
+        }
+        await _db.SaveChangesAsync(ct);
+        return new ProcedimientoGeneradoDto(true, null, r.ProcQueEs, r.ProcElimina, r.ProcConserva, r.Procedimiento);
+    }
+
     // Siembra (una vez por tenant) el agente "Procedimientos TRD" con sus 5 prompts y los devuelve por nombre.
     private async Task<IReadOnlyDictionary<string, string>> AsegurarPromptsProcedimientoAsync(Guid tenantId, AiProvider provider, CancellationToken ct)
     {

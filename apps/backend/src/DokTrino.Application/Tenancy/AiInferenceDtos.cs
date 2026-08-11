@@ -107,4 +107,11 @@ public interface IAiInferenceService
     /// Procedimiento y devuelve cada segmento por separado. Siembra el agente si no existe.
     /// </summary>
     Task<ProcedimientoGeneradoDto> GenerarProcedimientoAsync(Guid respuestaId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ejecuta UN solo paso de la cadena del procedimiento (para dividir el proceso desde la UI):
+    /// paso = "quees" | "elimina" | "conserva" | "unificar". Guarda ese segmento (y para "unificar"
+    /// recompone el texto final a partir de los segmentos ya guardados). Devuelve el estado actual.
+    /// </summary>
+    Task<ProcedimientoGeneradoDto> GenerarSegmentoAsync(Guid respuestaId, string paso, CancellationToken cancellationToken = default);
 }

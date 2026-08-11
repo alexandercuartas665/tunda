@@ -3,28 +3,26 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using DokTrino.Application.Tenancy
 @using System.Security.Claims
-@inject IClasificadorTrdService Clasificador
 @inject IAiUsageService Consumo
-@inject IAiInferenceService Agente
 @inject IAiAgentService Agentes
 
-<PageTitle>Clasificador TRD - Archimente</PageTitle>
+<PageTitle>Agentes TRD - Archimente</PageTitle>
 
-@* --- Hero con la mascota: le da cara al agente de IA del modulo --- *@
+@* --- Hero con la mascota: le da cara a los agentes de IA del modulo --- *@
 <div class="clia-hero">
     <img class="clia-mascota" src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" />
     <div class="clia-hero-txt">
         <div class="clia-eyebrow">IA Documental &middot; Archimente</div>
-        <h1 class="clia-title">Clasificador TRD asistido</h1>
+        <h1 class="clia-title">Agentes de la TRD</h1>
         <p class="clia-sub">
-            El agente lee tu Tabla de Retencion en <b>solo lectura</b> para sugerir la serie, proponer
-            tiempos de retencion (AG/AC) y redactar el procedimiento. Sin proveedor de IA, sigue la
-            clasificacion heuristica.
+            Cada agente tiene una mision y un conjunto de prompts (los pasos en que se divide su trabajo).
+            El de <b>generacion</b> arma el procedimiento por segmentos; podras ejecutar cada paso por separado
+            desde el documento en <b>Transacciones documentales</b>.
         </p>
     </div>
 </div>
 
-@* --- Consumo de IA del tenant (mismo modulo de tokens que usa toda la plataforma) --- *@
+@* --- Consumo de IA del tenant --- *@
 <div class="clia-kpis">
     <div class="clia-kpi">
         <div class="k">Tokens consumidos</div>
@@ -52,114 +50,90 @@
 </div>
 
 @if (_error is not null) { <div class="ase-alert">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-<div class="ase-card">
-    <div class="ase-card-h">Texto del documento (asunto / contenido)</div>
-    <textarea class="form-control" rows="4" @bind="_texto" placeholder="Ej: Solicitud de certificado laboral y contrato de prestacion de servicios..."></textarea>
-    <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" @onclick="Analizar" disabled="@(_busy || _busyIa)">
-            @(_busyIa ? "Consultando al agente..." : "Analizar con el agente")
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="Sugerir" disabled="@(_busy || _busyIa)">
-            @(_busy ? "Analizando..." : "Solo heuristica")
-        </button>
-    </div>
-    <small class="text-muted">El agente lee tu TRD con herramientas de solo lectura para ubicar la serie, proponer AG/AC y redactar el procedimiento. La heuristica (coincidencia de terminos) siempre queda disponible como respaldo.</small>
-</div>
-
-@* --- Configuracion del agente: aqui vive lo que antes era el modulo "Agentes IA" --- *@
-<div class="ase-card">
-    <div class="ase-card-h clia-cfg-h" @onclick="() => _cfgAbierta = !_cfgAbierta">
-        @* MarkupString: Razor escaparia la entidad y la pintaria como texto literal. *@
-        <span class="clia-caret">@((MarkupString)(_cfgAbierta ? "&#9662;" : "&#9656;"))</span>
-        Configuracion del agente
-        <small class="text-muted" style="margin-left:auto; font-weight:400;">
-            @(_promptGuardado ? "Prompt propio de la entidad" : "Usando el prompt por defecto")
-        </small>
-    </div>
-
-    @if (_cfgAbierta)
-    {
-        <div class="clia-cfg">
-            <div class="clia-tools">
-                <div class="est-block-t2">Herramientas del agente &middot; solo lectura</div>
-                <ul>
-                    <li><code>listar_series_trd</code> &mdash; recorre el catalogo de series de tu TRD</li>
-                    <li><code>detalle_serie</code> &mdash; abre una serie con sus subseries, tipologias y tiempos</li>
-                </ul>
-                <small class="text-muted">
-                    El agente consulta la TRD de tu entidad; no puede crear, modificar ni borrar nada.
-                </small>
-            </div>
-
-            <div>
-                <div class="est-block-t2">Instrucciones (prompt de sistema)</div>
-                <textarea class="form-control" rows="10" @bind="_prompt"></textarea>
-                <div class="clia-cfg-btns">
-                    <button class="btn btn-primary btn-sm" @onclick="GuardarPrompt" disabled="@_busyCfg">
-                        @(_busyCfg ? "Guardando..." : "Guardar instrucciones")
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="RestaurarPrompt" disabled="@_busyCfg">
-                        Restaurar el de por defecto
-                    </button>
-                </div>
-                @if (_cfgOk is not null) { <div class="ase-ok" style="margin-top:8px;">@_cfgOk</div> }
-                @if (_cfgError is not null) { <div class="ase-alert" style="margin-top:8px;">@_cfgError</div> }
-            </div>
-        </div>
-    }
-</div>
-
-@if (_respuesta is not null)
+@if (_cargando)
 {
-    <div class="ase-card clia-respuesta">
-        <div class="ase-card-h">
-            <img src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" class="clia-avatar" />
-            Analisis del agente
-        </div>
-        <div class="clia-texto">@Formatear(_respuesta)</div>
-        <small class="text-muted">Generado por IA sobre tu TRD. Valida los tiempos antes de aprobar la tabla.</small>
-    </div>
+    <div class="ase-card"><div class="dep-ind-load">Cargando agentes...</div></div>
 }
-
-@if (_avisoIa is not null)
-{
-    <div class="ase-card clia-aviso">
-        <b>El agente no pudo responder.</b> @_avisoIa
-        <div><small class="text-muted">Abajo quedan las coincidencias de la heuristica.</small></div>
-    </div>
-}
-
-@if (_done)
+else if (_agentes.Count == 0)
 {
     <div class="ase-card">
-        <div class="ase-card-h">Series sugeridas (@_sug.Count)</div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle">
-                <thead><tr><th class="text-center">Score</th><th>Codigo</th><th>Serie</th><th>Terminos coincidentes</th><th class="text-center">AG</th><th class="text-center">AC</th></tr></thead>
-                <tbody>
-                    @foreach (var s in _sug)
+        <div class="ase-card-h">Sin agentes todavia</div>
+        <p class="text-muted" style="margin:0;">
+            El agente de <b>generacion de procedimientos</b> se crea solo la primera vez que generas
+            un procedimiento desde una fila de la TRD (Transacciones documentales). Vuelve aqui y lo veras
+            como tarjeta con sus pasos.
+        </p>
+    </div>
+}
+else
+{
+    <div class="ag-grid">
+        @foreach (var a in _agentes)
+        {
+            <div class="ag-card @(EsGeneracion(a.Agent) ? "gen" : "")">
+                <div class="ag-card-h">
+                    <img class="ag-ic" src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" />
+                    <div class="ag-id">
+                        <div class="ag-nom">@a.Agent.Name</div>
+                        <div class="ag-rol">@RolLabel(a.Agent.Role)</div>
+                    </div>
+                    <span class="ag-estado @(a.Agent.IsActive ? "on" : "off")">@(a.Agent.IsActive ? "Activo" : "Inactivo")</span>
+                </div>
+
+                <div class="ag-sec-t">Mision</div>
+                @if (_editMisionId == a.Agent.Id)
+                {
+                    <textarea class="form-control ag-ta" rows="6" @bind="_misionTexto"></textarea>
+                    <div class="ag-btns">
+                        <button class="btn btn-primary btn-sm" @onclick="() => GuardarMision(a.Agent)" disabled="@_guardando">Guardar mision</button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _editMisionId = null" disabled="@_guardando">Cancelar</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="ag-mision">@Resumen(a.Agent.SystemPrompt)</div>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="() => EditarMision(a.Agent)">Editar mision</button>
+                }
+
+                @if (a.Prompts.Count > 0)
+                {
+                    <div class="ag-sec-t">Pasos / prompts (@a.Prompts.Count)</div>
+                    <div class="ag-pasos">
+                        @foreach (var p in a.Prompts.OrderBy(x => x.SortOrder))
+                        {
+                            <div class="ag-paso">
+                                <div class="ag-paso-h" @onclick="() => TogglePrompt(p.Id)">
+                                    <span class="ag-paso-n">@p.SortOrder</span>
+                                    <span class="ag-paso-nom">@p.Name</span>
+                                    <span class="ag-caret">@((MarkupString)(_promptAbierto == p.Id ? "&#9662;" : "&#9656;"))</span>
+                                </div>
+                                @if (_promptAbierto == p.Id)
+                                {
+                                    <textarea class="form-control ag-ta" rows="7" @bind="_promptTexto"></textarea>
+                                    <div class="ag-btns">
+                                        <button class="btn btn-primary btn-sm" @onclick="() => GuardarPrompt(a.Agent, p)" disabled="@_guardando">Guardar paso</button>
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => _promptAbierto = null" disabled="@_guardando">Cerrar</button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                    @if (EsGeneracion(a.Agent))
                     {
-                        <tr>
-                            <td class="text-center"><span class="cls-score">@s.Score</span></td>
-                            <td><span class="mono">@s.Codigo</span></td>
-                            <td>@s.Nombre</td>
-                            <td><small>@s.Coincidencias</small></td>
-                            <td class="text-center">@(s.AgAnios?.ToString() ?? "-")</td>
-                            <td class="text-center">@(s.AcAnios?.ToString() ?? "-")</td>
-                        </tr>
+                        <div class="ag-nota">
+                            Para <b>ejecutar cada paso por separado</b>, abre el procedimiento de una fila en
+                            Transacciones documentales: alli estan los botones <i>Que es &middot; Elimina &middot; Conserva &middot; Unificar</i>.
+                        </div>
                     }
-                </tbody>
-            </table>
-            @if (_sug.Count == 0) { <div class="ase-empty">Sin coincidencias con la TRD. Revisa que existan series cargadas (modulo TRD) o ajusta el texto.</div> }
-        </div>
+                }
+            </div>
+        }
     </div>
 }
 
 <style>
-    .cls-score { font-weight: 800; color: var(--primary); background: var(--primary-soft); padding: 1px 9px; border-radius: 999px; }
-    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
-
     /* Hero con mascota */
     .clia-hero { position: relative; overflow: hidden; display: flex; align-items: center; gap: 20px;
                  background: linear-gradient(135deg, var(--primary-deep), var(--primary)); color: #fff;
@@ -168,7 +142,7 @@
     @@media (max-width: 640px) { .clia-mascota { display: none; } }
     .clia-eyebrow { font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
     .clia-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin: 3px 0 6px; }
-    .clia-sub { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,.92); margin: 0; max-width: 720px; }
+    .clia-sub { font-size: 13px; line-height: 1.6; color: rgba(255,255,255,.92); margin: 0; max-width: 760px; }
 
     /* KPIs de consumo */
     .clia-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
@@ -180,139 +154,149 @@
     .clia-bar { height: 6px; border-radius: 6px; background: #eef1f7; overflow: hidden; margin: 4px 0; }
     .clia-bar span { display: block; height: 100%; background: var(--primary); }
 
-    /* Respuesta del agente */
-    .clia-respuesta .ase-card-h { display: flex; align-items: center; gap: 9px; }
-    .clia-avatar { height: 30px; width: auto; }
-    .clia-texto { line-height: 1.65; font-size: 13.5px; color: #2a2f3d; margin: 6px 0 10px; }
-    .clia-texto p { margin: 0 0 9px; }
-    .clia-texto .clia-h { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px;
-                          color: var(--primary); margin: 16px 0 7px; }
-    .clia-texto .clia-h:first-child { margin-top: 4px; }
-    .clia-texto .clia-ul { margin: 0 0 10px; padding-left: 19px; }
-    .clia-texto .clia-ul li { margin-bottom: 4px; }
-    .clia-texto .clia-li-sub { list-style: circle; color: #59617a; }
-    .clia-aviso { border-left: 3px solid #e0a800; }
-
-    /* Configuracion del agente */
-    .clia-cfg-h { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
-    .clia-caret { color: var(--primary); font-size: 11px; }
-    .clia-cfg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 18px; margin-top: 12px; }
-    @@media (max-width: 900px) { .clia-cfg { grid-template-columns: 1fr; } }
-    .est-block-t2 { font-size: 11px; font-weight: 700; color: #1f2433; text-transform: uppercase;
-                    letter-spacing: .4px; margin-bottom: 8px; }
-    .clia-tools ul { margin: 0 0 8px; padding-left: 18px; font-size: 12.5px; line-height: 1.7; color: #59617a; }
-    .clia-tools code { background: var(--primary-soft); color: var(--primary); padding: 1px 6px;
-                       border-radius: 5px; font-size: 11.5px; }
-    .clia-cfg textarea { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 12px; line-height: 1.6; }
-    .clia-cfg-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    /* Tarjetas de agentes */
+    .ag-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+    @@media (max-width: 900px) { .ag-grid { grid-template-columns: 1fr; } }
+    .ag-card { background:#fff; border:1px solid #e6e9f2; border-radius:14px; padding:16px 18px; }
+    .ag-card.gen { border-color:var(--primary); box-shadow:0 8px 22px var(--primary-shadow); }
+    .ag-card-h { display:flex; align-items:center; gap:11px; }
+    .ag-ic { height:44px; width:auto; }
+    .ag-id { flex:1; min-width:0; }
+    .ag-nom { font-size:15px; font-weight:800; color:#1f2433; }
+    .ag-rol { font-size:12px; color:#6b7593; }
+    .ag-estado { font-size:10px; font-weight:800; padding:2px 8px; border-radius:20px; }
+    .ag-estado.on { background:#e8f5ee; color:#2f7d54; }
+    .ag-estado.off { background:#f1f3f8; color:#9aa3bd; }
+    .ag-sec-t { font-size:11px; font-weight:700; color:#1f2433; text-transform:uppercase; letter-spacing:.4px; margin:14px 0 7px; }
+    .ag-mision { font-size:12.5px; line-height:1.6; color:#59617a; white-space:pre-wrap; max-height:120px; overflow:auto; margin-bottom:8px; }
+    .ag-ta { font-family:'JetBrains Mono','Consolas',monospace; font-size:12px; line-height:1.55; }
+    .ag-btns { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+    .ag-pasos { display:flex; flex-direction:column; gap:6px; }
+    .ag-paso { border:1px solid #eef1f7; border-radius:9px; overflow:hidden; }
+    .ag-paso-h { display:flex; align-items:center; gap:9px; padding:8px 11px; cursor:pointer; user-select:none; }
+    .ag-paso-h:hover { background:#f6f8fc; }
+    .ag-paso-n { width:20px; height:20px; border-radius:6px; background:var(--primary-soft); color:var(--primary);
+                 font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .ag-paso-nom { flex:1; font-size:12.5px; font-weight:600; color:#2a2f3d; }
+    .ag-caret { color:var(--primary); font-size:11px; }
+    .ag-paso .ag-ta { margin:0 11px 11px; width:calc(100% - 22px); }
+    .ag-paso .ag-btns { padding:0 11px 11px; margin-top:0; }
+    .ag-nota { font-size:12px; color:#59617a; background:#f6f8fc; border-radius:9px; padding:9px 11px; margin-top:10px; }
+    .ase-card { background:#fff; border:1px solid #e6e9f2; border-radius:14px; padding:16px 18px; margin-bottom:14px; }
+    .ase-card-h { font-size:14px; font-weight:800; color:#1f2433; margin-bottom:8px; }
+    .ase-alert { background:#fdecea; color:#b02a1a; border-radius:10px; padding:10px 13px; margin-bottom:12px; font-size:13px; }
+    .ase-ok { background:#e8f5ee; color:#2f7d54; border-radius:10px; padding:10px 13px; margin-bottom:12px; font-size:13px; }
+    .dep-ind-load { color:#9aa3bd; font-style:italic; }
 </style>
 
 @code {
-    private string _texto = "";
-    private List<SugerenciaSerieDto> _sug = new();
-    private bool _busy, _busyIa, _done;
-    private string? _error;
-    private string? _respuesta;
-    private string? _avisoIa;
+    private sealed record AgenteVista(AiAgentDto Agent, IReadOnlyList<AiAgentPromptDto> Prompts);
 
-    /// <summary>
-    /// Rol del agente. Se le insiste en usar las herramientas antes de opinar: sin
-    /// leer la TRD del tenant cualquier tiempo de retencion que proponga es inventado.
-    /// </summary>
-    private const string PromptPorDefecto = @"Eres un asistente experto en gestion documental publica colombiana (Ley 594 de 2000,
-        Acuerdos del Archivo General de la Nacion) que apoya la construccion de Tablas de
-        Retencion Documental.
+    private List<AgenteVista> _agentes = new();
+    private bool _cargando = true, _guardando;
+    private string? _error, _ok;
 
-        Trabajas SIEMPRE sobre la TRD real del cliente. Antes de responder usa las herramientas
-        disponibles para leerla: primero listar_series_trd para ubicar candidatas, luego
-        detalle_serie sobre la que mejor encaje. Nunca cites una serie que no hayas leido con
-        una herramienta.
-
-        Estructura tu respuesta asi:
-        1. Serie y subserie sugeridas, con su codigo, y por que encajan.
-        2. Tiempos de retencion propuestos: AG (archivo de gestion) y AC (archivo central) en
-           anios, con la justificacion normativa o funcional de cada uno.
-        3. Disposicion final sugerida (CT conservacion total, S seleccion, E eliminacion,
-           D digitalizacion) y por que.
-        4. Procedimiento: pasos concretos de manejo del expediente.
-
-        Si la serie ya tiene tiempos declarados en la TRD, dilo y contrasta tu propuesta con
-        ellos. Si no encuentras una serie adecuada, dilo con franqueza y sugiere crearla en vez
-        de forzar una coincidencia. Responde en espanol, claro y sin relleno.";
+    private Guid? _editMisionId;
+    private string _misionTexto = "";
+    private Guid? _promptAbierto;
+    private string _promptTexto = "";
 
     private AiUsageSummaryDto _consumo = new(0, 0, 0, 0, 0m, []);
     private AiQuotaDto _cupo = new(0, 0, false);
-
-    // --- Configuracion del agente (lo que antes era el modulo "Agentes IA") ---
-    private bool _cfgAbierta, _busyCfg, _promptGuardado;
-    private string _prompt = PromptPorDefecto;
-    private string? _cfgOk, _cfgError;
-    private Guid? _agenteId;
-
-    /// <summary>Rol reservado con el que se identifica al agente de este modulo.</summary>
-    private const string RolAgente = "clasificador-trd";
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         await CargarConsumo();
-        await CargarAgente();
+        await CargarAgentes();
     }
 
-    /// <summary>
-    /// Busca el agente de este modulo entre los del tenant. Si no existe todavia,
-    /// la pagina trabaja con el prompt por defecto y solo lo crea al guardar.
-    /// </summary>
-    private async Task CargarAgente()
+    private async Task CargarConsumo()
     {
+        _consumo = await Consumo.GetSummaryAsync();
+        _cupo = await Consumo.GetQuotaAsync();
+    }
+
+    private async Task CargarAgentes()
+    {
+        _cargando = true;
         try
         {
-            var mio = (await Agentes.ListAsync()).FirstOrDefault(a => a.Role == RolAgente);
-            if (mio is null) { return; }
-            _agenteId = mio.Id;
-            var det = await Agentes.GetAsync(mio.Id);
-            if (det is not null && !string.IsNullOrWhiteSpace(det.Agent.SystemPrompt))
+            var lista = await Agentes.ListAsync();
+            var vistas = new List<AgenteVista>();
+            foreach (var a in lista)
             {
-                _prompt = det.Agent.SystemPrompt;
-                _promptGuardado = true;
+                var det = await Agentes.GetAsync(a.Id);
+                vistas.Add(new AgenteVista(a, det?.Prompts ?? Array.Empty<AiAgentPromptDto>()));
             }
+            // El de generacion primero (es el protagonista del modulo).
+            _agentes = vistas.OrderByDescending(v => EsGeneracion(v.Agent)).ThenBy(v => v.Agent.Name).ToList();
         }
-        catch { /* sin agente configurado se sigue con el prompt por defecto */ }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _cargando = false; }
     }
 
-    private async Task GuardarPrompt()
-    {
-        _cfgOk = _cfgError = null;
-        if (string.IsNullOrWhiteSpace(_prompt)) { _cfgError = "Las instrucciones no pueden quedar vacias."; return; }
+    private static bool EsGeneracion(AiAgentDto a) => a.Role == "procedimientos-trd";
 
-        _busyCfg = true;
+    private static string RolLabel(string? role) => role switch
+    {
+        "procedimientos-trd" => "Generacion - arma el procedimiento por segmentos",
+        "clasificador-trd" => "Revision - sugiere la clasificacion de la TRD",
+        _ => string.IsNullOrWhiteSpace(role) ? "Agente" : role
+    };
+
+    private static string Resumen(string? texto)
+    {
+        var t = (texto ?? "").Trim();
+        return t.Length <= 320 ? t : t[..320] + "...";
+    }
+
+    private void EditarMision(AiAgentDto a)
+    {
+        _editMisionId = a.Id;
+        _misionTexto = a.SystemPrompt;
+        _ok = _error = null;
+    }
+
+    private async Task GuardarMision(AiAgentDto a)
+    {
+        _ok = _error = null;
+        if (string.IsNullOrWhiteSpace(_misionTexto)) { _error = "La mision no puede quedar vacia."; return; }
+        _guardando = true;
         try
         {
-            var actor = await Actor();
-            if (_agenteId is Guid id)
-            {
-                await Agentes.UpdateAsync(id, new UpdateAiAgentRequest(
-                    "Clasificador TRD", RolAgente, AiProvider.Gemini, null, _prompt), actor);
-            }
-            else
-            {
-                var creado = await Agentes.CreateAsync(new CreateAiAgentRequest(
-                    "Clasificador TRD", RolAgente, AiProvider.Gemini, null, _prompt), actor);
-                _agenteId = creado?.Id;
-            }
-            _promptGuardado = true;
-            _cfgOk = "Instrucciones guardadas. El agente las usara en la proxima consulta.";
+            await Agentes.UpdateAsync(a.Id, new UpdateAiAgentRequest(a.Name, a.Role, a.Provider, a.Model, _misionTexto), await Actor());
+            _editMisionId = null;
+            _ok = "Mision guardada.";
+            await CargarAgentes();
         }
-        catch (Exception ex) { _cfgError = ex.Message; }
-        finally { _busyCfg = false; }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _guardando = false; }
     }
 
-    private void RestaurarPrompt()
+    private void TogglePrompt(Guid promptId)
     {
-        _prompt = PromptPorDefecto;
-        _cfgOk = "Instrucciones por defecto cargadas. Guarda para aplicarlas.";
-        _cfgError = null;
+        if (_promptAbierto == promptId) { _promptAbierto = null; return; }
+        _promptAbierto = promptId;
+        _promptTexto = _agentes.SelectMany(a => a.Prompts).FirstOrDefault(p => p.Id == promptId)?.Body ?? "";
+        _ok = _error = null;
+    }
+
+    private async Task GuardarPrompt(AiAgentDto a, AiAgentPromptDto p)
+    {
+        _ok = _error = null;
+        if (string.IsNullOrWhiteSpace(_promptTexto)) { _error = "El prompt no puede quedar vacio."; return; }
+        _guardando = true;
+        try
+        {
+            await Agentes.UpdatePromptAsync(p.Id, new UpdateAgentPromptRequest(p.Name, p.Rule, _promptTexto), await Actor());
+            _promptAbierto = null;
+            _ok = "Paso guardado.";
+            await CargarAgentes();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _guardando = false; }
     }
 
     private async Task<Guid> Actor()
@@ -322,121 +306,5 @@
         return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
     }
 
-    private async Task CargarConsumo()
-    {
-        _consumo = await Consumo.GetSummaryAsync();
-        _cupo = await Consumo.GetQuotaAsync();
-    }
-
     private static string Tokens(long n) => n >= 1000 ? $"{n / 1000.0:0.#}k" : n.ToString();
-
-    /// <summary>
-    /// El modelo responde en markdown ligero. Renderizamos solo titulos, negrita y
-    /// vinetas; todo lo demas va escapado, porque el texto viene de un tercero y no
-    /// puede inyectar HTML en la pagina.
-    /// </summary>
-    private static MarkupString Formatear(string? texto)
-    {
-        if (string.IsNullOrWhiteSpace(texto)) { return new MarkupString(""); }
-
-        var sb = new System.Text.StringBuilder();
-        var enLista = false;
-
-        foreach (var linea in texto.Replace("\r\n", "\n").Split('\n'))
-        {
-            var l = linea.TrimEnd();
-            var sangria = l.Length - l.TrimStart().Length;
-            var t = l.TrimStart();
-
-            if (t.Length == 0) { CerrarLista(sb, ref enLista); continue; }
-
-            // Titulos: #, ##, ### -> siempre h4, no queremos competir con el h1 de la pagina.
-            if (t.StartsWith('#'))
-            {
-                CerrarLista(sb, ref enLista);
-                sb.Append("<h4 class=\"clia-h\">").Append(Negrita(t.TrimStart('#').Trim())).Append("</h4>");
-                continue;
-            }
-
-            // Vinetas (*, -) y listas numeradas (1., 2., ...).
-            var vineta = t.StartsWith("* ") || t.StartsWith("- ");
-            var numerada = !vineta && t.Length > 2 && char.IsDigit(t[0]) && (t[1] == '.' || (char.IsDigit(t[1]) && t.Length > 3 && t[2] == '.'));
-            if (vineta || numerada)
-            {
-                if (!enLista) { sb.Append("<ul class=\"clia-ul\">"); enLista = true; }
-                var cuerpo = vineta ? t[2..] : t[(t.IndexOf('.') + 1)..];
-                var clase = sangria >= 2 ? " class=\"clia-li-sub\"" : "";
-                sb.Append("<li").Append(clase).Append('>').Append(Negrita(cuerpo.Trim())).Append("</li>");
-                continue;
-            }
-
-            CerrarLista(sb, ref enLista);
-            sb.Append("<p>").Append(Negrita(t)).Append("</p>");
-        }
-
-        CerrarLista(sb, ref enLista);
-        return new MarkupString(sb.ToString());
-    }
-
-    private static void CerrarLista(System.Text.StringBuilder sb, ref bool enLista)
-    {
-        if (enLista) { sb.Append("</ul>"); enLista = false; }
-    }
-
-    /// <summary>Escapa el texto y solo despues convierte los pares **...** en negrita.</summary>
-    private static string Negrita(string crudo)
-    {
-        var s = System.Net.WebUtility.HtmlEncode(crudo);
-        var partes = s.Split("**");
-        if (partes.Length < 3) { return s; }
-
-        var sb = new System.Text.StringBuilder();
-        for (var i = 0; i < partes.Length; i++)
-        {
-            // Los indices impares quedan entre un par de marcadores: esos van en negrita.
-            var enfasis = i % 2 == 1 && i < partes.Length - 1;
-            sb.Append(enfasis ? $"<b>{partes[i]}</b>" : partes[i]);
-        }
-        return sb.ToString();
-    }
-
-    private async Task Sugerir()
-    {
-        _error = null; _busy = true;
-        try
-        {
-            _sug = (await Clasificador.SugerirAsync(_texto)).ToList();
-            _done = true;
-        }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _busy = false; }
-    }
-
-    /// <summary>
-    /// Corre las dos vias: la heuristica local (instantanea, siempre disponible) y el
-    /// agente con herramientas. Si el agente falla la heuristica ya quedo en pantalla.
-    /// </summary>
-    private async Task Analizar()
-    {
-        _respuesta = null; _avisoIa = null;
-
-        if (string.IsNullOrWhiteSpace(_texto))
-        {
-            _avisoIa = "Escribe primero el asunto o contenido del documento.";
-            return;
-        }
-
-        await Sugerir();
-
-        _busyIa = true;
-        try
-        {
-            var r = await Agente.ConsultarConHerramientasAsync(_prompt, _texto);
-            if (r.Ok) { _respuesta = r.Text; }
-            else { _avisoIa = r.Error; }
-            await CargarConsumo();
-        }
-        catch (Exception ex) { _avisoIa = ex.Message; }
-        finally { _busyIa = false; }
-    }
 }

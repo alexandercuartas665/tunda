@@ -590,6 +590,14 @@
                                 <option value="@t.Id">@t.Nombre</option>
                             }
                         </select>
+                        <div class="tip-nueva">
+                            <input class="dep-in" placeholder="Crear tipologia nueva..." @bind="_nuevaTipo" @bind:event="oninput" />
+                            <button class="trx-btn ghost mini" title="Crear la tipologia en el catalogo y seleccionarla"
+                                    @onclick="CrearTipologiaInline" disabled="@(_creandoTipo || string.IsNullOrWhiteSpace(_nuevaTipo) || string.IsNullOrWhiteSpace(_docSerie))">
+                                @(_creandoTipo ? "..." : "+ crear")
+                            </button>
+                        </div>
+                        <small class="text-muted">Para quitar una tipologia de la TRD usa la &times; de su fila en la tabla.</small>
                     </div>
                 </div>
 
@@ -644,6 +652,19 @@
                         <label class="doc-chk"><input type="checkbox" @bind="_doc.SerieDdhh" /> DDHH/DIH</label>
                         <label class="doc-chk"><input type="checkbox" @bind="_doc.RelacionSig" /> Relacion con el SIG</label>
                     </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Soporte / formato</div>
+                    <div class="doc-chks">
+                        @foreach (var f in FormatosDisponibles)
+                        {
+                            <label class="doc-chk">
+                                <input type="checkbox" checked="@_docFormatos.Contains(f)" @onchange="e => ToggleFormatoDoc(f, e.Value)" /> @f
+                            </label>
+                        }
+                    </div>
+                    <small class="text-muted">Papel = soporte fisico; el resto son la extension electronica que maneja esta tipologia.</small>
                 </div>
 
                 <div class="ed-bloque" style="margin-top: 12px;">
@@ -703,10 +724,23 @@
                 }
             </div>
 
+            <div class="proc-pasos">
+                <span class="proc-pasos-t">Por pasos:</span>
+                <button class="trx-btn ghost mini" @onclick='() => GenerarSegmento("quees")' disabled="@(_generando == _procDoc.Id)">1. Que es</button>
+                @if (_procDoc.DispE)
+                {
+                    <button class="trx-btn ghost mini" @onclick='() => GenerarSegmento("elimina")' disabled="@(_generando == _procDoc.Id)">2. Elimina</button>
+                }
+                @if (_procDoc.DispCt)
+                {
+                    <button class="trx-btn ghost mini" @onclick='() => GenerarSegmento("conserva")' disabled="@(_generando == _procDoc.Id)">3. Conserva</button>
+                }
+                <button class="trx-btn ghost mini" @onclick='() => GenerarSegmento("unificar")' disabled="@(_generando == _procDoc.Id)">4. Unificar</button>
+            </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid #eef1f7;">
                 <button class="trx-btn ghost" @onclick="() => _procAbierto = false">Cerrar</button>
                 <button class="trx-btn" @onclick="() => GenerarProc(_procDoc)" disabled="@(_generando == _procDoc.Id)">
-                    @(_generando == _procDoc.Id ? "Generando..." : "Generar con IA")
+                    @(_generando == _procDoc.Id ? "Generando..." : "Generar todo con IA")
                 </button>
             </div>
         </div>
@@ -1172,6 +1206,8 @@
     .dep-tb tr.tok td { font-size:11px; color:#8a93ad; background:#fbfcfe; cursor:default; }
     .dep-tb td.acc { text-align:center; vertical-align:middle; white-space:nowrap; }
     .tip-nom { font-weight:600; }
+    .tip-nueva { display:flex; gap:6px; align-items:center; margin-top:6px; }
+    .tip-nueva .dep-in { flex:1; }
     .tip-sop { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
     .sop-chip { font-size:10px; font-weight:700; line-height:1.4; padding:1px 7px; border-radius:20px; white-space:normal; }
     .sop-chip.papel { background:#fdeede; color:#a8620f; }
@@ -1240,6 +1276,8 @@
     .proc-nota { font-size:11.5px; color:#8a93ad; margin-bottom:10px; }
     .proc-texto { white-space:pre-wrap; line-height:1.65; color:#2b3245; font-size:13.5px; }
     .proc-vacio { color:#a8b0c4; font-style:italic; padding:12px 0; }
+    .proc-pasos { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 16px 0; }
+    .proc-pasos-t { font-size:11px; font-weight:700; color:#8a93ad; text-transform:uppercase; letter-spacing:.3px; }
     /* Inputs editables dentro de la tabla */
     .dep-tb .cell-in { width:100%; border:1px solid transparent; background:transparent; font:inherit;
                        text-align:center; padding:2px 3px; border-radius:4px; color:#37415c; }
@@ -1706,6 +1744,24 @@
         finally { _generando = null; }
     }
 
+    // Ejecuta UN paso de la cadena (dividir el proceso): quees / elimina / conserva / unificar.
+    private async Task GenerarSegmento(string paso)
+    {
+        if (_procDoc is null || _generando is not null) { return; }
+        _docError = _ok = null; _generando = _procDoc.Id;
+        try
+        {
+            var res = await Inferencia.GenerarSegmentoAsync(_procDoc.Id, paso);
+            if (!res.Ok) { _docError = res.Error; }
+            else { _ok = "Segmento generado."; }
+            await RecargarDocs();
+            _procDoc = _docs.FirstOrDefault(x => x.Id == _procDoc.Id) ?? _procDoc;
+            _procTab = paso switch { "elimina" => "elimina", "conserva" => "conserva", "unificar" => "uni", _ => "quees" };
+        }
+        catch (Exception ex) { _docError = ex.Message; }
+        finally { _generando = null; }
+    }
+
     // ---- Modal de procedimiento (tabs: cada calculo por separado + unificado) ----
     private bool _procAbierto;
     private DocumentoTrdDto? _procDoc;
@@ -1763,6 +1819,7 @@
     private async Task AbrirDoc(DocumentoTrdDto? d)
     {
         _docError = null;
+        _nuevaTipo = "";
         _seriesDoc = (await Trd.ListSeriesAsync()).ToList();
 
         if (d is null)
@@ -1772,6 +1829,7 @@
             _docSerie = _docSub = _docTipo = "";
             _subseriesDoc = new();
             _tiposDoc = new();
+            _docFormatos = new(StringComparer.OrdinalIgnoreCase);
         }
         else
         {
@@ -1794,8 +1852,43 @@
             _docTipo = d.TipologiaId?.ToString() ?? "";
             _subseriesDoc = (await Trd.ListSubseriesAsync(d.SerieId)).ToList();
             _tiposDoc = (await Trd.ListTipologiasAsync()).Where(t => t.SubserieId == d.SubserieId || t.SerieId == d.SerieId).ToList();
+            _docFormatos = (d.Formatos ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         _docAbierto = true;
+    }
+
+    private HashSet<string> _docFormatos = new(StringComparer.OrdinalIgnoreCase);
+    private string _nuevaTipo = "";
+    private bool _creandoTipo;
+
+    private void ToggleFormatoDoc(string formato, object? valor)
+    {
+        if (valor is bool on && on) { _docFormatos.Add(formato); }
+        else { _docFormatos.Remove(formato); }
+    }
+
+    // Crea una tipologia nueva en el catalogo (para la serie/subserie elegida) y la selecciona.
+    private async Task CrearTipologiaInline()
+    {
+        _docError = null;
+        var nombre = (_nuevaTipo ?? "").Trim();
+        if (nombre.Length == 0 || !Guid.TryParse(_docSerie, out var ser)) { return; }
+        Guid? sub = Guid.TryParse(_docSub, out var s) ? s : null;
+        _creandoTipo = true;
+        try
+        {
+            var codigo = "TD-" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            var creada = await Trd.CrearTipologiaAsync(ser, sub, codigo, nombre, "GENERAL", await Actor());
+            if (creada is not null)
+            {
+                _tiposDoc = (await Trd.ListTipologiasAsync()).Where(t => t.SubserieId == sub || t.SerieId == ser).ToList();
+                _docTipo = creada.Id.ToString();
+                _nuevaTipo = "";
+            }
+        }
+        catch (Exception ex) { _docError = ex.Message; }
+        finally { _creandoTipo = false; }
     }
 
     private void CerrarDoc() { _docAbierto = false; _docError = null; }
@@ -1836,7 +1929,13 @@
 
         try
         {
-            await Trd.GuardarDocumentoTrdAsync(_doc, await Actor());
+            var actor = await Actor();
+            var docId = await Trd.GuardarDocumentoTrdAsync(_doc, actor);
+            // Los formatos viven por fila (FormatoSerie): se reemplazan con lo marcado.
+            if (docId is Guid id)
+            {
+                await Trd.ActualizarFormatosDocumentoAsync(id, string.Join(", ", _docFormatos), actor);
+            }
             _docAbierto = false;
             await RecargarDocs();
             await LoadAll();
