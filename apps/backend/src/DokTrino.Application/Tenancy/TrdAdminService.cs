@@ -677,6 +677,7 @@ public sealed class TrdAdminService : ITrdAdminService
         bool nuevo;
         switch (campo)
         {
+            case nameof(RespuestaTablaDocumental.SinSubserie): nuevo = r.SinSubserie = !r.SinSubserie; break;
             case nameof(RespuestaTablaDocumental.DispCt): nuevo = r.DispCt = !r.DispCt; break;
             case nameof(RespuestaTablaDocumental.DispS): nuevo = r.DispS = !r.DispS; break;
             case nameof(RespuestaTablaDocumental.DispE): nuevo = r.DispE = !r.DispE; break;

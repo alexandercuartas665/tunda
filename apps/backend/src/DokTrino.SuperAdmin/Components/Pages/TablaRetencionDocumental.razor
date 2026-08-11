@@ -403,7 +403,7 @@
                             <table class="dep-tb wide">
                                 <colgroup>
                                     <col style="width:140px" /><col style="width:210px" /><col style="width:150px" />
-                                    <col style="width:42px" /><col style="width:42px" /><col style="width:200px" />
+                                    <col style="width:60px" /><col style="width:60px" /><col style="width:200px" />
                                     <col style="width:44px" />
                                     <col style="width:34px" /><col style="width:30px" /><col style="width:30px" /><col style="width:30px" /><col style="width:220px" />
                                     <col style="width:40px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
@@ -429,8 +429,8 @@
                                         <th rowspan="2" style="width: 60px;"></th>
                                     </tr>
                                     <tr>
-                                        <th class="c g-tiempo" style="width: 42px;">AG</th>
-                                        <th class="c g-tiempo" style="width: 42px;">AC</th>
+                                        <th class="c g-tiempo" style="width: 60px;">AG</th>
+                                        <th class="c g-tiempo" style="width: 60px;">AC</th>
                                         <th class="g-tiempo" style="width: 200px;">Descripcion</th>
                                         <th class="c g-disp" style="width: 34px;">CT</th>
                                         <th class="c g-disp" style="width: 30px;">S</th>
@@ -469,13 +469,13 @@
                                             <td class="fix fx3" @onclick="() => AbrirDoc(d)">@(d.TipologiaNombre ?? "-")</td>
                                             <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAg" @onchange="e => GuardarNum(d, nameof(d.TiempoAg), e.Value)" /></td>
                                             <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAc" @onchange="e => GuardarNum(d, nameof(d.TiempoAc), e.Value)" /></td>
-                                            <td class="c-tiempo"><textarea class="cell-ta" placeholder="Observacion del tiempo..." @onchange="e => GuardarTexto(d, nameof(d.TiempoObserv), e.Value)">@d.TiempoObserv</textarea></td>
-                                            <td class="mk">@(d.SinSubserie ? "X" : "")</td>
+                                            <td class="c-tiempo desc"><textarea class="cell-ta" placeholder="Observacion del tiempo..." @onchange="e => GuardarTexto(d, nameof(d.TiempoObserv), e.Value)">@d.TiempoObserv</textarea></td>
+                                            <td class="mk" title="Sin subserie" @onclick="() => AlternarFlag(d, nameof(d.SinSubserie))">@(d.SinSubserie ? "X" : "")</td>
                                             <td class="mk c-disp" title="Conservacion total" @onclick="() => AlternarFlag(d, nameof(d.DispCt))">@(d.DispCt ? "X" : "")</td>
                                             <td class="mk c-disp" title="Seleccion" @onclick="() => AlternarFlag(d, nameof(d.DispS))">@(d.DispS ? "X" : "")</td>
                                             <td class="mk c-disp" title="Eliminacion" @onclick="() => AlternarFlag(d, nameof(d.DispE))">@(d.DispE ? "X" : "")</td>
                                             <td class="mk c-disp" title="Digitalizacion" @onclick="() => AlternarFlag(d, nameof(d.DispD))">@(d.DispD ? "X" : "")</td>
-                                            <td class="c-disp"><textarea class="cell-ta" placeholder="Describe el proceso (p.ej. en caso de eliminacion)..." @onchange="e => GuardarTexto(d, nameof(d.DispObserv), e.Value)">@d.DispObserv</textarea></td>
+                                            <td class="c-disp desc"><textarea class="cell-ta" placeholder="Describe el proceso (p.ej. en caso de eliminacion)..." @onchange="e => GuardarTexto(d, nameof(d.DispObserv), e.Value)">@d.DispObserv</textarea></td>
                                             <td class="mk c-val1" title="Administrativa" @onclick="() => AlternarFlag(d, nameof(d.Val1Admin))">@(d.Val1Admin ? "X" : "")</td>
                                             <td class="mk c-val1" title="Tecnica" @onclick="() => AlternarFlag(d, nameof(d.Val1Tecnica))">@(d.Val1Tecnica ? "X" : "")</td>
                                             <td class="mk c-val1" title="Legal" @onclick="() => AlternarFlag(d, nameof(d.Val1Legal))">@(d.Val1Legal ? "X" : "")</td>
@@ -1161,6 +1161,8 @@
                        border-radius:6px; padding:5px 7px; font:inherit; font-size:11.5px; color:#37415c; line-height:1.35; }
     .dep-tb .cell-ta:focus { border-color:#2f6fc0; outline:none; }
     .dep-tb .cell-ta::placeholder { color:#aab2c6; }
+    /* Celda de descripcion: margen minimo para que la caja aproveche el ancho. */
+    .dep-tb td.desc { padding:2px; }
     /* Modal de procedimiento (tabs) */
     .proc-tabs { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid #e6e9f2; margin-bottom:10px; }
     .proc-tab { border:none; background:transparent; padding:8px 12px; font-size:12.5px; color:#6b7593;
