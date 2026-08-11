@@ -67,6 +67,7 @@ public sealed record DocumentoTrdDto(
     bool SinSubserie,
     bool Representativo, bool SerieDdhh, bool RelacionSig,
     string? Procedimiento,
+    string? ProcQueEs, string? ProcElimina, string? ProcConserva,
     string Formatos,
     DateTimeOffset FechaReg);
 

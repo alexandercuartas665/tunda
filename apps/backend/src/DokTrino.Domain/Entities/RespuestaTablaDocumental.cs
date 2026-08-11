@@ -54,8 +54,15 @@ public class RespuestaTablaDocumental : TenantEntity
     public bool SerieDdhh { get; set; }
     public string? RelacionSig { get; set; }
 
-    /// <summary>Procedimiento archivistico asociado a la serie/subserie (detalle y descripcion). Migra la columna PROCEDIMIENTO del grid antiguo.</summary>
+    /// <summary>Procedimiento archivistico asociado a la serie/subserie (texto unificado). Migra la columna PROCEDIMIENTO del grid antiguo.</summary>
     public string? Procedimiento { get; set; }
+
+    /// <summary>Segmento "que es" generado por la IA (para verlo por separado en el modal).</summary>
+    public string? ProcQueEs { get; set; }
+    /// <summary>Segmento "por que se elimina" generado por la IA (si aplica).</summary>
+    public string? ProcElimina { get; set; }
+    /// <summary>Segmento "por que se conserva" generado por la IA (si aplica).</summary>
+    public string? ProcConserva { get; set; }
 
     /// <summary>Extension flexible (jsonb) para futuras valoraciones sin migrar schema.</summary>
     public string Extension { get; set; } = "{}";

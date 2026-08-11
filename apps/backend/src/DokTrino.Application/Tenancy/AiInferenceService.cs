@@ -206,6 +206,9 @@ public sealed class AiInferenceService : IAiInferenceService
         var unificado = uni.Ok ? uni.Texto : string.Join("\n\n", textos);
 
         r.Procedimiento = unificado;
+        r.ProcQueEs = quees.Texto;
+        r.ProcElimina = elimina;
+        r.ProcConserva = conserva;
         await _db.SaveChangesAsync(ct);
 
         return new ProcedimientoGeneradoDto(true, null, quees.Texto, elimina, conserva, unificado);

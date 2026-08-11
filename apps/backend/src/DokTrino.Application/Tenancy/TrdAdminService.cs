@@ -574,6 +574,7 @@ public sealed class TrdAdminService : ITrdAdminService
                 r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
                 r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
                 r.SinSubserie, r.Representativo, r.SerieDdhh, r.RelacionSig, r.Procedimiento,
+                r.ProcQueEs, r.ProcElimina, r.ProcConserva,
                 Formatos = _db.FormatosSerie.Where(f => f.RespuestaId == r.Id).Select(f => f.Formato).ToList(),
                 r.FechaReg
             })
@@ -591,6 +592,7 @@ public sealed class TrdAdminService : ITrdAdminService
             r.SinSubserie,
             !string.IsNullOrWhiteSpace(r.Representativo), r.SerieDdhh, !string.IsNullOrWhiteSpace(r.RelacionSig),
             r.Procedimiento,
+            r.ProcQueEs, r.ProcElimina, r.ProcConserva,
             string.Join(", ", r.Formatos), r.FechaReg));
 
         if (busca.Length > 0)

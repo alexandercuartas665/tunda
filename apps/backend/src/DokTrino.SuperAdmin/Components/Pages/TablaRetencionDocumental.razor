@@ -478,7 +478,7 @@
                                                         @onclick="() => GenerarProc(d)" disabled="@(_generando == d.Id)">
                                                     @(_generando == d.Id ? "..." : "IA")
                                                 </button>
-                                                <span @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</span>
+                                                <span @onclick="() => AbrirProc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</span>
                                             </td>
                                             <td @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
                                             <td class="acc">
@@ -619,6 +619,59 @@
                     <button class="trx-btn ghost" @onclick="CerrarDoc">Cancelar</button>
                     <button class="trx-btn" @onclick="GuardarDoc">Guardar documento</button>
                 </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===================== Procedimiento (modal con tabs: cada calculo + unificado) ===================== *@
+@if (_procAbierto && _procDoc is not null)
+{
+    <div class="doktrino-drawer-scrim" style="display: block; z-index: 1990;" @onclick="() => _procAbierto = false"></div>
+    <div style="position: fixed; inset: 0; z-index: 1995; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+        <div class="per-modal" style="width: 840px; max-height: 86vh; display: flex; flex-direction: column;">
+            <div class="per-h">
+                <div>
+                    <div class="per-t">Procedimiento archivistico</div>
+                    <div class="per-sub">@_procDoc.SerieNombre@(_procDoc.SubserieNombre is null ? "" : " / " + _procDoc.SubserieNombre)</div>
+                </div>
+                <span class="per-x" @onclick="() => _procAbierto = false">&#10005;</span>
+            </div>
+
+            <div class="per-b" style="overflow: auto; flex: 1;">
+                <div class="proc-tabs">
+                    <button class="proc-tab @(_procTab == "uni" ? "on" : "")" @onclick='() => _procTab = "uni"'>Procedimiento</button>
+                    <button class="proc-tab @(_procTab == "quees" ? "on" : "")" @onclick='() => _procTab = "quees"'>Que es</button>
+                    @if (!string.IsNullOrWhiteSpace(_procDoc.ProcElimina))
+                    {
+                        <button class="proc-tab @(_procTab == "elimina" ? "on" : "")" @onclick='() => _procTab = "elimina"'>Por que se elimina</button>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_procDoc.ProcConserva))
+                    {
+                        <button class="proc-tab @(_procTab == "conserva" ? "on" : "")" @onclick='() => _procTab = "conserva"'>Por que se conserva</button>
+                    }
+                </div>
+                <div class="proc-nota">
+                    @(_procTab == "uni" ? "Texto final (los segmentos unidos por la IA)."
+                      : _procTab == "quees" ? "Segmento: contexto y definicion de la subserie."
+                      : _procTab == "elimina" ? "Segmento: sustento de la eliminacion."
+                      : "Segmento: sustento de la conservacion.")
+                </div>
+                @if (string.IsNullOrWhiteSpace(TextoTab()))
+                {
+                    <div class="proc-vacio">Aun no hay texto para este segmento. Genera el procedimiento con IA.</div>
+                }
+                else
+                {
+                    <div class="proc-texto">@TextoTab()</div>
+                }
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid #eef1f7;">
+                <button class="trx-btn ghost" @onclick="() => _procAbierto = false">Cerrar</button>
+                <button class="trx-btn" @onclick="() => GenerarProc(_procDoc)" disabled="@(_generando == _procDoc.Id)">
+                    @(_generando == _procDoc.Id ? "Generando..." : "Generar con IA")
+                </button>
             </div>
         </div>
     </div>
@@ -1082,6 +1135,14 @@
     .dep-tb td.mk { cursor:pointer; user-select:none; }
     .dep-tb td.mk:hover { outline:2px solid rgba(47,111,192,.35); outline-offset:-2px; }
     .dep-tb td.doc-proc { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#37415c; }
+    /* Modal de procedimiento (tabs) */
+    .proc-tabs { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid #e6e9f2; margin-bottom:10px; }
+    .proc-tab { border:none; background:transparent; padding:8px 12px; font-size:12.5px; color:#6b7593;
+                cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+    .proc-tab.on { color:var(--primary); border-bottom-color:var(--primary); font-weight:700; }
+    .proc-nota { font-size:11.5px; color:#8a93ad; margin-bottom:10px; }
+    .proc-texto { white-space:pre-wrap; line-height:1.65; color:#2b3245; font-size:13.5px; }
+    .proc-vacio { color:#a8b0c4; font-style:italic; padding:12px 0; }
     /* Inputs editables dentro de la tabla */
     .dep-tb .cell-in { width:100%; border:1px solid transparent; background:transparent; font:inherit;
                        text-align:center; padding:2px 3px; border-radius:4px; color:#37415c; }
@@ -1541,10 +1602,25 @@
             if (!res.Ok) { _docError = res.Error; }
             else { _ok = "Procedimiento generado con IA."; }
             await RecargarDocs();
+            // Si el modal esta abierto sobre esta fila, refresca con el texto nuevo.
+            if (_procAbierto) { _procDoc = _docs.FirstOrDefault(x => x.Id == d.Id) ?? _procDoc; }
         }
         catch (Exception ex) { _docError = ex.Message; }
         finally { _generando = null; }
     }
+
+    // ---- Modal de procedimiento (tabs: cada calculo por separado + unificado) ----
+    private bool _procAbierto;
+    private DocumentoTrdDto? _procDoc;
+    private string _procTab = "uni";
+    private void AbrirProc(DocumentoTrdDto d) { _procDoc = d; _procTab = "uni"; _procAbierto = true; }
+    private string? TextoTab() => _procDoc is null ? null : _procTab switch
+    {
+        "quees" => _procDoc.ProcQueEs,
+        "elimina" => _procDoc.ProcElimina,
+        "conserva" => _procDoc.ProcConserva,
+        _ => _procDoc.Procedimiento
+    };
 
     // Edita un numero (AG/AC) directo en la tabla.
     private async Task GuardarNum(DocumentoTrdDto d, string campo, object? valor)
