@@ -12,6 +12,16 @@ public sealed record AiChatAttachment(string Name, AgentResourceType ResourceTyp
 public sealed record AiChatResult(bool Ok, string? Text, string? Error, int InputTokens = 0, int OutputTokens = 0,
     IReadOnlyList<AiChatAttachment>? Attachments = null);
 
+/// <summary>
+/// Resultado de la cadena de 4 prompts que genera el Procedimiento de una subserie: cada segmento
+/// por separado (para el modal con tabs) y el texto unificado que se guarda en la fila de la TRD.
+/// </summary>
+public sealed record ProcedimientoGeneradoDto(bool Ok, string? Error,
+    string? QueEs, string? PorqueElimina, string? PorqueConserva, string? Unificado)
+{
+    public static ProcedimientoGeneradoDto Fail(string error) => new(false, error, null, null, null, null);
+}
+
 // ==================== Tool-use (function calling) ====================
 // Portado de ECOREX: permite que el agente invoque herramientas (p.ej. leer la
 // TRD) en un loop, en vez de solo texto->texto.
@@ -90,4 +100,11 @@ public interface IAiInferenceService
     /// Usa el primer proveedor de IA habilitado. Registra el consumo.
     /// </summary>
     Task<AiChatResult> ConsultarConHerramientasAsync(string systemPrompt, string pregunta, string source = "clasificador", CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Genera el Procedimiento de una fila de la TRD con la cadena de 4 prompts (QUEES ->
+    /// PORQUEELIMINA? -> PORQUECONSERVA? -> UNIFICADOR), lo guarda en RespuestaTablaDocumental.
+    /// Procedimiento y devuelve cada segmento por separado. Siembra el agente si no existe.
+    /// </summary>
+    Task<ProcedimientoGeneradoDto> GenerarProcedimientoAsync(Guid respuestaId, CancellationToken cancellationToken = default);
 }

@@ -6,6 +6,7 @@
 @using DokTrino.Application.Tenancy
 @inject ITrdAdminService Trd
 @inject ICursoService Cursos
+@inject IAiInferenceService Inferencia
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -472,7 +473,13 @@
                                             <td class="mk c-clas" title="Representativa" @onclick="() => AlternarFlag(d, nameof(d.Representativo))">@(d.Representativo ? "X" : "")</td>
                                             <td class="mk c-clas" title="DDHH/DIH" @onclick="() => AlternarFlag(d, nameof(d.SerieDdhh))">@(d.SerieDdhh ? "X" : "")</td>
                                             <td class="mk c-clas" title="Relacion con el SIG" @onclick="() => AlternarFlag(d, nameof(d.RelacionSig))">@(d.RelacionSig ? "X" : "")</td>
-                                            <td class="doc-proc" @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</td>
+                                            <td class="doc-proc">
+                                                <button class="trx-btn ghost mini" title="Generar el procedimiento con IA"
+                                                        @onclick="() => GenerarProc(d)" disabled="@(_generando == d.Id)">
+                                                    @(_generando == d.Id ? "..." : "IA")
+                                                </button>
+                                                <span @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</span>
+                                            </td>
                                             <td @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
                                             <td class="acc">
                                                 <button class="trx-btn ghost mini" @onclick="() => AbrirDoc(d)">Editar</button>
@@ -1520,6 +1527,23 @@
             await RecargarDocs();
         }
         catch (InvalidOperationException ex) { _docError = ex.Message; }
+    }
+
+    // Genera el procedimiento de la fila con la cadena de 4 prompts (IA).
+    private Guid? _generando;
+    private async Task GenerarProc(DocumentoTrdDto d)
+    {
+        if (_generando is not null) { return; }
+        _docError = _ok = null; _generando = d.Id;
+        try
+        {
+            var res = await Inferencia.GenerarProcedimientoAsync(d.Id);
+            if (!res.Ok) { _docError = res.Error; }
+            else { _ok = "Procedimiento generado con IA."; }
+            await RecargarDocs();
+        }
+        catch (Exception ex) { _docError = ex.Message; }
+        finally { _generando = null; }
     }
 
     // Edita un numero (AG/AC) directo en la tabla.

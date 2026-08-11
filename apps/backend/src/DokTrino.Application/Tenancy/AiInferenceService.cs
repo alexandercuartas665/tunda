@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using DokTrino.Application.Admin;
 using DokTrino.Application.Common;
+using DokTrino.Domain.Entities;
 using DokTrino.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -148,6 +149,145 @@ public sealed class AiInferenceService : IAiInferenceService
         }
 
         return result;
+    }
+
+    public async Task<ProcedimientoGeneradoDto> GenerarProcedimientoAsync(Guid respuestaId, CancellationToken ct = default)
+    {
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { return ProcedimientoGeneradoDto.Fail("El documento ya no existe; recarga la tabla."); }
+
+        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        if (providerCfg is null) { return ProcedimientoGeneradoDto.Fail("No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
+
+        string apiKey;
+        try { apiKey = _secretProtector.Unprotect(providerCfg.ApiKeyEncrypted!); }
+        catch { return ProcedimientoGeneradoDto.Fail("La API key esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
+
+        var meta = AiProviderCatalog.For(providerCfg.Provider);
+        var model = !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model! : meta.DefaultModel;
+
+        var quota = await _usage.GetQuotaAsync(ct);
+        if (quota.Exceeded && quota.Hard)
+        { return ProcedimientoGeneradoDto.Fail($"Alcanzaste el limite de tokens de IA de tu plan este mes ({quota.MonthlyLimitTokens:N0})."); }
+
+        var prompts = await AsegurarPromptsProcedimientoAsync(r.TenantId, providerCfg.Provider, ct);
+        var plantilla = await LlenarPlantillaAsync(prompts[ProcedimientoPrompts.NPlantilla], r, ct);
+
+        // 1) QUE ES
+        var quees = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            prompts[ProcedimientoPrompts.NQueEs].Replace("@@PLANTILLA@@", plantilla), ct);
+        if (!quees.Ok) { return ProcedimientoGeneradoDto.Fail(quees.Error); }
+
+        var textos = new List<string> { quees.Texto };
+        string? elimina = null, conserva = null;
+
+        // 2) POR QUE ELIMINA (solo si la disposicion es Eliminacion)
+        if (r.DispE)
+        {
+            var e = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+                prompts[ProcedimientoPrompts.NElimina].Replace("@@PLANTILLA@@", plantilla), ct);
+            if (e.Ok) { elimina = e.Texto; textos.Add(e.Texto); }
+        }
+
+        // 3) POR QUE CONSERVA (solo si es Conservacion Total)
+        if (r.DispCt)
+        {
+            var c = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+                prompts[ProcedimientoPrompts.NConserva].Replace("@@PLANTILLA@@", plantilla), ct);
+            if (c.Ok) { conserva = c.Texto; textos.Add(c.Texto); }
+        }
+
+        // 4) UNIFICADOR
+        var uniPrompt = prompts[ProcedimientoPrompts.NUnificador]
+            .Replace("@@PLANTILLA@@", plantilla)
+            .Replace("@@TEXTOS@@", string.Join("\n\n", textos));
+        var uni = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
+        var unificado = uni.Ok ? uni.Texto : string.Join("\n\n", textos);
+
+        r.Procedimiento = unificado;
+        await _db.SaveChangesAsync(ct);
+
+        return new ProcedimientoGeneradoDto(true, null, quees.Texto, elimina, conserva, unificado);
+    }
+
+    // Siembra (una vez por tenant) el agente "Procedimientos TRD" con sus 5 prompts y los devuelve por nombre.
+    private async Task<IReadOnlyDictionary<string, string>> AsegurarPromptsProcedimientoAsync(Guid tenantId, AiProvider provider, CancellationToken ct)
+    {
+        var agent = await _db.AiAgents.FirstOrDefaultAsync(a => a.Role == ProcedimientoPrompts.AgenteRol, ct);
+        if (agent is null)
+        {
+            agent = new AiAgent
+            {
+                TenantId = tenantId, Name = ProcedimientoPrompts.AgenteNombre, Role = ProcedimientoPrompts.AgenteRol,
+                Provider = provider, SystemPrompt = ProcedimientoPrompts.AgenteDescripcion, IsActive = true
+            };
+            _db.AiAgents.Add(agent);
+            short orden = 1;
+            foreach (var (nombre, cuerpo) in ProcedimientoPrompts.Todos())
+            {
+                _db.AiAgentPrompts.Add(new AiAgentPrompt { TenantId = tenantId, AgentId = agent.Id, Name = nombre, Rule = "", Body = cuerpo, SortOrder = orden++ });
+            }
+            await _db.SaveChangesAsync(ct);
+        }
+
+        var prompts = await _db.AiAgentPrompts.AsNoTracking()
+            .Where(p => p.AgentId == agent.Id)
+            .ToDictionaryAsync(p => p.Name, p => p.Body, ct);
+        // Si el admin borro algun prompt, se completa con el de base para no romper la cadena.
+        foreach (var (nombre, cuerpo) in ProcedimientoPrompts.Todos())
+        { if (!prompts.ContainsKey(nombre)) { prompts[nombre] = cuerpo; } }
+        return prompts;
+    }
+
+    private async Task<string> LlenarPlantillaAsync(string plantilla, RespuestaTablaDocumental r, CancellationToken ct)
+    {
+        var serie = await _db.Series.AsNoTracking().Where(s => s.Id == r.SerieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefaultAsync(ct) ?? "";
+        var subserie = r.SubserieId == null ? "SIN SUBSERIE"
+            : (await _db.Subseries.AsNoTracking().Where(s => s.Id == r.SubserieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefaultAsync(ct) ?? "SIN SUBSERIE");
+        var gerencia = await _db.Dependencias.AsNoTracking().Where(d => d.Id == r.DependenciaId).Select(d => d.Codigo + " - " + d.NombreCargo).FirstOrDefaultAsync(ct) ?? "";
+
+        static string SiNo(bool b) => b ? "Si" : "No";
+        static string Anios(decimal? n) => n is decimal v ? v.ToString("0.##", CultureInfo.InvariantCulture) + " anios" : "(no definido)";
+
+        return plantilla
+            .Replace("@@SERIE@@", serie)
+            .Replace("@@SUBSERIE@@", subserie)
+            .Replace("@@GERENCIA@@", gerencia)
+            .Replace("@@Archivo gestion@@", Anios(r.TiempoAg))
+            .Replace("@@Archivo central@@", Anios(r.TiempoAc))
+            .Replace("@@TIEMPOBSE@@", string.IsNullOrWhiteSpace(r.TiempoObserv) ? "(sin observacion)" : r.TiempoObserv!)
+            .Replace("@@Conservacion Total@@", SiNo(r.DispCt))
+            .Replace("@@Seleccion@@", SiNo(r.DispS))
+            .Replace("@@Eliminacion@@", SiNo(r.DispE))
+            .Replace("@@DISPOBS@@", string.IsNullOrWhiteSpace(r.DispObserv) ? "(sin observacion)" : r.DispObserv!)
+            .Replace("@@REPPAL@@", SiNo(!string.IsNullOrWhiteSpace(r.Representativo)))
+            .Replace("@@DDHH@@", SiNo(r.SerieDdhh))
+            .Replace("@@Administrativo@@", SiNo(r.Val1Admin))
+            .Replace("@@Tecnico@@", SiNo(r.Val1Tecnica))
+            .Replace("@@Legal@@", SiNo(r.Val1Legal))
+            .Replace("@@Contable@@", SiNo(r.Val1Contable))
+            .Replace("@@Fiscal@@", SiNo(r.Val1Fiscal))
+            .Replace("@@Historico@@", SiNo(r.Val2Historica))
+            .Replace("@@Cientifico@@", SiNo(r.Val2Cientifica))
+            .Replace("@@Cultural@@", SiNo(r.Val2Cultural));
+    }
+
+    private async Task<(bool Ok, string Texto, string Error)> PasoAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
+    {
+        var res = await _client.CompleteAsync(provider, apiKey, baseUrl, model, systemPrompt,
+            new[] { new AiChatTurn("user", "Genera unicamente el XML solicitado.") }, ct);
+        if (!res.Ok) { return (false, "", res.Error ?? "Fallo la generacion con el modelo."); }
+        await _usage.RecordAsync(null, provider, model, res.InputTokens, res.OutputTokens, "procedimiento", true, ct);
+        return (true, ExtraerProcedimiento(res.Text ?? ""), "");
+    }
+
+    // Saca el contenido de <PROCEDIMIENTO>...</PROCEDIMIENTO> (tolera espacios en el cierre); si no hay XML, usa el texto tal cual.
+    private static string ExtraerProcedimiento(string xml)
+    {
+        var m = Regex.Match(xml, @"<\s*PROCEDIMIENTO\s*>(.*?)<\s*/\s*PROCEDIMIENTO\s*>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        var txt = m.Success ? m.Groups[1].Value : xml;
+        return System.Net.WebUtility.HtmlDecode(txt).Trim();
     }
 
     // Arma el prompt del sistema: prompt base + enrutador (con {{recurso}} expandido) + catalogo de recursos.
