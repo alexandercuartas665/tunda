@@ -40,5 +40,18 @@ public class Dependencia : TenantEntity
     /// <summary>Fecha estimada en que la dependencia debe terminar su TRD (agenda de trabajo).</summary>
     public DateOnly? FechaFinEstimada { get; set; }
 
+    /// <summary>
+    /// "Cerrado en revision": cuando esta en true, los usuarios de la dependencia
+    /// (URL cliente) ya no pueden capturar ni cambiar datos; el admin toma la TRD
+    /// para completar la caracterizacion sin que se la modifiquen por debajo.
+    /// </summary>
+    public bool RevisionCerrada { get; set; }
+
+    /// <summary>Cuando se marco por ultima vez el cierre en revision (inicio del proceso de revision).</summary>
+    public DateTimeOffset? RevisionIniciadaEn { get; set; }
+
+    /// <summary>Quien marco el cierre en revision.</summary>
+    public Guid? RevisionIniciadaPor { get; set; }
+
     public ICollection<Dependencia> Hijos { get; set; } = new List<Dependencia>();
 }

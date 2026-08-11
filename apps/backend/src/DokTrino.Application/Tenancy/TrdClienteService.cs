@@ -28,10 +28,13 @@ public sealed class TrdClienteService : ITrdClienteService
 
         // Solo se diligencia la encuesta ACTIVA: una en DESARROLLO todavia se
         // esta armando y una CERRADA ya se cerro. Antes ambas aceptaban
-        // respuestas igual que la activa.
-        var soloLectura = expirado || trd.Estado != "ACTIVO" || dep.Estado == "CERRADO";
+        // respuestas igual que la activa. Ademas, si el administrador marco la
+        // dependencia como "cerrada en revision", queda en solo lectura para que
+        // no le cambien los datos mientras completa la caracterizacion.
+        var soloLectura = expirado || trd.Estado != "ACTIVO" || dep.Estado == "CERRADO" || dep.RevisionCerrada;
         var motivo = !soloLectura ? null
             : expirado ? "El enlace expiro."
+            : dep.RevisionCerrada ? "Tu dependencia esta en revision por el administrador; por ahora no se pueden cambiar datos."
             : dep.Estado == "CERRADO" ? "Tu dependencia esta cerrada."
             : trd.Estado == "DESARROLLO" ? "La encuesta aun esta en desarrollo; el administrador debe activarla."
             : "La encuesta esta cerrada.";

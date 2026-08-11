@@ -29,6 +29,16 @@ public interface ITrdAdminService
     /// <summary>Actualiza solo las fechas de agenda (inicio/fin) de una dependencia. Usado por el modulo Agenda.</summary>
     Task<bool> ActualizarFechasDependenciaAsync(Guid id, DateOnly? inicio, DateOnly? fin, Guid actor, CancellationToken ct = default);
 
+    /// <summary>
+    /// Marca o desmarca el "cerrado en revision" de una dependencia. Al cerrar, los usuarios
+    /// de la dependencia (URL cliente) quedan en solo lectura. Deja constancia en la bitacora
+    /// (quien y cuando). Devuelve el nuevo estado (true = en revision).
+    /// </summary>
+    Task<bool> AlternarRevisionDependenciaAsync(Guid dependenciaId, Guid actor, string? actorNombre, CancellationToken ct = default);
+
+    /// <summary>Bitacora de cierres/aperturas de revision de una dependencia, mas reciente primero.</summary>
+    Task<IReadOnlyList<TrazaRevisionDto>> BitacoraRevisionAsync(Guid dependenciaId, CancellationToken ct = default);
+
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
 

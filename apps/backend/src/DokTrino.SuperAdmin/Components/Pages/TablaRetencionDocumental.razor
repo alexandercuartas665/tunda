@@ -332,13 +332,14 @@
                                                 <th style="width: 70px;">Nivel</th>
                                                 <th style="width: 90px;">Personas</th>
                                                 <th style="width: 90px;">Estado</th>
+                                                <th style="width: 120px;" title="Al marcar, los usuarios de la dependencia quedan en solo lectura mientras el administrador completa la caracterizacion">En revision</th>
                                                 <th style="width: 170px;"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @if (_deps.Count == 0)
                                             {
-                                                <tr><td colspan="6" class="vacio">Sin dependencias. Crea la raiz del organigrama.</td></tr>
+                                                <tr><td colspan="7" class="vacio">Sin dependencias. Crea la raiz del organigrama.</td></tr>
                                             }
                                             @foreach (var d in Jerarquia())
                                             {
@@ -354,6 +355,12 @@
                                                     <td>@d.Nivel</td>
                                                     <td>@d.Personas</td>
                                                     <td><span class="dep-badge">@d.Estado</span></td>
+                                                    <td @onclick:stopPropagation="true">
+                                                        <label class="rev-chk" title="@(d.RevisionCerrada ? "En revision: los usuarios estan en solo lectura. Clic para reabrir." : "Marca para cerrar en revision y bloquear la captura de los usuarios.")">
+                                                            <input type="checkbox" checked="@d.RevisionCerrada" @onchange="() => AlternarRevision(d)" />
+                                                            <span>@(d.RevisionCerrada ? "En revision" : "Abierta")</span>
+                                                        </label>
+                                                    </td>
                                                     <td class="acc" @onclick:stopPropagation="true">
                                                         <button class="trx-btn ghost mini" @onclick="() => AbrirPersonas(d)">Personas</button>
                                                         <button class="trx-btn danger mini" @onclick="() => DelDep(d.Id)">&times;</button>
@@ -410,7 +417,7 @@
                                     <col style="width:40px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
                                     <col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
                                     <col style="width:40px" /><col style="width:50px" /><col style="width:40px" />
-                                    <col style="width:260px" /><col style="width:150px" /><col style="width:60px" />
+                                    <col style="width:260px" /><col style="width:60px" />
                                 </colgroup>
                                 <thead>
                                     <tr>
@@ -427,7 +434,6 @@
                                         <th rowspan="2" class="c g-clas" style="width: 50px;">DDHH</th>
                                         <th rowspan="2" class="c g-clas" style="width: 40px;">SIG</th>
                                         <th rowspan="2" style="width: 260px;">Procedimiento</th>
-                                        <th rowspan="2" style="width: 150px;">Formatos</th>
                                         <th rowspan="2" style="width: 60px;"></th>
                                     </tr>
                                     <tr>
@@ -512,7 +518,6 @@
                                                 </button>
                                                 <div class="proc-txt" title="Ver el procedimiento por segmentos" @onclick="() => AbrirProc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</div>
                                             </td>
-                                            <td class="c-fmt"><input class="cell-in izq" value="@d.Formatos" placeholder="PDF, Papel..." @onchange="e => GuardarFormatos(d, e.Value)" /></td>
                                             <td class="acc">
                                                 <button class="trx-btn danger mini" title="Eliminar la fila" @onclick="() => BorrarDoc(d.Id)">&times;</button>
                                             </td>
@@ -1009,6 +1014,35 @@
                     <div class="dep-ind-load">Cargando indicadores...</div>
                 }
 
+                <div class="dep-sec-t">Revision</div>
+                <div class="per-nota">
+                    @if (_personasDe?.RevisionCerrada == true)
+                    {
+                        <span><b>En revision</b> desde @(_personasDe.RevisionIniciadaEn?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")). Los usuarios de la dependencia estan en solo lectura.</span>
+                    }
+                    else
+                    {
+                        <span>Abierta a captura. Marca <b>En revision</b> en la tabla para bloquear a los usuarios mientras completas la caracterizacion.</span>
+                    }
+                </div>
+                @if (_bitacora.Count > 0)
+                {
+                    <div class="biti">
+                        @foreach (var b in _bitacora)
+                        {
+                            <div class="biti-row">
+                                <span class="biti-ev @(b.Evento == "CERRO" ? "cerro" : "abrio")">@(b.Evento == "CERRO" ? "Cerro" : "Reabrio")</span>
+                                <span class="biti-quien">@(string.IsNullOrWhiteSpace(b.ActorNombre) ? "Administrador" : b.ActorNombre)</span>
+                                <span class="biti-cuando">@b.Fecha.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="trx-empty">Sin eventos de revision todavia.</div>
+                }
+
                 @if (_perError is not null)
                 {
                     <div class="trx-error">@_perError</div>
@@ -1145,6 +1179,17 @@
     .dep-tb td.vacio { text-align:center; color:#a8b0c4; padding:22px; }
     .dep-badge { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 7px;
                  border-radius:20px; background:#e8f5ee; color:#2f7d54; }
+    .rev-chk { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; font-weight:700; color:#8a93ad; }
+    .rev-chk input { accent-color:#c0392b; width:15px; height:15px; cursor:pointer; }
+    .rev-chk input:checked + span { color:#c0392b; }
+    .biti { border:1px solid #eef1f7; border-radius:10px; overflow:hidden; }
+    .biti-row { display:flex; align-items:center; gap:8px; padding:7px 11px; font-size:12px; border-top:1px solid #f2f4f9; }
+    .biti-row:first-child { border-top:0; }
+    .biti-ev { font-size:10px; font-weight:800; padding:1px 7px; border-radius:20px; }
+    .biti-ev.cerro { background:#fde3e0; color:#c0392b; }
+    .biti-ev.abrio { background:#e7f0ff; color:#1f5bb5; }
+    .biti-quien { color:#59617a; }
+    .biti-cuando { margin-left:auto; color:#9aa3bd; }
 
     .trx-btn.mini { padding:5px 9px; font-size:11px; }
     .doc-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
@@ -1971,6 +2016,36 @@
         await LoadAll();
     }
 
+    // Marca/desmarca "cerrado en revision": bloquea al cliente y deja traza. El admin no se bloquea.
+    private async Task AlternarRevision(DependenciaDto d)
+    {
+        _error = _ok = _depError = null;
+        try
+        {
+            var cerrada = await Trd.AlternarRevisionDependenciaAsync(d.Id, await Actor(), await ActorNombre());
+            _ok = cerrada
+                ? $"Dependencia {d.Codigo} en revision: sus usuarios quedan en solo lectura."
+                : $"Dependencia {d.Codigo} reabierta para captura.";
+            await LoadAll();
+            // Si el modal esta abierto sobre esta dependencia, refresca su estado y bitacora.
+            if (_personasDe?.Id == d.Id)
+            {
+                _personasDe = _deps.FirstOrDefault(x => x.Id == d.Id) ?? _personasDe;
+                _bitacora = (await Trd.BitacoraRevisionAsync(d.Id)).ToList();
+            }
+        }
+        catch (Exception ex) { _depError = ex.Message; }
+    }
+
+    private async Task<string?> ActorNombre()
+    {
+        if (AuthState is null) { return null; }
+        var st = await AuthState;
+        return st.User.Identity?.Name
+            ?? st.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? st.User.FindFirst(ClaimTypes.Email)?.Value;
+    }
+
     // ---------- Personas de una dependencia ----------
 
     private async Task AbrirPersonas(DependenciaDto d)
@@ -1982,9 +2057,12 @@
         _prop = new PropForm { CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones,
                                FechaInicio = d.FechaInicioEstimada, FechaFin = d.FechaFinEstimada };
         _ind = null;
+        _bitacora = (await Trd.BitacoraRevisionAsync(d.Id)).ToList();
         _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
         _ind = await Trd.IndicadoresDependenciaAsync(d.Id);
     }
+
+    private List<TrazaRevisionDto> _bitacora = new();
 
     private async Task GuardarPropiedades()
     {

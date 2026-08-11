@@ -111,6 +111,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<CatalogoCaracteristica> CatalogoCaracteristicas => Set<CatalogoCaracteristica>();
     public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
     public DbSet<FormacionDependencia> FormacionesDependencia => Set<FormacionDependencia>();
+    public DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia => Set<TrazaRevisionDependencia>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1005,6 +1006,14 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Modulo).HasMaxLength(40).IsRequired();
             b.HasOne(x => x.Colaborador).WithMany().HasForeignKey(x => x.ColaboradorId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.ColaboradorId });
+        });
+
+        modelBuilder.Entity<TrazaRevisionDependencia>(b =>
+        {
+            b.Property(x => x.Evento).HasMaxLength(20).IsRequired();
+            b.Property(x => x.ActorNombre).HasMaxLength(200);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.Fecha });
         });
 
         modelBuilder.Entity<Radicado>(b =>

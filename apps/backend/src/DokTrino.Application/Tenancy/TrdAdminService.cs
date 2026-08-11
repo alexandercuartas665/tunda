@@ -211,7 +211,8 @@ public sealed class TrdAdminService : ITrdAdminService
             .Select(d => new DependenciaDto(d.Id, d.PadreId, d.Nivel, d.Orden, d.NombreCargo, d.Codigo, d.Estado,
                 _db.ColaboradoresDependencia.Count(c => c.DependenciaId == d.Id),
                 d.CodigoRaizDocumental, d.GerenteNombre, d.GerenteEmail, d.Observaciones,
-                d.FechaInicioEstimada, d.FechaFinEstimada))
+                d.FechaInicioEstimada, d.FechaFinEstimada,
+                d.RevisionCerrada, d.RevisionIniciadaEn))
             .ToListAsync(ct);
 
     public async Task<DependenciaDto?> AgregarDependenciaAsync(CrearDependenciaRequest req, Guid actor, CancellationToken ct = default)
@@ -318,6 +319,41 @@ public sealed class TrdAdminService : ITrdAdminService
         await _db.SaveChangesAsync(ct);
         return true;
     }
+
+    public async Task<bool> AlternarRevisionDependenciaAsync(Guid dependenciaId, Guid actor, string? actorNombre, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return false; }
+        var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == dependenciaId, ct);
+        if (dep is null) { return false; }
+
+        var ahora = DateTimeOffset.UtcNow;
+        dep.RevisionCerrada = !dep.RevisionCerrada;
+        if (dep.RevisionCerrada)
+        {
+            dep.RevisionIniciadaEn = ahora;
+            dep.RevisionIniciadaPor = actor;
+        }
+
+        _db.TrazasRevisionDependencia.Add(new TrazaRevisionDependencia
+        {
+            TenantId = tenantId,
+            DependenciaId = dependenciaId,
+            Evento = dep.RevisionCerrada ? "CERRO" : "ABRIO",
+            Actor = actor,
+            ActorNombre = string.IsNullOrWhiteSpace(actorNombre) ? null : actorNombre.Trim(),
+            Fecha = ahora
+        });
+
+        await _db.SaveChangesAsync(ct);
+        return dep.RevisionCerrada;
+    }
+
+    public async Task<IReadOnlyList<TrazaRevisionDto>> BitacoraRevisionAsync(Guid dependenciaId, CancellationToken ct = default) =>
+        await _db.TrazasRevisionDependencia.AsNoTracking()
+            .Where(t => t.DependenciaId == dependenciaId)
+            .OrderByDescending(t => t.Fecha)
+            .Select(t => new TrazaRevisionDto(t.Evento, t.ActorNombre, t.Fecha))
+            .ToListAsync(ct);
 
     public async Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid depId, CancellationToken ct = default)
     {

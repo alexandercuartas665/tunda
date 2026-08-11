@@ -21,7 +21,11 @@ public sealed record TrdDto(
 /// que la tabla del organigrama muestra sin tener que abrir cada dependencia.</summary>
 public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Orden, string NombreCargo, string Codigo, string Estado, int Personas = 0,
     string? CodigoRaizDocumental = null, string? GerenteNombre = null, string? GerenteEmail = null, string? Observaciones = null,
-    DateOnly? FechaInicioEstimada = null, DateOnly? FechaFinEstimada = null);
+    DateOnly? FechaInicioEstimada = null, DateOnly? FechaFinEstimada = null,
+    bool RevisionCerrada = false, DateTimeOffset? RevisionIniciadaEn = null);
+
+/// <summary>Un evento de la bitacora de revision de una dependencia (cerro/reabrio, quien, cuando).</summary>
+public sealed record TrazaRevisionDto(string Evento, string? ActorNombre, DateTimeOffset Fecha);
 
 /// <summary>Propiedades editables de una dependencia (distintas del organigrama: codigo raiz, gerente, observaciones, fechas de agenda).</summary>
 public sealed record GuardarPropiedadesDependenciaRequest(Guid Id, string? CodigoRaizDocumental, string? GerenteNombre, string? GerenteEmail, string? Observaciones,

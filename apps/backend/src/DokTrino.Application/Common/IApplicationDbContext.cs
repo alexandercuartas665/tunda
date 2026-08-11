@@ -78,6 +78,7 @@ public interface IApplicationDbContext
     DbSet<CatalogoCaracteristica> CatalogoCaracteristicas { get; }
     DbSet<ColaboradorDependencia> ColaboradoresDependencia { get; }
     DbSet<FormacionDependencia> FormacionesDependencia { get; }
+    DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia { get; }
     DbSet<Radicado> Radicados { get; }
     DbSet<Bodega> Bodegas { get; }
     DbSet<Caja> Cajas { get; }
