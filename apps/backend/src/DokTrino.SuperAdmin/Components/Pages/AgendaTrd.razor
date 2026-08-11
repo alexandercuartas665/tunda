@@ -141,21 +141,6 @@
                 <span class="ag-modal-x" @onclick="() => _editOpen = false">&#10005;</span>
             </div>
 
-            @if (_copiaOk is not null) { <div class="ase-ok" style="margin-bottom:10px;">@_copiaOk</div> }
-
-            @* Copiar la agenda de otra encuesta a esta *@
-            <div class="ag-copia">
-                <span class="ag-copia-lbl">Copiar fechas desde otra encuesta:</span>
-                <select class="dep-in" style="max-width:230px;" @bind="_copiaOrigen">
-                    <option value="">(elige encuesta origen)</option>
-                    @foreach (var t in _trds.Where(t => t.Id != _trdSelId))
-                    {
-                        <option value="@t.Id">@t.Consecutivo &middot; @t.Titulo</option>
-                    }
-                </select>
-                <button class="trx-btn ghost mini" @onclick="CopiarDesde" disabled="@(_copiaOrigen == "")">Copiar aqui</button>
-            </div>
-
             <div class="table-responsive" style="max-height:56vh; overflow-y:auto;">
                 <table class="table table-sm align-middle ag-tabla">
                     <thead>
@@ -272,8 +257,6 @@
     private DateOnly _ganttRef;                    // mes de referencia (inicio de la ventana)
     private string? _error, _ok;
     private bool _editOpen;
-    private string _copiaOrigen = "";
-    private string? _copiaOk;
     private DateOnly _mes;
     private readonly DateOnly _hoy = DateOnly.FromDateTime(DateTime.Today);
 
@@ -372,20 +355,6 @@
         try
         {
             await Trd.ActualizarFechasDependenciaAsync(d.Id, ini, fin, await Actor());
-            await CargarAgenda();
-        }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
-    }
-
-    private async Task CopiarDesde()
-    {
-        _copiaOk = _error = null;
-        if (!Guid.TryParse(_copiaOrigen, out var origen) || _trdSelId == Guid.Empty) { return; }
-        try
-        {
-            var n = await Trd.CopiarAgendaAsync(origen, _trdSelId, await Actor());
-            _copiaOk = n > 0 ? $"Se copiaron las fechas de {n} dependencia(s) que coinciden por codigo." : "Ninguna dependencia coincidio por codigo.";
-            _copiaOrigen = "";
             await CargarAgenda();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }

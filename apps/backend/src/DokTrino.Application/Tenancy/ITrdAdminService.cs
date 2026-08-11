@@ -10,6 +10,8 @@ public interface ITrdAdminService
     // Cabecera TRD
     Task<IReadOnlyList<TrdDto>> ListarTrdAsync(CancellationToken ct = default);
     Task<TrdDto?> CrearTrdAsync(CrearTrdRequest req, Guid actor, CancellationToken ct = default);
+    /// <summary>Duplica una encuesta completa (organigrama, personas y matriz TRD) menos la agenda de fechas. La copia nace en DESARROLLO.</summary>
+    Task<TrdDto?> DuplicarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default);
     Task<bool> CambiarEstadoAsync(Guid trdId, string estado, Guid actor, CancellationToken ct = default);
     Task<bool> EliminarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default);
 
@@ -26,9 +28,6 @@ public interface ITrdAdminService
 
     /// <summary>Actualiza solo las fechas de agenda (inicio/fin) de una dependencia. Usado por el modulo Agenda.</summary>
     Task<bool> ActualizarFechasDependenciaAsync(Guid id, DateOnly? inicio, DateOnly? fin, Guid actor, CancellationToken ct = default);
-
-    /// <summary>Copia las fechas de agenda de una TRD a otra, emparejando dependencias por su codigo. Devuelve cuantas copio.</summary>
-    Task<int> CopiarAgendaAsync(Guid origenTrdId, Guid destinoTrdId, Guid actor, CancellationToken ct = default);
 
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);

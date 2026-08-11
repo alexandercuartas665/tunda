@@ -34,45 +34,6 @@
     @if (_error is not null) { <div class="ase-alert">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-    @* --- Capacitacion obligatoria del Cliente Encuesta (se configura aqui y en Config. Documental) --- *@
-    <div class="cap-box">
-        <div class="cap-box-h" @onclick="() => _capOpen = !_capOpen">
-            <span class="cap-box-caret">@((MarkupString)(_capOpen ? "&#9662;" : "&#9656;"))</span>
-            <span class="cap-box-t">Capacitacion obligatoria</span>
-            <span class="cap-box-sub">
-                @(_capCursoSel == "" ? "Sin curso: el colaborador diligencia sin restriccion"
-                                     : $"{NombreCurso(_capCursoSel)} - {_capIntentos} intento(s)" + (_capObligatorio ? " - obligatorio" : ""))
-            </span>
-        </div>
-        @if (_capOpen)
-        {
-            <div class="cap-box-b">
-                <div class="cap-box-nota">
-                    El colaborador debe aprobar este curso antes de diligenciar la TRD de su dependencia.
-                    Al agotar los intentos queda bloqueado; lo desbloqueas en Configuracion Documental &rarr; Formacion.
-                </div>
-                <div class="cap-box-fila">
-                    <div style="flex:1; min-width:220px;">
-                        <label class="trx-lbl">Curso</label>
-                        <select class="dep-in" @bind="_capCursoSel">
-                            <option value="">Ninguno (sin curso obligatorio)</option>
-                            @foreach (var c in _capCursos) { <option value="@c.Id">@c.Titulo</option> }
-                        </select>
-                    </div>
-                    <div style="width:120px; flex-shrink:0;">
-                        <label class="trx-lbl">Intentos</label>
-                        <input class="dep-in" type="number" min="1" @bind="_capIntentos" />
-                    </div>
-                    <label class="doc-chk" style="align-self:flex-end; padding-bottom:9px;">
-                        <input type="checkbox" @bind="_capObligatorio" /> Obligatorio
-                    </label>
-                    <button class="trx-btn" style="align-self:flex-end;" @onclick="GuardarCapacitacion">Guardar</button>
-                </div>
-                @if (_capOk is not null) { <div class="dep-ok" style="margin-top:8px;">@_capOk</div> }
-            </div>
-        }
-    </div>
-
     @* --- Alta de transaccion --- *@
     @if (_nuevaOpen)
     {
@@ -222,6 +183,7 @@
                         </div>
                         <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap;">
                             <a class="trx-btn ghost" href="@($"/api/doktrino/trd/{_sel.Id}/excel")" target="_blank">Exportar matriz (Excel AGN)</a>
+                            <button class="trx-btn ghost" @onclick="() => Duplicar(_sel!.Id)" disabled="@_duplicando">@(_duplicando ? "Duplicando..." : "Duplicar encuesta")</button>
                             @if (_sel.Estado == "DESARROLLO")
                             {
                                 <button class="trx-btn" @onclick='() => Estado(_sel!.Id, "ACTIVO")'>Activar</button>
@@ -231,6 +193,47 @@
                                 <button class="trx-btn danger" @onclick='() => Estado(_sel!.Id, "CERRADO")'>Cerrar transaccion</button>
                             }
                         </div>
+                    </div>
+                }
+            </div>
+
+            @* --- Capacitacion obligatoria de ESTA encuesta --- *@
+            <div class="trx-acc">
+                <div class="trx-acc-h" @onclick="() => _capOpen = !_capOpen" style="cursor: pointer;">
+                    <span class="trx-acc-ico">&#127891;</span>
+                    <span class="trx-acc-t">Capacitacion obligatoria</span>
+                    <span class="trx-acc-meta">
+                        @(_capCursoSel == "" ? "Sin curso: se diligencia sin restriccion"
+                                             : $"{NombreCurso(_capCursoSel)} - {_capIntentos} intento(s)" + (_capObligatorio ? " - obligatorio" : ""))
+                    </span>
+                    <span style="color: #9aa3bd;">@(_capOpen ? "-" : "+")</span>
+                </div>
+                @if (_capOpen)
+                {
+                    <div class="trx-acc-b">
+                        <div class="cap-box-nota">
+                            El colaborador de esta encuesta debe aprobar este curso antes de diligenciar su TRD.
+                            Cada encuesta puede exigir un curso distinto. Al agotar los intentos queda bloqueado;
+                            lo desbloqueas en Configuracion Documental &rarr; Formacion.
+                        </div>
+                        <div class="cap-box-fila">
+                            <div style="flex:1; min-width:220px;">
+                                <label class="trx-lbl">Curso</label>
+                                <select class="dep-in" @bind="_capCursoSel">
+                                    <option value="">Ninguno (sin curso obligatorio)</option>
+                                    @foreach (var c in _capCursos) { <option value="@c.Id">@c.Titulo</option> }
+                                </select>
+                            </div>
+                            <div style="width:120px; flex-shrink:0;">
+                                <label class="trx-lbl">Intentos</label>
+                                <input class="dep-in" type="number" min="1" @bind="_capIntentos" />
+                            </div>
+                            <label class="doc-chk" style="align-self:flex-end; padding-bottom:9px;">
+                                <input type="checkbox" @bind="_capObligatorio" /> Obligatorio
+                            </label>
+                            <button class="trx-btn" style="align-self:flex-end;" @onclick="GuardarCapacitacion">Guardar</button>
+                        </div>
+                        @if (_capOk is not null) { <div class="dep-ok" style="margin-top:8px;">@_capOk</div> }
                     </div>
                 }
             </div>
@@ -1217,13 +1220,14 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAll();
-        await CargarCapacitacion();
+        _capCursos = (await Cursos.ListarCursosAsync()).ToList();
     }
 
-    private async Task CargarCapacitacion()
+    // Carga la exigencia de curso de LA encuesta abierta (cada TRD tiene la suya).
+    private async Task CargarCapacitacion(Guid trdId)
     {
-        _capCursos = (await Cursos.ListarCursosAsync()).ToList();
-        var cfg = await Cursos.ConfigClienteAsync();
+        _capOk = null;
+        var cfg = await Cursos.ConfigClienteAsync(trdId);
         _capCursoSel = cfg.CursoId?.ToString() ?? "";
         _capIntentos = cfg.IntentosMax < 1 ? 1 : cfg.IntentosMax;
         _capObligatorio = cfg.Obligatorio;
@@ -1235,12 +1239,13 @@
     private async Task GuardarCapacitacion()
     {
         _capOk = _error = null;
+        if (_sel is null) { return; }
         try
         {
             Guid? cursoId = Guid.TryParse(_capCursoSel, out var id) ? id : null;
-            await Cursos.GuardarConfigClienteAsync(cursoId, _capObligatorio, _capIntentos < 1 ? 1 : _capIntentos, await Actor());
-            _capOk = cursoId is null ? "Se quito el curso obligatorio." : "Capacitacion guardada.";
-            await CargarCapacitacion();
+            await Cursos.GuardarConfigClienteAsync(_sel.Id, cursoId, _capObligatorio, _capIntentos < 1 ? 1 : _capIntentos, await Actor());
+            _capOk = cursoId is null ? "Se quito el curso obligatorio de esta encuesta." : "Capacitacion guardada para esta encuesta.";
+            await CargarCapacitacion(_sel.Id);
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
@@ -1274,6 +1279,7 @@
         _sel = t;
         _deps = (await Trd.ArbolDependenciasAsync(t.Id)).ToList();
         _sinCuenta = await Trd.ColaboradoresSinCuentaAsync(t.Id);
+        await CargarCapacitacion(t.Id);
         // Se carga aunque el acordeon este plegado: si no, la cabecera anuncia
         // "0 documentos" cuando si los hay.
         _fltDep = _fltDoc = "";
@@ -1326,6 +1332,29 @@
         _error = _ok = null;
         try { await Trd.CambiarEstadoAsync(id, e, await Actor()); _ok = $"Estado -> {e}."; await LoadAll(); }
         catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private bool _duplicando;
+
+    // Clona la encuesta completa (organigrama, personas y matriz TRD) menos la
+    // agenda de fechas, que es propia de cada encuesta. La copia nace en DESARROLLO.
+    private async Task Duplicar(Guid id)
+    {
+        if (_duplicando) { return; }
+        _error = _ok = null; _duplicando = true;
+        try
+        {
+            var copia = await Trd.DuplicarTrdAsync(id, await Actor());
+            await LoadAll();
+            if (copia is not null)
+            {
+                _ok = $"Se duplico la encuesta en {copia.Consecutivo} (sin agenda). Ajusta su cronograma en Agenda de trabajo TRD.";
+                var nueva = _trds.FirstOrDefault(t => t.Id == copia.Id);
+                if (nueva is not null) { await Abrir(nueva); }
+            }
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _duplicando = false; }
     }
 
     // ---------- Organigrama ----------

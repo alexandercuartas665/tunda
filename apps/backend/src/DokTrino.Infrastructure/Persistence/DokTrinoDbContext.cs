@@ -858,8 +858,10 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         modelBuilder.Entity<ConfiguracionCursoCliente>(b =>
         {
             b.HasOne(x => x.Curso).WithMany().HasForeignKey(x => x.CursoId).OnDelete(DeleteBehavior.Cascade);
-            // Un curso vigente por tenant.
-            b.HasIndex(x => x.TenantId).IsUnique();
+            // La exigencia muere con la encuesta que la define.
+            b.HasOne(x => x.Trd).WithMany().HasForeignKey(x => x.TrdId).OnDelete(DeleteBehavior.Cascade);
+            // Un curso vigente por (tenant, encuesta): cada TRD tiene su compuerta.
+            b.HasIndex(x => new { x.TenantId, x.TrdId }).IsUnique();
         });
 
         modelBuilder.Entity<ProcesoNodo>(b =>

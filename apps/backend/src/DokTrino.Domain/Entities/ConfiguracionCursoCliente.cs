@@ -3,11 +3,16 @@ using DokTrino.Domain.Common;
 namespace DokTrino.Domain.Entities;
 
 /// <summary>
-/// Curso vigente que el Cliente Encuesta debe validar, elegido en Configuracion
-/// documental. Una fila por tenant: es el curso que hoy actua como compuerta.
+/// Curso que el Cliente Encuesta debe aprobar para diligenciar una TRD concreta.
+/// Una fila por (tenant, TRD): cada encuesta puede exigir un curso distinto, o
+/// ninguno. Es la compuerta de esa encuesta.
 /// </summary>
 public class ConfiguracionCursoCliente : TenantEntity
 {
+    /// <summary>Encuesta (TRD) a la que aplica esta exigencia de curso.</summary>
+    public Guid TrdId { get; set; }
+    public TablaRetencionDocumental Trd { get; set; } = null!;
+
     public Guid CursoId { get; set; }
     public Curso Curso { get; set; } = null!;
 

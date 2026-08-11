@@ -59,7 +59,7 @@ public sealed class ClienteCursoService : IClienteCursoService
         if (s is null) { return new CursoGateDto(false, false, null, null, null, false, false, 0, 0); }
 
         var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId, ct);
+            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
         if (cfg is null) { return new CursoGateDto(false, false, null, null, null, false, false, 0, 0); }
 
         var curso = await _db.Cursos.IgnoreQueryFilters().AsNoTracking()
@@ -84,7 +84,7 @@ public sealed class ClienteCursoService : IClienteCursoService
         if (s is null) { return null; }
 
         var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId, ct);
+            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
         if (cfg is null) { return null; }
 
         var curso = await _db.Cursos.IgnoreQueryFilters().AsNoTracking()
@@ -128,7 +128,7 @@ public sealed class ClienteCursoService : IClienteCursoService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { return; }
         var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId, ct);
+            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
         if (cfg is null) { return; }
 
         var prog = await _db.CursoProgresos.IgnoreQueryFilters()

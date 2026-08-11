@@ -219,20 +219,21 @@ public sealed class CursoService : ICursoService
 
     // ---------- Publicacion (curso vigente para el cliente) ----------
 
-    public async Task<ConfigCursoClienteDto> ConfigClienteAsync(CancellationToken ct = default)
+    public async Task<ConfigCursoClienteDto> ConfigClienteAsync(Guid trdId, CancellationToken ct = default)
     {
-        var cfg = await _db.ConfiguracionesCursoCliente.AsNoTracking().FirstOrDefaultAsync(ct);
+        var cfg = await _db.ConfiguracionesCursoCliente.AsNoTracking().FirstOrDefaultAsync(c => c.TrdId == trdId, ct);
         if (cfg is null) { return new ConfigCursoClienteDto(null, null, true, 3); }
         var titulo = await _db.Cursos.AsNoTracking().Where(c => c.Id == cfg.CursoId).Select(c => c.Titulo).FirstOrDefaultAsync(ct);
         return new ConfigCursoClienteDto(cfg.CursoId, titulo, cfg.Obligatorio, cfg.IntentosMax);
     }
 
-    public async Task GuardarConfigClienteAsync(Guid? cursoId, bool obligatorio, int intentosMax, Guid actor, CancellationToken ct = default)
+    public async Task GuardarConfigClienteAsync(Guid trdId, Guid? cursoId, bool obligatorio, int intentosMax, Guid actor, CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tenantId) { return; }
-        var cfg = await _db.ConfiguracionesCursoCliente.FirstOrDefaultAsync(ct);
+        if (!await _db.TablasRetencionDocumental.AnyAsync(t => t.Id == trdId, ct)) { throw new InvalidOperationException("La encuesta no existe."); }
+        var cfg = await _db.ConfiguracionesCursoCliente.FirstOrDefaultAsync(c => c.TrdId == trdId, ct);
 
-        // Desasociar: sin curso vigente, se retira la fila.
+        // Desasociar: sin curso, esta encuesta no exige capacitacion.
         if (cursoId is not Guid cid)
         {
             if (cfg is not null) { _db.ConfiguracionesCursoCliente.Remove(cfg); await _db.SaveChangesAsync(ct); }
@@ -243,7 +244,7 @@ public sealed class CursoService : ICursoService
 
         if (cfg is null)
         {
-            cfg = new ConfiguracionCursoCliente { TenantId = tenantId };
+            cfg = new ConfiguracionCursoCliente { TenantId = tenantId, TrdId = trdId };
             _db.ConfiguracionesCursoCliente.Add(cfg);
         }
         cfg.CursoId = cid;
@@ -280,10 +281,12 @@ public sealed class CursoService : ICursoService
 
     public async Task<(int Inscritos, int Aprobados)> ResumenVigenteAsync(CancellationToken ct = default)
     {
-        var cursoId = await _db.ConfiguracionesCursoCliente.AsNoTracking().Select(c => (Guid?)c.CursoId).FirstOrDefaultAsync(ct);
-        if (cursoId is not Guid cid) { return (0, 0); }
-        var inscritos = await _db.CursoProgresos.CountAsync(p => p.CursoId == cid && p.FechaInicio != null, ct);
-        var aprobados = await _db.CursoProgresos.CountAsync(p => p.CursoId == cid && p.Aprobado, ct);
+        // Cada encuesta puede exigir un curso distinto: se agrega el avance de
+        // todos los cursos que hoy actuan como compuerta en el tenant.
+        var cursoIds = await _db.ConfiguracionesCursoCliente.AsNoTracking().Select(c => c.CursoId).Distinct().ToListAsync(ct);
+        if (cursoIds.Count == 0) { return (0, 0); }
+        var inscritos = await _db.CursoProgresos.CountAsync(p => cursoIds.Contains(p.CursoId) && p.FechaInicio != null, ct);
+        var aprobados = await _db.CursoProgresos.CountAsync(p => cursoIds.Contains(p.CursoId) && p.Aprobado, ct);
         return (inscritos, aprobados);
     }
 

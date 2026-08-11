@@ -66,6 +66,104 @@ public sealed class TrdAdminService : ITrdAdminService
         return new TrdDto(trd.Id, trd.Consecutivo, trd.Titulo, trd.Estado, null, trd.FechaInicio, trd.FechaFin, 0);
     }
 
+    public async Task<TrdDto?> DuplicarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var origen = await _db.TablasRetencionDocumental.AsNoTracking().FirstOrDefaultAsync(t => t.Id == trdId, ct);
+        if (origen is null) { return null; }
+
+        // Consecutivo nuevo (misma logica de secuencia que CrearTrdAsync).
+        var seq = await _db.TablasRetencionDocumental.CountAsync(ct) + 1;
+        string consecutivo;
+        do { consecutivo = $"TRD-{seq:D4}"; seq++; }
+        while (await _db.TablasRetencionDocumental.AnyAsync(x => x.Consecutivo == consecutivo, ct));
+
+        // La copia nace en DESARROLLO y con titulo marcado. El cap protege el max(200).
+        var baseTitulo = origen.Titulo.Length > 192 ? origen.Titulo[..192] : origen.Titulo;
+        var nueva = new TablaRetencionDocumental
+        {
+            TenantId = tenantId, Consecutivo = consecutivo, Titulo = baseTitulo + " (copia)", Estado = "DESARROLLO",
+            SegmentoId = origen.SegmentoId, FechaInicio = origen.FechaInicio, FechaFin = origen.FechaFin,
+            Observaciones = origen.Observaciones, CreadoPor = actor
+        };
+        _db.TablasRetencionDocumental.Add(nueva);
+
+        // Dependencias: se copia todo el organigrama MENOS la agenda (FechaInicioEstimada/FechaFinEstimada),
+        // que es propia de cada encuesta. Se remapea Id -> Id nuevo para reconstruir el arbol (PadreId).
+        var deps = await _db.Dependencias.AsNoTracking().Where(d => d.TrdId == trdId)
+            .OrderBy(d => d.Nivel).ThenBy(d => d.Orden).ToListAsync(ct);
+        var mapDep = new Dictionary<Guid, Guid>();
+        var nuevasDeps = new List<Dependencia>();
+        foreach (var d in deps)
+        {
+            var nd = new Dependencia
+            {
+                TenantId = tenantId, TrdId = nueva.Id, Nivel = d.Nivel, Orden = d.Orden,
+                NombreCargo = d.NombreCargo, Codigo = d.Codigo, Estado = d.Estado,
+                CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre,
+                GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones
+                // FechaInicioEstimada / FechaFinEstimada: NO se copian (la agenda es propia de cada encuesta).
+            };
+            mapDep[d.Id] = nd.Id;
+            nuevasDeps.Add(nd);
+        }
+        // Reasignar padres con el mapa (el orden por Nivel garantiza que el padre ya esta mapeado).
+        for (var i = 0; i < deps.Count; i++)
+        {
+            if (deps[i].PadreId is Guid pid && mapDep.TryGetValue(pid, out var np)) { nuevasDeps[i].PadreId = np; }
+        }
+        _db.Dependencias.AddRange(nuevasDeps);
+
+        // Personas (colaboradores) por dependencia.
+        var depIds = mapDep.Keys.ToList();
+        var colabs = await _db.ColaboradoresDependencia.AsNoTracking()
+            .Where(c => depIds.Contains(c.DependenciaId)).ToListAsync(ct);
+        foreach (var c in colabs)
+        {
+            _db.ColaboradoresDependencia.Add(new ColaboradorDependencia
+            {
+                TenantId = tenantId, DependenciaId = mapDep[c.DependenciaId], UsuarioId = c.UsuarioId,
+                Email = c.Email, Nombre = c.Nombre, Telefono = c.Telefono, Rol = c.Rol
+            });
+        }
+
+        // Matriz TRD (respuestas archivisticas) + sus formatos. Se remapea RespuestaId.
+        var resps = await _db.RespuestasTablaDocumental.AsNoTracking().Where(r => r.TrdId == trdId).ToListAsync(ct);
+        var mapResp = new Dictionary<Guid, Guid>();
+        foreach (var r in resps)
+        {
+            var nr = new RespuestaTablaDocumental
+            {
+                TenantId = tenantId, TrdId = nueva.Id,
+                DependenciaId = mapDep.TryGetValue(r.DependenciaId, out var nid) ? nid : r.DependenciaId,
+                SerieId = r.SerieId, SubserieId = r.SubserieId, TipologiaId = r.TipologiaId, SinSubserie = r.SinSubserie,
+                TiempoAg = r.TiempoAg, TiempoAc = r.TiempoAc, TiempoObserv = r.TiempoObserv,
+                DispCt = r.DispCt, DispS = r.DispS, DispE = r.DispE, DispD = r.DispD, DispObserv = r.DispObserv,
+                Val1Admin = r.Val1Admin, Val1Tecnica = r.Val1Tecnica, Val1Legal = r.Val1Legal,
+                Val1Contable = r.Val1Contable, Val1Fiscal = r.Val1Fiscal,
+                Val2Historica = r.Val2Historica, Val2Cientifica = r.Val2Cientifica, Val2Cultural = r.Val2Cultural,
+                Representativo = r.Representativo, SerieDdhh = r.SerieDdhh, RelacionSig = r.RelacionSig,
+                Extension = r.Extension, FechaReg = r.FechaReg, CreadoPor = actor
+            };
+            mapResp[r.Id] = nr.Id;
+            _db.RespuestasTablaDocumental.Add(nr);
+        }
+        var respIds = mapResp.Keys.ToList();
+        var formatos = await _db.FormatosSerie.AsNoTracking().Where(f => respIds.Contains(f.RespuestaId)).ToListAsync(ct);
+        foreach (var f in formatos)
+        {
+            _db.FormatosSerie.Add(new FormatoSerie
+            {
+                TenantId = tenantId, RespuestaId = mapResp[f.RespuestaId],
+                Soporte = f.Soporte, Formato = f.Formato, Descripcion = f.Descripcion
+            });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return new TrdDto(nueva.Id, nueva.Consecutivo, nueva.Titulo, nueva.Estado, null,
+            nueva.FechaInicio, nueva.FechaFin, deps.Count);
+    }
+
     public async Task<bool> CambiarEstadoAsync(Guid trdId, string estado, Guid actor, CancellationToken ct = default)
     {
         estado = (estado ?? "").Trim().ToUpperInvariant();
@@ -219,31 +317,6 @@ public sealed class TrdAdminService : ITrdAdminService
         dep.FechaFinEstimada = fin;
         await _db.SaveChangesAsync(ct);
         return true;
-    }
-
-    public async Task<int> CopiarAgendaAsync(Guid origenTrdId, Guid destinoTrdId, Guid actor, CancellationToken ct = default)
-    {
-        if (origenTrdId == destinoTrdId) { return 0; }
-        var origen = await _db.Dependencias.AsNoTracking()
-            .Where(d => d.TrdId == origenTrdId && d.FechaInicioEstimada != null)
-            .Select(d => new { d.Codigo, d.FechaInicioEstimada, d.FechaFinEstimada })
-            .ToListAsync(ct);
-        if (origen.Count == 0) { return 0; }
-        var porCodigo = origen.GroupBy(o => o.Codigo).ToDictionary(g => g.Key, g => g.First());
-
-        var destino = await _db.Dependencias.Where(d => d.TrdId == destinoTrdId).ToListAsync(ct);
-        var copiadas = 0;
-        foreach (var d in destino)
-        {
-            if (porCodigo.TryGetValue(d.Codigo, out var src))
-            {
-                d.FechaInicioEstimada = src.FechaInicioEstimada;
-                d.FechaFinEstimada = src.FechaFinEstimada;
-                copiadas++;
-            }
-        }
-        if (copiadas > 0) { await _db.SaveChangesAsync(ct); }
-        return copiadas;
     }
 
     public async Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid depId, CancellationToken ct = default)

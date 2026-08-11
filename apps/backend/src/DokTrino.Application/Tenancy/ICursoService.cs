@@ -27,9 +27,9 @@ public interface ICursoService
     // Cuestionarios disponibles para elegir como evaluacion final
     Task<IReadOnlyList<(Guid Id, string Titulo)>> CuestionariosAsync(CancellationToken ct = default);
 
-    // Publicacion: curso vigente para el Cliente Encuesta (Configuracion documental)
-    Task<ConfigCursoClienteDto> ConfigClienteAsync(CancellationToken ct = default);
-    Task GuardarConfigClienteAsync(Guid? cursoId, bool obligatorio, int intentosMax, Guid actor, CancellationToken ct = default);
+    // Publicacion: curso obligatorio por encuesta (se configura en cada TRD)
+    Task<ConfigCursoClienteDto> ConfigClienteAsync(Guid trdId, CancellationToken ct = default);
+    Task GuardarConfigClienteAsync(Guid trdId, Guid? cursoId, bool obligatorio, int intentosMax, Guid actor, CancellationToken ct = default);
 
     // Estadisticas y desbloqueo
     Task<IReadOnlyList<CursoProgresoDto>> ProgresoAsync(Guid cursoId, CancellationToken ct = default);

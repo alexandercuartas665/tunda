@@ -47,10 +47,10 @@ public sealed class CuestionarioService : ICuestionarioService
     /// (compatibilidad con el quiz suelto anterior). Devuelve tambien la config
     /// del curso para aplicar intentos/bloqueo.
     /// </summary>
-    private async Task<(CuestionarioCapacitacion? Cuestionario, ConfiguracionCursoCliente? Curso)> ResolverGateAsync(Guid tenantId, CancellationToken ct)
+    private async Task<(CuestionarioCapacitacion? Cuestionario, ConfiguracionCursoCliente? Curso)> ResolverGateAsync(Guid tenantId, Guid trdId, CancellationToken ct)
     {
         var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TenantId == tenantId, ct);
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.TrdId == trdId, ct);
         if (cfg is not null)
         {
             var cuestId = await _db.Cursos.IgnoreQueryFilters().AsNoTracking()
@@ -72,7 +72,7 @@ public sealed class CuestionarioService : ICuestionarioService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { return null; }
 
-        var (cuestionario, _) = await ResolverGateAsync(s.TenantId, ct);
+        var (cuestionario, _) = await ResolverGateAsync(s.TenantId, s.TrdId, ct);
         if (cuestionario is null) { return null; }
 
         var preguntas = await _db.CuestionarioPreguntas.IgnoreQueryFilters().AsNoTracking()
@@ -92,7 +92,7 @@ public sealed class CuestionarioService : ICuestionarioService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { return new EstadoCapacitacionDto(false, 0, 0, false); }
 
-        var (cuest, _) = await ResolverGateAsync(s.TenantId, ct);
+        var (cuest, _) = await ResolverGateAsync(s.TenantId, s.TrdId, ct);
         var hay = cuest is not null;
 
         // Intentos del cuestionario que hoy es la evaluacion (curso o FORMACION_TRD).
@@ -116,7 +116,7 @@ public sealed class CuestionarioService : ICuestionarioService
         var s = await _cliente.ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
 
-        var (cuestionario, cfgCurso) = await ResolverGateAsync(s.TenantId, ct);
+        var (cuestionario, cfgCurso) = await ResolverGateAsync(s.TenantId, s.TrdId, ct);
         if (cuestionario is null) { return null; }
 
         // Si el curso tiene la compuerta y el colaborador agoto los intentos sin

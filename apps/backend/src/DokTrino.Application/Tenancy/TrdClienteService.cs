@@ -70,6 +70,7 @@ public sealed class TrdClienteService : ITrdClienteService
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
         if (s.Expirado) { throw new InvalidOperationException("El token expiro."); }
         if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede diligenciar."); }
+        await EnsureCapacitacionAsync(s, ct);
         if (!await _db.Series.IgnoreQueryFilters().AnyAsync(x => x.Id == cmd.SerieId && x.TenantId == s.TenantId, ct))
         { throw new InvalidOperationException("La serie no existe."); }
 
@@ -185,6 +186,7 @@ public sealed class TrdClienteService : ITrdClienteService
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
         if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede sugerir catalogo."); }
+        await EnsureCapacitacionAsync(s, ct);
 
         var nombre = (cmd.Nombre ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("El nombre es obligatorio."); }
@@ -272,6 +274,7 @@ public sealed class TrdClienteService : ITrdClienteService
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { throw new InvalidOperationException("Token invalido."); }
         if (s.SoloLectura) { throw new InvalidOperationException(s.MotivoSoloLectura ?? "No se puede editar."); }
+        await EnsureCapacitacionAsync(s, ct);
 
         var nombre = (formato ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("Indica el formato (PDF, papel, video...)."); }
@@ -347,6 +350,29 @@ public sealed class TrdClienteService : ITrdClienteService
 
         fila.MostrarHint = false;
         await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Compuerta de capacitacion del servidor: replica PuedeDiligenciar del
+    /// Cliente Encuesta (no hay curso obligatorio, o la dependencia ya aprobo).
+    /// El gate de la UI es solo visual; esta es la barrera real antes de escribir.
+    /// </summary>
+    private async Task EnsureCapacitacionAsync(TokenSesionDto s, CancellationToken ct)
+    {
+        var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
+        if (cfg is null || !cfg.Obligatorio) { return; }
+
+        var cursoActivo = await _db.Cursos.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(c => c.Id == cfg.CursoId && c.Activo, ct);
+        if (!cursoActivo) { return; }
+
+        var aprobado = await _db.CursoProgresos.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(p => p.CursoId == cfg.CursoId && p.DependenciaId == s.DependenciaId && p.Aprobado, ct);
+        if (!aprobado)
+        {
+            throw new InvalidOperationException("Debes aprobar la capacitacion obligatoria antes de diligenciar la tabla.");
+        }
     }
 
     private async Task<FormacionDependencia?> FormacionDeLaDependenciaAsync(
