@@ -56,6 +56,7 @@ public sealed record ColaboradorDto(Guid Id, Guid DependenciaId, string Nombre, 
 /// </summary>
 public sealed record DocumentoTrdDto(
     Guid Id,
+    string Codigo,
     Guid DependenciaId, string DependenciaCodigo, string DependenciaNombre,
     Guid SerieId, string SerieNombre,
     Guid? SubserieId, string? SubserieNombre,

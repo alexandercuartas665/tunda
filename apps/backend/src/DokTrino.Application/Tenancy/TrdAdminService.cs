@@ -561,9 +561,12 @@ public sealed class TrdAdminService : ITrdAdminService
                 r.Id, r.DependenciaId,
                 DepCodigo = _db.Dependencias.Where(d => d.Id == r.DependenciaId).Select(d => d.Codigo).FirstOrDefault(),
                 DepNombre = _db.Dependencias.Where(d => d.Id == r.DependenciaId).Select(d => d.NombreCargo).FirstOrDefault(),
+                RaizDoc = _db.Dependencias.Where(d => d.Id == r.DependenciaId).Select(d => d.CodigoRaizDocumental).FirstOrDefault(),
                 r.SerieId,
+                SerieCod = _db.Series.Where(s => s.Id == r.SerieId).Select(s => s.Codigo).FirstOrDefault(),
                 SerieNombre = _db.Series.Where(s => s.Id == r.SerieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefault(),
                 r.SubserieId,
+                SubCod = r.SubserieId == null ? null : _db.Subseries.Where(s => s.Id == r.SubserieId).Select(s => s.Codigo).FirstOrDefault(),
                 SubserieNombre = r.SubserieId == null ? null
                     : _db.Subseries.Where(s => s.Id == r.SubserieId).Select(s => s.Codigo + " - " + s.Nombre).FirstOrDefault(),
                 r.TipologiaId,
@@ -582,7 +585,8 @@ public sealed class TrdAdminService : ITrdAdminService
 
         var busca = (texto ?? "").Trim();
         var resultado = filas.Select(r => new DocumentoTrdDto(
-            r.Id, r.DependenciaId, r.DepCodigo ?? "", r.DepNombre ?? "",
+            r.Id, ComponerCodigo(r.RaizDoc, r.DepCodigo ?? "", r.SerieCod ?? "", r.SubCod),
+            r.DependenciaId, r.DepCodigo ?? "", r.DepNombre ?? "",
             r.SerieId, r.SerieNombre ?? "", r.SubserieId, r.SubserieNombre,
             r.TipologiaId, r.TipologiaNombre,
             r.TiempoAg, r.TiempoAc, r.TiempoObserv,
@@ -606,6 +610,33 @@ public sealed class TrdAdminService : ITrdAdminService
 
     private static bool Contiene(string? campo, string busca) =>
         campo is not null && campo.Contains(busca, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Codigo de clasificacion documental (derivado): RAIZ.SERIE.COLA_SUBSERIE con separador punto.
+    /// La raiz es el codigo raiz documental de la dependencia; si esta vacio, cae al codigo del
+    /// organigrama. La cola de subserie es su codigo sin el prefijo de la serie (049-07 -> 07).
+    /// </summary>
+    private static string ComponerCodigo(string? raizDoc, string depCodigo, string serieCodigo, string? subserieCodigo)
+    {
+        var partes = new List<string>();
+        var raiz = string.IsNullOrWhiteSpace(raizDoc) ? depCodigo : raizDoc.Trim();
+        if (!string.IsNullOrWhiteSpace(raiz)) { partes.Add(raiz); }
+        if (!string.IsNullOrWhiteSpace(serieCodigo)) { partes.Add(serieCodigo.Trim()); }
+        var cola = ColaSubserie(subserieCodigo, serieCodigo);
+        if (cola.Length > 0) { partes.Add(cola); }
+        return string.Join(".", partes);
+    }
+
+    private static string ColaSubserie(string? subserieCodigo, string? serieCodigo)
+    {
+        if (string.IsNullOrWhiteSpace(subserieCodigo)) { return ""; }
+        var s = subserieCodigo.Trim();
+        if (!string.IsNullOrWhiteSpace(serieCodigo) && s.StartsWith(serieCodigo, StringComparison.OrdinalIgnoreCase))
+        {
+            s = s[serieCodigo!.Length..].TrimStart('-', '.', ' ');
+        }
+        return s;
+    }
 
     public async Task<Guid?> GuardarDocumentoTrdAsync(GuardarDocumentoTrdRequest req, Guid actor, CancellationToken ct = default)
     {
