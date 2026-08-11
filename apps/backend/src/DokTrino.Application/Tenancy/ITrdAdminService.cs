@@ -58,6 +58,10 @@ public interface ITrdAdminService
     Task<IReadOnlyList<DocumentoTrdDto>> DocumentosTrdAsync(
         Guid trdId, Guid? dependenciaId = null, string? texto = null, CancellationToken ct = default);
     Task<Guid?> GuardarDocumentoTrdAsync(GuardarDocumentoTrdRequest req, Guid actor, CancellationToken ct = default);
+    /// <summary>Alterna (marca/desmarca) un campo booleano de una fila de la TRD desde la tabla, sin abrir el detalle. Devuelve el nuevo valor.</summary>
+    Task<bool> AlternarCampoDocumentoAsync(Guid respuestaId, string campo, Guid actor, CancellationToken ct = default);
+    /// <summary>Edita un campo numerico (tiempo AG/AC) de una fila de la TRD directo en la tabla.</summary>
+    Task ActualizarNumeroDocumentoAsync(Guid respuestaId, string campo, decimal? valor, Guid actor, CancellationToken ct = default);
 
     /// <summary>
     /// Alta multiple estilo "Cargar Estructura": una fila de la TRD por cada tipologia

@@ -573,6 +573,7 @@ public sealed class TrdAdminService : ITrdAdminService
                 r.DispCt, r.DispS, r.DispE, r.DispD,
                 r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
                 r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
+                r.SinSubserie, r.Representativo, r.SerieDdhh, r.RelacionSig, r.Procedimiento,
                 Formatos = _db.FormatosSerie.Where(f => f.RespuestaId == r.Id).Select(f => f.Formato).ToList(),
                 r.FechaReg
             })
@@ -587,6 +588,9 @@ public sealed class TrdAdminService : ITrdAdminService
             r.DispCt, r.DispS, r.DispE, r.DispD,
             r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
             r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
+            r.SinSubserie,
+            !string.IsNullOrWhiteSpace(r.Representativo), r.SerieDdhh, !string.IsNullOrWhiteSpace(r.RelacionSig),
+            r.Procedimiento,
             string.Join(", ", r.Formatos), r.FechaReg));
 
         if (busca.Length > 0)
@@ -651,9 +655,64 @@ public sealed class TrdAdminService : ITrdAdminService
         fila.Val1Admin = req.Val1Admin; fila.Val1Tecnica = req.Val1Tecnica; fila.Val1Legal = req.Val1Legal;
         fila.Val1Contable = req.Val1Contable; fila.Val1Fiscal = req.Val1Fiscal;
         fila.Val2Historica = req.Val2Historica; fila.Val2Cientifica = req.Val2Cientifica; fila.Val2Cultural = req.Val2Cultural;
+        // REP y SIG se guardan como marca (SI/null); la entidad los modela como texto libre.
+        fila.Representativo = req.Representativo ? "SI" : null;
+        fila.SerieDdhh = req.SerieDdhh;
+        fila.RelacionSig = req.RelacionSig ? "SI" : null;
+        fila.Procedimiento = string.IsNullOrWhiteSpace(req.Procedimiento) ? null : req.Procedimiento!.Trim();
 
         await _db.SaveChangesAsync(ct);
         return fila.Id;
+    }
+
+    public async Task<bool> AlternarCampoDocumentoAsync(Guid respuestaId, string campo, Guid actor, CancellationToken ct = default)
+    {
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { throw new InvalidOperationException("El documento ya no existe; recarga la tabla."); }
+        var estado = await _db.TablasRetencionDocumental.Where(t => t.Id == r.TrdId).Select(t => t.Estado).FirstOrDefaultAsync(ct);
+        if (estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+
+        bool nuevo;
+        switch (campo)
+        {
+            case nameof(RespuestaTablaDocumental.DispCt): nuevo = r.DispCt = !r.DispCt; break;
+            case nameof(RespuestaTablaDocumental.DispS): nuevo = r.DispS = !r.DispS; break;
+            case nameof(RespuestaTablaDocumental.DispE): nuevo = r.DispE = !r.DispE; break;
+            case nameof(RespuestaTablaDocumental.DispD): nuevo = r.DispD = !r.DispD; break;
+            case nameof(RespuestaTablaDocumental.Val1Admin): nuevo = r.Val1Admin = !r.Val1Admin; break;
+            case nameof(RespuestaTablaDocumental.Val1Tecnica): nuevo = r.Val1Tecnica = !r.Val1Tecnica; break;
+            case nameof(RespuestaTablaDocumental.Val1Legal): nuevo = r.Val1Legal = !r.Val1Legal; break;
+            case nameof(RespuestaTablaDocumental.Val1Contable): nuevo = r.Val1Contable = !r.Val1Contable; break;
+            case nameof(RespuestaTablaDocumental.Val1Fiscal): nuevo = r.Val1Fiscal = !r.Val1Fiscal; break;
+            case nameof(RespuestaTablaDocumental.Val2Historica): nuevo = r.Val2Historica = !r.Val2Historica; break;
+            case nameof(RespuestaTablaDocumental.Val2Cientifica): nuevo = r.Val2Cientifica = !r.Val2Cientifica; break;
+            case nameof(RespuestaTablaDocumental.Val2Cultural): nuevo = r.Val2Cultural = !r.Val2Cultural; break;
+            case nameof(RespuestaTablaDocumental.SerieDdhh): nuevo = r.SerieDdhh = !r.SerieDdhh; break;
+            // REP y SIG se modelan como texto libre; se alternan como marca SI/null.
+            case nameof(RespuestaTablaDocumental.Representativo):
+                r.Representativo = string.IsNullOrWhiteSpace(r.Representativo) ? "SI" : null; nuevo = r.Representativo is not null; break;
+            case nameof(RespuestaTablaDocumental.RelacionSig):
+                r.RelacionSig = string.IsNullOrWhiteSpace(r.RelacionSig) ? "SI" : null; nuevo = r.RelacionSig is not null; break;
+            default: throw new InvalidOperationException($"Campo no alternable: {campo}.");
+        }
+        await _db.SaveChangesAsync(ct);
+        return nuevo;
+    }
+
+    public async Task ActualizarNumeroDocumentoAsync(Guid respuestaId, string campo, decimal? valor, Guid actor, CancellationToken ct = default)
+    {
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { throw new InvalidOperationException("El documento ya no existe; recarga la tabla."); }
+        var estado = await _db.TablasRetencionDocumental.Where(t => t.Id == r.TrdId).Select(t => t.Estado).FirstOrDefaultAsync(ct);
+        if (estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+        if (valor is < 0) { throw new InvalidOperationException("El tiempo no puede ser negativo."); }
+        switch (campo)
+        {
+            case nameof(RespuestaTablaDocumental.TiempoAg): r.TiempoAg = valor; break;
+            case nameof(RespuestaTablaDocumental.TiempoAc): r.TiempoAc = valor; break;
+            default: throw new InvalidOperationException($"Campo numerico no editable: {campo}.");
+        }
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>El unico soporte fisico es el papel; el resto son digitales (mismo criterio que el cliente).</summary>

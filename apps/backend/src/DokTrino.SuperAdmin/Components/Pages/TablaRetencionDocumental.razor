@@ -7,6 +7,7 @@
 @inject ITrdAdminService Trd
 @inject ICursoService Cursos
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Transacciones documentales - Archimente</PageTitle>
 
@@ -396,45 +397,84 @@
                             <button class="trx-btn mini" style="margin-left: auto;" @onclick="AbrirPicker">&#43; Agregar documento</button>
                         </div>
 
-                        <div class="doc-scroll">
-                            <table class="dep-tb">
+                        <div class="doc-scroll-top" @ref="_topScroll"><div></div></div>
+                        <div class="doc-scroll" @ref="_botScroll">
+                            <table class="dep-tb wide">
                                 <thead>
                                     <tr>
-                                        <th style="width: 150px;">Dependencia</th>
-                                        <th>Serie / Subserie</th>
-                                        <th style="width: 170px;">Tipologia</th>
-                                        <th style="width: 46px;">AG</th>
-                                        <th style="width: 46px;">AC</th>
-                                        <th style="width: 96px;">Disposicion</th>
-                                        <th style="width: 120px;">Formatos</th>
-                                        <th style="width: 92px;"></th>
+                                        <th rowspan="2" class="fix fx1" style="width: 140px;">Dependencia</th>
+                                        <th rowspan="2" class="fix fx2" style="width: 210px;">Serie / Subserie</th>
+                                        <th rowspan="2" class="fix fx3" style="width: 150px;">Tipologia</th>
+                                        <th colspan="2" class="grp g-tiempo">Tiempo</th>
+                                        <th rowspan="2" class="c" style="width: 44px;">No Sub</th>
+                                        <th colspan="4" class="grp g-disp">Disposicion</th>
+                                        <th colspan="5" class="grp g-val1">Valoracion primaria</th>
+                                        <th colspan="3" class="grp g-val2">Val. secundaria</th>
+                                        <th rowspan="2" class="c g-clas" style="width: 40px;">REP</th>
+                                        <th rowspan="2" class="c g-clas" style="width: 50px;">DDHH</th>
+                                        <th rowspan="2" class="c g-clas" style="width: 40px;">SIG</th>
+                                        <th rowspan="2" style="width: 160px;">Procedimiento</th>
+                                        <th rowspan="2" style="width: 130px;">Formatos</th>
+                                        <th rowspan="2" style="width: 88px;"></th>
+                                    </tr>
+                                    <tr>
+                                        <th class="c g-tiempo" style="width: 42px;">AG</th>
+                                        <th class="c g-tiempo" style="width: 42px;">AC</th>
+                                        <th class="c g-disp" style="width: 34px;">CT</th>
+                                        <th class="c g-disp" style="width: 30px;">S</th>
+                                        <th class="c g-disp" style="width: 30px;">E</th>
+                                        <th class="c g-disp" style="width: 30px;">D</th>
+                                        <th class="c g-val1" style="width: 40px;">Adm</th>
+                                        <th class="c g-val1" style="width: 38px;">Tec</th>
+                                        <th class="c g-val1" style="width: 38px;">Leg</th>
+                                        <th class="c g-val1" style="width: 38px;">Con</th>
+                                        <th class="c g-val1" style="width: 38px;">Fis</th>
+                                        <th class="c g-val2" style="width: 38px;">His</th>
+                                        <th class="c g-val2" style="width: 38px;">Cie</th>
+                                        <th class="c g-val2" style="width: 38px;">Cul</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @if (_docs.Count == 0)
                                     {
-                                        <tr><td colspan="8" class="vacio">
+                                        <tr><td colspan="24" class="vacio">
                                             Todavia no hay documentos declarados. Los llenan las dependencias
                                             desde su enlace, o puedes agregarlos aqui.
                                         </td></tr>
                                     }
                                     @foreach (var d in _docs)
                                     {
-                                        <tr @onclick="() => AbrirDoc(d)">
-                                            <td><span class="mono">@d.DependenciaCodigo</span> @d.DependenciaNombre</td>
-                                            <td>
+                                        <tr>
+                                            <td class="fix fx1" @onclick="() => AbrirDoc(d)"><span class="mono">@d.DependenciaCodigo</span> @d.DependenciaNombre</td>
+                                            <td class="fix fx2" @onclick="() => AbrirDoc(d)">
                                                 @d.SerieNombre
                                                 @if (d.SubserieNombre is not null)
                                                 {
                                                     <div class="doc-sub">@d.SubserieNombre</div>
                                                 }
                                             </td>
-                                            <td>@(d.TipologiaNombre ?? "-")</td>
-                                            <td class="mono">@(d.TiempoAg?.ToString() ?? "-")</td>
-                                            <td class="mono">@(d.TiempoAc?.ToString() ?? "-")</td>
-                                            <td><span class="mono">@Disposicion(d)</span></td>
-                                            <td>@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
-                                            <td class="acc" @onclick:stopPropagation="true">
+                                            <td class="fix fx3" @onclick="() => AbrirDoc(d)">@(d.TipologiaNombre ?? "-")</td>
+                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAg" @onchange="e => GuardarNum(d, nameof(d.TiempoAg), e.Value)" /></td>
+                                            <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAc" @onchange="e => GuardarNum(d, nameof(d.TiempoAc), e.Value)" /></td>
+                                            <td class="mk">@(d.SinSubserie ? "X" : "")</td>
+                                            <td class="mk c-disp" title="Conservacion total" @onclick="() => AlternarFlag(d, nameof(d.DispCt))">@(d.DispCt ? "X" : "")</td>
+                                            <td class="mk c-disp" title="Seleccion" @onclick="() => AlternarFlag(d, nameof(d.DispS))">@(d.DispS ? "X" : "")</td>
+                                            <td class="mk c-disp" title="Eliminacion" @onclick="() => AlternarFlag(d, nameof(d.DispE))">@(d.DispE ? "X" : "")</td>
+                                            <td class="mk c-disp" title="Digitalizacion" @onclick="() => AlternarFlag(d, nameof(d.DispD))">@(d.DispD ? "X" : "")</td>
+                                            <td class="mk c-val1" title="Administrativa" @onclick="() => AlternarFlag(d, nameof(d.Val1Admin))">@(d.Val1Admin ? "X" : "")</td>
+                                            <td class="mk c-val1" title="Tecnica" @onclick="() => AlternarFlag(d, nameof(d.Val1Tecnica))">@(d.Val1Tecnica ? "X" : "")</td>
+                                            <td class="mk c-val1" title="Legal" @onclick="() => AlternarFlag(d, nameof(d.Val1Legal))">@(d.Val1Legal ? "X" : "")</td>
+                                            <td class="mk c-val1" title="Contable" @onclick="() => AlternarFlag(d, nameof(d.Val1Contable))">@(d.Val1Contable ? "X" : "")</td>
+                                            <td class="mk c-val1" title="Fiscal" @onclick="() => AlternarFlag(d, nameof(d.Val1Fiscal))">@(d.Val1Fiscal ? "X" : "")</td>
+                                            <td class="mk c-val2" title="Historica" @onclick="() => AlternarFlag(d, nameof(d.Val2Historica))">@(d.Val2Historica ? "X" : "")</td>
+                                            <td class="mk c-val2" title="Cientifica" @onclick="() => AlternarFlag(d, nameof(d.Val2Cientifica))">@(d.Val2Cientifica ? "X" : "")</td>
+                                            <td class="mk c-val2" title="Cultural" @onclick="() => AlternarFlag(d, nameof(d.Val2Cultural))">@(d.Val2Cultural ? "X" : "")</td>
+                                            <td class="mk c-clas" title="Representativa" @onclick="() => AlternarFlag(d, nameof(d.Representativo))">@(d.Representativo ? "X" : "")</td>
+                                            <td class="mk c-clas" title="DDHH/DIH" @onclick="() => AlternarFlag(d, nameof(d.SerieDdhh))">@(d.SerieDdhh ? "X" : "")</td>
+                                            <td class="mk c-clas" title="Relacion con el SIG" @onclick="() => AlternarFlag(d, nameof(d.RelacionSig))">@(d.RelacionSig ? "X" : "")</td>
+                                            <td class="doc-proc" @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</td>
+                                            <td @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
+                                            <td class="acc">
                                                 <button class="trx-btn ghost mini" @onclick="() => AbrirDoc(d)">Editar</button>
                                                 <button class="trx-btn danger mini" @onclick="() => BorrarDoc(d.Id)">&times;</button>
                                             </td>
@@ -552,6 +592,20 @@
                         <label class="doc-chk"><input type="checkbox" @bind="_doc.Val2Cientifica" /> Cientifica</label>
                         <label class="doc-chk"><input type="checkbox" @bind="_doc.Val2Cultural" /> Cultural</label>
                     </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Clasificacion adicional</div>
+                    <div class="doc-chks">
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.Representativo" /> REP representativa</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.SerieDdhh" /> DDHH/DIH</label>
+                        <label class="doc-chk"><input type="checkbox" @bind="_doc.RelacionSig" /> Relacion con el SIG</label>
+                    </div>
+                </div>
+
+                <div class="ed-bloque" style="margin-top: 12px;">
+                    <div class="ed-bloque-t">Procedimiento</div>
+                    <textarea class="dep-in" rows="2" placeholder="Detalle del procedimiento archivistico..." @bind="_doc.Procedimiento"></textarea>
                 </div>
 
                 <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
@@ -977,10 +1031,14 @@
     .dep-in.celda:hover { border-color:#e3e7f2; background:#fff; }
     .dep-in.celda:focus { border-color:var(--primary); background:#fff; }
 
-    .dep-tb { width:100%; border-collapse:collapse; font-size:12.5px; }
+    /* separate (no collapse): collapse rompe el sticky de los th al hacer scroll. */
+    .dep-tb { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
     .dep-tb th { position:sticky; top:0; background:#1e2436; color:#fff; text-align:left;
                  font-size:10.5px; letter-spacing:.4px; text-transform:uppercase;
                  padding:9px 10px; z-index:1; }
+    /* Encabezado de 2 filas: la fila de grupos arriba, las hojas justo debajo. */
+    .dep-tb thead tr:first-child th { top:0; height:30px; }
+    .dep-tb thead tr:last-child th { top:30px; }
     .dep-tb td { padding:9px 10px; border-bottom:1px solid #eef1f7; }
     .dep-tb tbody tr { cursor:pointer; }
     .dep-tb tbody tr:hover { background:#f6f8fc; }
@@ -994,6 +1052,37 @@
     .trx-btn.mini { padding:5px 9px; font-size:11px; }
     .doc-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .doc-scroll { max-height:52vh; overflow:auto; border:1px solid #e6e9f2; border-radius:12px; }
+    .dep-tb.wide { min-width:1500px; }
+    .dep-tb th.c, .dep-tb td.c { text-align:center; padding-left:4px; padding-right:4px; white-space:nowrap; }
+    .dep-tb th.grp { text-align:center; }
+    .dep-tb td.mk { text-align:center; font-weight:700; padding-left:4px; padding-right:4px; }
+    /* Primeras 3 columnas fijas (scroll horizontal) */
+    .dep-tb th.fix, .dep-tb td.fix { position:sticky; z-index:3; }
+    .dep-tb thead th.fix { z-index:6; background:#1e2436; }
+    .dep-tb td.fix { background:#fff; }
+    .dep-tb tbody tr:hover td.fix { background:#f6f8fc; }
+    .dep-tb .fx1 { left:0; }
+    .dep-tb .fx2 { left:140px; }
+    .dep-tb .fx3 { left:350px; box-shadow:6px 0 8px -6px rgba(20,30,60,.18); }
+    /* Colores por seccion: cabecera de grupo + celdas de datos */
+    .dep-tb th.g-tiempo { background:#2f6fc0; } .dep-tb td.c-tiempo { background:#eef4ff; }
+    .dep-tb th.g-disp   { background:#2f8a4c; } .dep-tb td.c-disp   { background:#eafaf1; }
+    .dep-tb th.g-val1   { background:#c9772a; } .dep-tb td.c-val1   { background:#fff4e6; }
+    .dep-tb th.g-val2   { background:#7a4fb5; } .dep-tb td.c-val2   { background:#f3ecff; }
+    .dep-tb th.g-clas   { background:#2199a8; } .dep-tb td.c-clas   { background:#e6fbff; }
+    .dep-tb td.mk.c-disp { color:#2f8a4c; } .dep-tb td.mk.c-val1 { color:#c9772a; }
+    .dep-tb td.mk.c-val2 { color:#7a4fb5; } .dep-tb td.mk.c-clas { color:#2199a8; }
+    .dep-tb td.mk { cursor:pointer; user-select:none; }
+    .dep-tb td.mk:hover { outline:2px solid rgba(47,111,192,.35); outline-offset:-2px; }
+    .dep-tb td.doc-proc { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#37415c; }
+    /* Inputs editables dentro de la tabla */
+    .dep-tb .cell-in { width:100%; border:1px solid transparent; background:transparent; font:inherit;
+                       text-align:center; padding:2px 3px; border-radius:4px; color:#37415c; }
+    .dep-tb .cell-in:hover { border-color:#cdd5e5; background:#fff; }
+    .dep-tb .cell-in:focus { border-color:#2f6fc0; background:#fff; outline:none; }
+    /* Doble scroll horizontal sincronizado */
+    .doc-scroll-top { overflow-x:auto; overflow-y:hidden; }
+    .doc-scroll-top > div { height:1px; }
     .doc-sub { font-size:11px; color:#8a93ad; margin-top:2px; }
     .doc-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
     @@media (max-width: 700px) { .doc-grid { grid-template-columns:1fr; } }
@@ -1145,6 +1234,19 @@
     private List<DocumentoTrdDto> _docs = new();
     private string _fltDep = "", _fltDoc = "";
     private string? _docError;
+
+    // Doble scroll horizontal sincronizado (barra superior + contenedor real).
+    private ElementReference _topScroll;
+    private ElementReference _botScroll;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_trdOpen)
+        {
+            try { await JS.InvokeVoidAsync("tablaDobleScroll.init", _topScroll, _botScroll); }
+            catch { /* los elementos aun no estan en el DOM */ }
+        }
+    }
 
     private bool _docAbierto;
     private GuardarDocumentoTrdRequest _doc = new();
@@ -1408,14 +1510,33 @@
     }
 
     /// <summary>Sigla de disposicion, como la escribe el AGN.</summary>
-    private static string Disposicion(DocumentoTrdDto d)
+    // Marca/desmarca una X directo en la tabla, sin abrir el detalle.
+    private async Task AlternarFlag(DocumentoTrdDto d, string campo)
     {
-        var partes = new List<string>();
-        if (d.DispCt) { partes.Add("CT"); }
-        if (d.DispS) { partes.Add("S"); }
-        if (d.DispE) { partes.Add("E"); }
-        if (d.DispD) { partes.Add("D"); }
-        return partes.Count == 0 ? "-" : string.Join("/", partes);
+        _docError = null;
+        try
+        {
+            await Trd.AlternarCampoDocumentoAsync(d.Id, campo, await Actor());
+            await RecargarDocs();
+        }
+        catch (InvalidOperationException ex) { _docError = ex.Message; }
+    }
+
+    // Edita un numero (AG/AC) directo en la tabla.
+    private async Task GuardarNum(DocumentoTrdDto d, string campo, object? valor)
+    {
+        _docError = null;
+        decimal? num = null;
+        var s = valor?.ToString();
+        if (!string.IsNullOrWhiteSpace(s)
+            && decimal.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { num = v; }
+        try
+        {
+            await Trd.ActualizarNumeroDocumentoAsync(d.Id, campo, num, await Actor());
+            await RecargarDocs();
+        }
+        catch (InvalidOperationException ex) { _docError = ex.Message; }
     }
 
     private async Task AbrirDoc(DocumentoTrdDto? d)
@@ -1442,7 +1563,9 @@
                 DispCt = d.DispCt, DispS = d.DispS, DispE = d.DispE, DispD = d.DispD,
                 Val1Admin = d.Val1Admin, Val1Tecnica = d.Val1Tecnica, Val1Legal = d.Val1Legal,
                 Val1Contable = d.Val1Contable, Val1Fiscal = d.Val1Fiscal,
-                Val2Historica = d.Val2Historica, Val2Cientifica = d.Val2Cientifica, Val2Cultural = d.Val2Cultural
+                Val2Historica = d.Val2Historica, Val2Cientifica = d.Val2Cientifica, Val2Cultural = d.Val2Cultural,
+                Representativo = d.Representativo, SerieDdhh = d.SerieDdhh, RelacionSig = d.RelacionSig,
+                Procedimiento = d.Procedimiento
             };
             _docDep = d.DependenciaId.ToString();
             _docSerie = d.SerieId.ToString();

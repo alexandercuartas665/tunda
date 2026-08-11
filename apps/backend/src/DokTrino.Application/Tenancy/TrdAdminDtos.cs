@@ -64,6 +64,9 @@ public sealed record DocumentoTrdDto(
     bool DispCt, bool DispS, bool DispE, bool DispD,
     bool Val1Admin, bool Val1Tecnica, bool Val1Legal, bool Val1Contable, bool Val1Fiscal,
     bool Val2Historica, bool Val2Cientifica, bool Val2Cultural,
+    bool SinSubserie,
+    bool Representativo, bool SerieDdhh, bool RelacionSig,
+    string? Procedimiento,
     string Formatos,
     DateTimeOffset FechaReg);
 
@@ -98,6 +101,15 @@ public sealed class GuardarDocumentoTrdRequest
     public bool Val2Historica { get; set; }
     public bool Val2Cientifica { get; set; }
     public bool Val2Cultural { get; set; }
+
+    /// <summary>REP: la serie es representativa (preproduccion tecnica).</summary>
+    public bool Representativo { get; set; }
+    /// <summary>DDHH/DIH: serie ligada a derechos humanos.</summary>
+    public bool SerieDdhh { get; set; }
+    /// <summary>SIG: la serie se relaciona con el Sistema Integrado de Gestion.</summary>
+    public bool RelacionSig { get; set; }
+    /// <summary>Procedimiento archivistico (detalle/descripcion).</summary>
+    public string? Procedimiento { get; set; }
 }
 /// <summary>
 /// Alta multiple estilo "Cargar Estructura" (lado administrador): crea UNA fila de
