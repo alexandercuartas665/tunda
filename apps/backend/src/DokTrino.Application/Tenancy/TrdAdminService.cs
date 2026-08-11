@@ -569,8 +569,8 @@ public sealed class TrdAdminService : ITrdAdminService
                 r.TipologiaId,
                 TipologiaNombre = r.TipologiaId == null ? null
                     : _db.TipologiasDocumentales.Where(t => t.Id == r.TipologiaId).Select(t => t.Nombre).FirstOrDefault(),
-                r.TiempoAg, r.TiempoAc,
-                r.DispCt, r.DispS, r.DispE, r.DispD,
+                r.TiempoAg, r.TiempoAc, r.TiempoObserv,
+                r.DispCt, r.DispS, r.DispE, r.DispD, r.DispObserv,
                 r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
                 r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
                 r.SinSubserie, r.Representativo, r.SerieDdhh, r.RelacionSig, r.Procedimiento,
@@ -585,8 +585,8 @@ public sealed class TrdAdminService : ITrdAdminService
             r.Id, r.DependenciaId, r.DepCodigo ?? "", r.DepNombre ?? "",
             r.SerieId, r.SerieNombre ?? "", r.SubserieId, r.SubserieNombre,
             r.TipologiaId, r.TipologiaNombre,
-            r.TiempoAg, r.TiempoAc,
-            r.DispCt, r.DispS, r.DispE, r.DispD,
+            r.TiempoAg, r.TiempoAc, r.TiempoObserv,
+            r.DispCt, r.DispS, r.DispE, r.DispD, r.DispObserv,
             r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
             r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
             r.SinSubserie,
@@ -713,6 +713,44 @@ public sealed class TrdAdminService : ITrdAdminService
             case nameof(RespuestaTablaDocumental.TiempoAg): r.TiempoAg = valor; break;
             case nameof(RespuestaTablaDocumental.TiempoAc): r.TiempoAc = valor; break;
             default: throw new InvalidOperationException($"Campo numerico no editable: {campo}.");
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ActualizarTextoDocumentoAsync(Guid respuestaId, string campo, string? valor, Guid actor, CancellationToken ct = default)
+    {
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { throw new InvalidOperationException("El documento ya no existe; recarga la tabla."); }
+        var estado = await _db.TablasRetencionDocumental.Where(t => t.Id == r.TrdId).Select(t => t.Estado).FirstOrDefaultAsync(ct);
+        if (estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+        var v = string.IsNullOrWhiteSpace(valor) ? null : valor!.Trim();
+        switch (campo)
+        {
+            case nameof(RespuestaTablaDocumental.TiempoObserv): r.TiempoObserv = v; break;
+            case nameof(RespuestaTablaDocumental.DispObserv): r.DispObserv = v; break;
+            default: throw new InvalidOperationException($"Campo de texto no editable: {campo}.");
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ActualizarFormatosDocumentoAsync(Guid respuestaId, string formatosCsv, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return; }
+        var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
+        if (r is null) { throw new InvalidOperationException("El documento ya no existe; recarga la tabla."); }
+        var estado = await _db.TablasRetencionDocumental.Where(t => t.Id == r.TrdId).Select(t => t.Estado).FirstOrDefaultAsync(ct);
+        if (estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+
+        // Se reemplaza la lista completa por lo que quedo escrito en la celda.
+        var existentes = await _db.FormatosSerie.Where(f => f.RespuestaId == respuestaId).ToListAsync(ct);
+        _db.FormatosSerie.RemoveRange(existentes);
+
+        var nombres = (formatosCsv ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var nombre in nombres)
+        {
+            _db.FormatosSerie.Add(new FormatoSerie { TenantId = tenantId, RespuestaId = respuestaId, Soporte = SoporteDe(nombre), Formato = nombre });
         }
         await _db.SaveChangesAsync(ct);
     }

@@ -62,6 +62,10 @@ public interface ITrdAdminService
     Task<bool> AlternarCampoDocumentoAsync(Guid respuestaId, string campo, Guid actor, CancellationToken ct = default);
     /// <summary>Edita un campo numerico (tiempo AG/AC) de una fila de la TRD directo en la tabla.</summary>
     Task ActualizarNumeroDocumentoAsync(Guid respuestaId, string campo, decimal? valor, Guid actor, CancellationToken ct = default);
+    /// <summary>Reemplaza los formatos de una fila con la lista separada por comas escrita en la tabla (papel = fisico, resto digital).</summary>
+    Task ActualizarFormatosDocumentoAsync(Guid respuestaId, string formatosCsv, Guid actor, CancellationToken ct = default);
+    /// <summary>Edita un campo de texto (observacion de tiempo o disposicion) de una fila directo en la tabla.</summary>
+    Task ActualizarTextoDocumentoAsync(Guid respuestaId, string campo, string? valor, Guid actor, CancellationToken ct = default);
 
     /// <summary>
     /// Alta multiple estilo "Cargar Estructura": una fila de la TRD por cada tipologia

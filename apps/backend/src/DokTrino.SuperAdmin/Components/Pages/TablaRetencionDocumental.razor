@@ -403,38 +403,40 @@
                             <table class="dep-tb wide">
                                 <colgroup>
                                     <col style="width:140px" /><col style="width:210px" /><col style="width:150px" />
-                                    <col style="width:42px" /><col style="width:42px" />
+                                    <col style="width:42px" /><col style="width:42px" /><col style="width:200px" />
                                     <col style="width:44px" />
-                                    <col style="width:34px" /><col style="width:30px" /><col style="width:30px" /><col style="width:30px" />
+                                    <col style="width:34px" /><col style="width:30px" /><col style="width:30px" /><col style="width:30px" /><col style="width:220px" />
                                     <col style="width:40px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
                                     <col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
                                     <col style="width:40px" /><col style="width:50px" /><col style="width:40px" />
-                                    <col style="width:160px" /><col style="width:130px" /><col style="width:88px" />
+                                    <col style="width:260px" /><col style="width:150px" /><col style="width:60px" />
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="fix fx1" style="width: 140px;">Dependencia</th>
                                         <th rowspan="2" class="fix fx2" style="width: 210px;">Serie / Subserie</th>
                                         <th rowspan="2" class="fix fx3" style="width: 150px;">Tipologia</th>
-                                        <th colspan="2" class="grp g-tiempo">Tiempo</th>
+                                        <th colspan="3" class="grp g-tiempo">Tiempo</th>
                                         <th rowspan="2" class="c" style="width: 44px;">No Sub</th>
-                                        <th colspan="4" class="grp g-disp">Disposicion</th>
+                                        <th colspan="5" class="grp g-disp">Disposicion</th>
                                         <th colspan="5" class="grp g-val1">Valoracion primaria</th>
                                         <th colspan="3" class="grp g-val2">Val. secundaria</th>
                                         <th rowspan="2" class="c g-clas" style="width: 40px;">REP</th>
                                         <th rowspan="2" class="c g-clas" style="width: 50px;">DDHH</th>
                                         <th rowspan="2" class="c g-clas" style="width: 40px;">SIG</th>
-                                        <th rowspan="2" style="width: 160px;">Procedimiento</th>
-                                        <th rowspan="2" style="width: 130px;">Formatos</th>
-                                        <th rowspan="2" style="width: 88px;"></th>
+                                        <th rowspan="2" style="width: 260px;">Procedimiento</th>
+                                        <th rowspan="2" style="width: 150px;">Formatos</th>
+                                        <th rowspan="2" style="width: 60px;"></th>
                                     </tr>
                                     <tr>
                                         <th class="c g-tiempo" style="width: 42px;">AG</th>
                                         <th class="c g-tiempo" style="width: 42px;">AC</th>
+                                        <th class="g-tiempo" style="width: 200px;">Descripcion</th>
                                         <th class="c g-disp" style="width: 34px;">CT</th>
                                         <th class="c g-disp" style="width: 30px;">S</th>
                                         <th class="c g-disp" style="width: 30px;">E</th>
                                         <th class="c g-disp" style="width: 30px;">D</th>
+                                        <th class="g-disp" style="width: 220px;">Descripcion</th>
                                         <th class="c g-val1" style="width: 40px;">Adm</th>
                                         <th class="c g-val1" style="width: 38px;">Tec</th>
                                         <th class="c g-val1" style="width: 38px;">Leg</th>
@@ -448,7 +450,7 @@
                                 <tbody>
                                     @if (_docs.Count == 0)
                                     {
-                                        <tr><td colspan="24" class="vacio">
+                                        <tr><td colspan="26" class="vacio">
                                             Todavia no hay documentos declarados. Los llenan las dependencias
                                             desde su enlace, o puedes agregarlos aqui.
                                         </td></tr>
@@ -467,11 +469,13 @@
                                             <td class="fix fx3" @onclick="() => AbrirDoc(d)">@(d.TipologiaNombre ?? "-")</td>
                                             <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAg" @onchange="e => GuardarNum(d, nameof(d.TiempoAg), e.Value)" /></td>
                                             <td class="c c-tiempo"><input class="cell-in mono" type="number" min="0" step="0.5" value="@d.TiempoAc" @onchange="e => GuardarNum(d, nameof(d.TiempoAc), e.Value)" /></td>
+                                            <td class="c-tiempo"><textarea class="cell-ta" placeholder="Observacion del tiempo..." @onchange="e => GuardarTexto(d, nameof(d.TiempoObserv), e.Value)">@d.TiempoObserv</textarea></td>
                                             <td class="mk">@(d.SinSubserie ? "X" : "")</td>
                                             <td class="mk c-disp" title="Conservacion total" @onclick="() => AlternarFlag(d, nameof(d.DispCt))">@(d.DispCt ? "X" : "")</td>
                                             <td class="mk c-disp" title="Seleccion" @onclick="() => AlternarFlag(d, nameof(d.DispS))">@(d.DispS ? "X" : "")</td>
                                             <td class="mk c-disp" title="Eliminacion" @onclick="() => AlternarFlag(d, nameof(d.DispE))">@(d.DispE ? "X" : "")</td>
                                             <td class="mk c-disp" title="Digitalizacion" @onclick="() => AlternarFlag(d, nameof(d.DispD))">@(d.DispD ? "X" : "")</td>
+                                            <td class="c-disp"><textarea class="cell-ta" placeholder="Describe el proceso (p.ej. en caso de eliminacion)..." @onchange="e => GuardarTexto(d, nameof(d.DispObserv), e.Value)">@d.DispObserv</textarea></td>
                                             <td class="mk c-val1" title="Administrativa" @onclick="() => AlternarFlag(d, nameof(d.Val1Admin))">@(d.Val1Admin ? "X" : "")</td>
                                             <td class="mk c-val1" title="Tecnica" @onclick="() => AlternarFlag(d, nameof(d.Val1Tecnica))">@(d.Val1Tecnica ? "X" : "")</td>
                                             <td class="mk c-val1" title="Legal" @onclick="() => AlternarFlag(d, nameof(d.Val1Legal))">@(d.Val1Legal ? "X" : "")</td>
@@ -488,12 +492,11 @@
                                                         @onclick="() => GenerarProc(d)" disabled="@(_generando == d.Id)">
                                                     @(_generando == d.Id ? "..." : "IA")
                                                 </button>
-                                                <span @onclick="() => AbrirProc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</span>
+                                                <div class="proc-txt" title="Ver el procedimiento por segmentos" @onclick="() => AbrirProc(d)">@(string.IsNullOrWhiteSpace(d.Procedimiento) ? "-" : d.Procedimiento)</div>
                                             </td>
-                                            <td @onclick="() => AbrirDoc(d)">@(string.IsNullOrWhiteSpace(d.Formatos) ? "-" : d.Formatos)</td>
+                                            <td class="c-fmt"><input class="cell-in izq" value="@d.Formatos" placeholder="PDF, Papel..." @onchange="e => GuardarFormatos(d, e.Value)" /></td>
                                             <td class="acc">
-                                                <button class="trx-btn ghost mini" @onclick="() => AbrirDoc(d)">Editar</button>
-                                                <button class="trx-btn danger mini" @onclick="() => BorrarDoc(d.Id)">&times;</button>
+                                                <button class="trx-btn danger mini" title="Eliminar la fila" @onclick="() => BorrarDoc(d.Id)">&times;</button>
                                             </td>
                                         </tr>
                                     }
@@ -1105,11 +1108,12 @@
     .dep-tb { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
     .dep-tb th { position:sticky; top:0; background:#1e2436; color:#fff; text-align:left;
                  font-size:10.5px; letter-spacing:.4px; text-transform:uppercase;
-                 padding:9px 10px; z-index:1; }
+                 padding:9px 10px; z-index:1; border-right:1px solid rgba(255,255,255,.12); }
     /* Encabezado de 2 filas: la fila de grupos arriba, las hojas justo debajo. */
     .dep-tb thead tr:first-child th { top:0; height:30px; }
     .dep-tb thead tr:last-child th { top:30px; }
-    .dep-tb td { padding:9px 10px; border-bottom:1px solid #eef1f7; }
+    .dep-tb td { padding:12px 13px; border-bottom:1px solid #eef1f7; border-right:1px solid rgba(20,30,60,.07); vertical-align:middle; }
+    .dep-tb td.mk, .dep-tb td.c { padding-top:12px; padding-bottom:12px; }
     .dep-tb tbody tr { cursor:pointer; }
     .dep-tb tbody tr:hover { background:#f6f8fc; }
     .dep-tb tbody tr.on { background:var(--primary-soft); }
@@ -1123,7 +1127,7 @@
     .doc-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .doc-scroll { max-height:52vh; overflow:auto; border:1px solid #e6e9f2; border-radius:12px; }
     /* table-layout fixed + colgroup: los anchos exactos hacen que las columnas fijas casen sin huecos. */
-    .dep-tb.wide { min-width:1500px; table-layout:fixed; }
+    .dep-tb.wide { min-width:1900px; table-layout:fixed; }
     .dep-tb.wide th, .dep-tb.wide td { box-sizing:border-box; overflow:hidden; }
     .dep-tb th.c, .dep-tb td.c { text-align:center; padding-left:4px; padding-right:4px; white-space:nowrap; }
     .dep-tb th.grp { text-align:center; white-space:nowrap; }
@@ -1146,7 +1150,17 @@
     .dep-tb td.mk.c-val2 { color:#7a4fb5; } .dep-tb td.mk.c-clas { color:#2199a8; }
     .dep-tb td.mk { cursor:pointer; user-select:none; }
     .dep-tb td.mk:hover { outline:2px solid rgba(47,111,192,.35); outline-offset:-2px; }
-    .dep-tb td.doc-proc { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#37415c; }
+    .dep-tb td.doc-proc { vertical-align:top; color:#37415c; }
+    /* Procedimiento: hasta 5 lineas visibles (el resto se corta y se ve completo en el modal). */
+    .proc-txt { display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden;
+                margin-top:5px; line-height:1.35; font-size:11.5px; cursor:pointer; }
+    .proc-txt:hover { color:#2f6fc0; }
+    .dep-tb .cell-in.izq { text-align:left; }
+    /* Textarea de descripcion (observacion de tiempo / disposicion). */
+    .dep-tb .cell-ta { width:100%; min-height:56px; resize:vertical; border:1px solid #dbe1ec; background:#fff;
+                       border-radius:6px; padding:5px 7px; font:inherit; font-size:11.5px; color:#37415c; line-height:1.35; }
+    .dep-tb .cell-ta:focus { border-color:#2f6fc0; outline:none; }
+    .dep-tb .cell-ta::placeholder { color:#aab2c6; }
     /* Modal de procedimiento (tabs) */
     .proc-tabs { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid #e6e9f2; margin-bottom:10px; }
     .proc-tab { border:none; background:transparent; padding:8px 12px; font-size:12.5px; color:#6b7593;
@@ -1646,6 +1660,30 @@
         try
         {
             await Trd.ActualizarNumeroDocumentoAsync(d.Id, campo, num, await Actor());
+            await RecargarDocs();
+        }
+        catch (InvalidOperationException ex) { _docError = ex.Message; }
+    }
+
+    // Edita una descripcion (observacion de tiempo / disposicion) directo en la tabla.
+    private async Task GuardarTexto(DocumentoTrdDto d, string campo, object? valor)
+    {
+        _docError = null;
+        try
+        {
+            await Trd.ActualizarTextoDocumentoAsync(d.Id, campo, valor?.ToString(), await Actor());
+            await RecargarDocs();
+        }
+        catch (InvalidOperationException ex) { _docError = ex.Message; }
+    }
+
+    // Edita los formatos (lista separada por comas) directo en la tabla.
+    private async Task GuardarFormatos(DocumentoTrdDto d, object? valor)
+    {
+        _docError = null;
+        try
+        {
+            await Trd.ActualizarFormatosDocumentoAsync(d.Id, valor?.ToString() ?? "", await Actor());
             await RecargarDocs();
         }
         catch (InvalidOperationException ex) { _docError = ex.Message; }
