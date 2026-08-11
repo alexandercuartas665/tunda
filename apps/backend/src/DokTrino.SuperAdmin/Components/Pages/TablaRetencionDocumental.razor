@@ -401,6 +401,16 @@
                         <div class="doc-scroll-top" @ref="_topScroll"><div></div></div>
                         <div class="doc-scroll" @ref="_botScroll">
                             <table class="dep-tb wide">
+                                <colgroup>
+                                    <col style="width:140px" /><col style="width:210px" /><col style="width:150px" />
+                                    <col style="width:42px" /><col style="width:42px" />
+                                    <col style="width:44px" />
+                                    <col style="width:34px" /><col style="width:30px" /><col style="width:30px" /><col style="width:30px" />
+                                    <col style="width:40px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
+                                    <col style="width:38px" /><col style="width:38px" /><col style="width:38px" />
+                                    <col style="width:40px" /><col style="width:50px" /><col style="width:40px" />
+                                    <col style="width:160px" /><col style="width:130px" /><col style="width:88px" />
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th rowspan="2" class="fix fx1" style="width: 140px;">Dependencia</th>
@@ -1112,9 +1122,11 @@
     .trx-btn.mini { padding:5px 9px; font-size:11px; }
     .doc-barra { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .doc-scroll { max-height:52vh; overflow:auto; border:1px solid #e6e9f2; border-radius:12px; }
-    .dep-tb.wide { min-width:1500px; }
+    /* table-layout fixed + colgroup: los anchos exactos hacen que las columnas fijas casen sin huecos. */
+    .dep-tb.wide { min-width:1500px; table-layout:fixed; }
+    .dep-tb.wide th, .dep-tb.wide td { box-sizing:border-box; overflow:hidden; }
     .dep-tb th.c, .dep-tb td.c { text-align:center; padding-left:4px; padding-right:4px; white-space:nowrap; }
-    .dep-tb th.grp { text-align:center; }
+    .dep-tb th.grp { text-align:center; white-space:nowrap; }
     .dep-tb td.mk { text-align:center; font-weight:700; padding-left:4px; padding-right:4px; }
     /* Primeras 3 columnas fijas (scroll horizontal) */
     .dep-tb th.fix, .dep-tb td.fix { position:sticky; z-index:3; }

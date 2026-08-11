@@ -81,13 +81,18 @@ else
     <div class="ag-grid">
         @foreach (var a in _agents)
         {
-            <div class="ag-card">
+            <div class="ag-card @(a.Role == "procedimientos-trd" ? "ag-super" : "")">
+                <img class="ag-mascota" src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true" />
                 <div class="ag-card-top">
                     <span class="ag-provider @ProviderClass(a.Provider)">@ProviderLabel(a.Provider)</span>
                     <span class="badge @(a.IsActive ? "bg-success" : "bg-secondary")">@(a.IsActive ? "En produccion" : "Apagado")</span>
                 </div>
                 <div class="ag-name">@a.Name</div>
-                @if (!string.IsNullOrWhiteSpace(a.Role))
+                @if (a.Role == "procedimientos-trd")
+                {
+                    <div class="ag-gen">&#129504; Genera los procedimientos de la TRD</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(a.Role))
                 {
                     <div class="ag-role">@a.Role</div>
                 }
