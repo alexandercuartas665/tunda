@@ -77,6 +77,18 @@ public interface ITrdAdminService
     /// <summary>Edita un campo de texto (observacion de tiempo o disposicion) de una fila directo en la tabla.</summary>
     Task ActualizarTextoDocumentoAsync(Guid respuestaId, string campo, string? valor, Guid actor, CancellationToken ct = default);
 
+    // --- Edicion por grupo (subserie): la matriz agrupa la archivistica por subserie, asi que
+    //     estos setters aplican el cambio a TODAS las tipologias del grupo (trd+dep+serie+subserie). ---
+
+    /// <summary>Fija un campo booleano en todas las filas de un grupo (dep+serie+subserie).</summary>
+    Task EstablecerFlagGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, bool valor, Guid actor, CancellationToken ct = default);
+    /// <summary>Fija un campo numerico (AG/AC) en todas las filas de un grupo.</summary>
+    Task EstablecerNumeroGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, decimal? valor, Guid actor, CancellationToken ct = default);
+    /// <summary>Fija un campo de texto (observaciones) en todas las filas de un grupo.</summary>
+    Task EstablecerTextoGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, string? valor, Guid actor, CancellationToken ct = default);
+    /// <summary>Agrega una tipologia (fila) al grupo copiando su archivistica + formatos. Devuelve el nuevo id (o null si ya existia).</summary>
+    Task<Guid?> AgregarTipologiaEnGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, Guid tipologiaId, string formatosCsv, Guid actor, CancellationToken ct = default);
+
     /// <summary>
     /// Alta multiple estilo "Cargar Estructura": una fila de la TRD por cada tipologia
     /// marcada (misma dependencia/serie/subserie + propiedades archivisticas compartidas)

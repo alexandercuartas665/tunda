@@ -825,6 +825,115 @@ public sealed class TrdAdminService : ITrdAdminService
         await _db.SaveChangesAsync(ct);
     }
 
+    // ---------- Edicion por grupo (subserie) ----------
+
+    private async Task<List<RespuestaTablaDocumental>> FilasDelGrupoAsync(Guid trdId, Guid depId, Guid serieId, Guid? subId, CancellationToken ct)
+    {
+        var estado = await _db.TablasRetencionDocumental.Where(t => t.Id == trdId).Select(t => t.Estado).FirstOrDefaultAsync(ct);
+        if (estado == "CERRADO") { throw new InvalidOperationException("La encuesta esta cerrada; no admite cambios."); }
+        return await _db.RespuestasTablaDocumental
+            .Where(r => r.TrdId == trdId && r.DependenciaId == depId && r.SerieId == serieId && r.SubserieId == subId)
+            .ToListAsync(ct);
+    }
+
+    private static void AplicarFlag(RespuestaTablaDocumental r, string campo, bool v)
+    {
+        switch (campo)
+        {
+            case nameof(RespuestaTablaDocumental.SinSubserie): r.SinSubserie = v; break;
+            case nameof(RespuestaTablaDocumental.DispCt): r.DispCt = v; break;
+            case nameof(RespuestaTablaDocumental.DispS): r.DispS = v; break;
+            case nameof(RespuestaTablaDocumental.DispE): r.DispE = v; break;
+            case nameof(RespuestaTablaDocumental.DispD): r.DispD = v; break;
+            case nameof(RespuestaTablaDocumental.Val1Admin): r.Val1Admin = v; break;
+            case nameof(RespuestaTablaDocumental.Val1Tecnica): r.Val1Tecnica = v; break;
+            case nameof(RespuestaTablaDocumental.Val1Legal): r.Val1Legal = v; break;
+            case nameof(RespuestaTablaDocumental.Val1Contable): r.Val1Contable = v; break;
+            case nameof(RespuestaTablaDocumental.Val1Fiscal): r.Val1Fiscal = v; break;
+            case nameof(RespuestaTablaDocumental.Val2Historica): r.Val2Historica = v; break;
+            case nameof(RespuestaTablaDocumental.Val2Cientifica): r.Val2Cientifica = v; break;
+            case nameof(RespuestaTablaDocumental.Val2Cultural): r.Val2Cultural = v; break;
+            case nameof(RespuestaTablaDocumental.SerieDdhh): r.SerieDdhh = v; break;
+            // REP y SIG se modelan como texto libre (SI/null).
+            case nameof(RespuestaTablaDocumental.Representativo): r.Representativo = v ? "SI" : null; break;
+            case nameof(RespuestaTablaDocumental.RelacionSig): r.RelacionSig = v ? "SI" : null; break;
+            default: throw new InvalidOperationException($"Campo booleano no editable: {campo}.");
+        }
+    }
+
+    public async Task EstablecerFlagGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, bool valor, Guid actor, CancellationToken ct = default)
+    {
+        var filas = await FilasDelGrupoAsync(trdId, dependenciaId, serieId, subserieId, ct);
+        foreach (var r in filas) { AplicarFlag(r, campo, valor); }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task EstablecerNumeroGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, decimal? valor, Guid actor, CancellationToken ct = default)
+    {
+        if (valor is < 0) { throw new InvalidOperationException("El tiempo no puede ser negativo."); }
+        var filas = await FilasDelGrupoAsync(trdId, dependenciaId, serieId, subserieId, ct);
+        foreach (var r in filas)
+        {
+            switch (campo)
+            {
+                case nameof(RespuestaTablaDocumental.TiempoAg): r.TiempoAg = valor; break;
+                case nameof(RespuestaTablaDocumental.TiempoAc): r.TiempoAc = valor; break;
+                default: throw new InvalidOperationException($"Campo numerico no editable: {campo}.");
+            }
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task EstablecerTextoGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, string campo, string? valor, Guid actor, CancellationToken ct = default)
+    {
+        var v = string.IsNullOrWhiteSpace(valor) ? null : valor!.Trim();
+        var filas = await FilasDelGrupoAsync(trdId, dependenciaId, serieId, subserieId, ct);
+        foreach (var r in filas)
+        {
+            switch (campo)
+            {
+                case nameof(RespuestaTablaDocumental.TiempoObserv): r.TiempoObserv = v; break;
+                case nameof(RespuestaTablaDocumental.DispObserv): r.DispObserv = v; break;
+                default: throw new InvalidOperationException($"Campo de texto no editable: {campo}.");
+            }
+        }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<Guid?> AgregarTipologiaEnGrupoAsync(Guid trdId, Guid dependenciaId, Guid serieId, Guid? subserieId, Guid tipologiaId, string formatosCsv, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var filas = await FilasDelGrupoAsync(trdId, dependenciaId, serieId, subserieId, ct);
+        // Ya declarada esa tipologia en el grupo: no se duplica.
+        if (filas.Any(r => r.TipologiaId == tipologiaId)) { return filas.First(r => r.TipologiaId == tipologiaId).Id; }
+
+        // Se copia la archivistica del lider del grupo (si hay); si el grupo esta vacio, nace en blanco.
+        var lider = filas.FirstOrDefault();
+        var nueva = new RespuestaTablaDocumental
+        {
+            TenantId = tenantId, TrdId = trdId, DependenciaId = dependenciaId, SerieId = serieId, SubserieId = subserieId,
+            TipologiaId = tipologiaId, SinSubserie = subserieId is null,
+            Extension = "{}", FechaReg = _clock.GetUtcNow(), CreadoPor = actor
+        };
+        if (lider is not null)
+        {
+            nueva.TiempoAg = lider.TiempoAg; nueva.TiempoAc = lider.TiempoAc; nueva.TiempoObserv = lider.TiempoObserv;
+            nueva.DispCt = lider.DispCt; nueva.DispS = lider.DispS; nueva.DispE = lider.DispE; nueva.DispD = lider.DispD; nueva.DispObserv = lider.DispObserv;
+            nueva.Val1Admin = lider.Val1Admin; nueva.Val1Tecnica = lider.Val1Tecnica; nueva.Val1Legal = lider.Val1Legal; nueva.Val1Contable = lider.Val1Contable; nueva.Val1Fiscal = lider.Val1Fiscal;
+            nueva.Val2Historica = lider.Val2Historica; nueva.Val2Cientifica = lider.Val2Cientifica; nueva.Val2Cultural = lider.Val2Cultural;
+            nueva.Representativo = lider.Representativo; nueva.SerieDdhh = lider.SerieDdhh; nueva.RelacionSig = lider.RelacionSig;
+            nueva.Procedimiento = lider.Procedimiento; nueva.ProcQueEs = lider.ProcQueEs; nueva.ProcElimina = lider.ProcElimina; nueva.ProcConserva = lider.ProcConserva;
+        }
+        // Los formatos van por la navegacion: EF fija la FK aunque el Id se genere al guardar.
+        foreach (var nombre in (formatosCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            nueva.Formatos.Add(new FormatoSerie { TenantId = tenantId, Soporte = SoporteDe(nombre), Formato = nombre });
+        }
+        _db.RespuestasTablaDocumental.Add(nueva);
+        await _db.SaveChangesAsync(ct);
+        return nueva.Id;
+    }
+
     /// <summary>El unico soporte fisico es el papel; el resto son digitales (mismo criterio que el cliente).</summary>
     private static string SoporteDe(string formato) =>
         formato.Trim().Equals("Papel", StringComparison.OrdinalIgnoreCase) ? "PAPEL" : "DIGITAL";
