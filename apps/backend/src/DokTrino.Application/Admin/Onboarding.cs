@@ -12,7 +12,10 @@ public sealed record OnboardTenantRequest(
     Guid? PlanId = null,
     BillingFrequency BillingFrequency = BillingFrequency.Monthly,
     // Cuando viene un subject de Google, el admin se crea sin clave (login via Google).
-    string? GoogleSubject = null);
+    string? GoogleSubject = null,
+    // Si el correo ya pertenece a un usuario, en vez de fallar se liga ese usuario
+    // existente como Owner de la nueva empresa (conserva su clave actual).
+    bool LinkExistingAdmin = false);
 
 public sealed record OnboardingResult(
     Guid TenantId,
@@ -21,7 +24,7 @@ public sealed record OnboardingResult(
     string AdminEmail,
     Guid? SubscriptionId);
 
-public sealed record OnboardingOutcome(bool Success, OnboardingResult? Result, string? Error);
+public sealed record OnboardingOutcome(bool Success, OnboardingResult? Result, string? Error, bool ExistingUserConflict = false);
 
 public interface IOnboardingService
 {

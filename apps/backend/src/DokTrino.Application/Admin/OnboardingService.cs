@@ -31,14 +31,17 @@ public sealed class OnboardingService : IOnboardingService
         {
             return new OnboardingOutcome(false, null, "El correo del administrador es obligatorio.");
         }
-        if (!isGoogle && string.IsNullOrWhiteSpace(request.AdminPassword))
+
+        // Si el correo ya existe podemos ligar ese usuario (no crear uno nuevo). Solo
+        // cuando NO se liga se exige una clave para el admin que vamos a crear.
+        var existing = await _db.PlatformUsers.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+        if (existing is not null && !request.LinkExistingAdmin)
+        {
+            return new OnboardingOutcome(false, null, "Ya existe un usuario con ese correo.", ExistingUserConflict: true);
+        }
+        if (existing is null && !isGoogle && string.IsNullOrWhiteSpace(request.AdminPassword))
         {
             return new OnboardingOutcome(false, null, "Correo y clave del administrador son obligatorios.");
-        }
-
-        if (await _db.PlatformUsers.AnyAsync(u => u.Email == email, cancellationToken))
-        {
-            return new OnboardingOutcome(false, null, "Ya existe un usuario con ese correo.");
         }
 
         if (request.PlanId is Guid planId && !await _db.SaasPlans.AnyAsync(p => p.Id == planId, cancellationToken))
@@ -55,7 +58,9 @@ public sealed class OnboardingService : IOnboardingService
             Kind = TenantKind.Standard
         };
 
-        var admin = new PlatformUser
+        // Usuario existente: se liga tal cual (no se toca su clave ni sus datos).
+        // Usuario nuevo: se crea con la clave provista (o sin clave si es Google).
+        var admin = existing ?? new PlatformUser
         {
             Email = email,
             DisplayName = request.AdminDisplayName?.Trim(),
@@ -67,7 +72,7 @@ public sealed class OnboardingService : IOnboardingService
         };
 
         _db.Tenants.Add(tenant);
-        _db.PlatformUsers.Add(admin);
+        if (existing is null) { _db.PlatformUsers.Add(admin); }
         _db.TenantUsers.Add(new TenantUser
         {
             TenantId = tenant.Id,
@@ -109,7 +114,7 @@ public sealed class OnboardingService : IOnboardingService
 
         _audit.Write(actorUserId, "tenant.onboard", nameof(Tenant), tenant.Id,
             previousValue: null,
-            newValue: new { tenant.Name, AdminEmail = email, HasSubscription = subscriptionId is not null },
+            newValue: new { tenant.Name, AdminEmail = email, LinkedExisting = existing is not null, HasSubscription = subscriptionId is not null },
             tenantId: tenant.Id);
 
         await _db.SaveChangesAsync(cancellationToken);

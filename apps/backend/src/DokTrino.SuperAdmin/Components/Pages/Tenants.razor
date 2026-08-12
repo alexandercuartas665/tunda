@@ -167,14 +167,25 @@ else
                     </div>
                 </div>
 
-                @if (_error is not null)
+                @if (_existingConflict)
+                {
+                    <div class="text-warning small" style="margin-top:6px;">
+                        Ya existe un usuario con ese correo. Puedes <strong>ligarlo</strong> como administrador de esta empresa;
+                        conserva su clave actual y podra elegir entre sus empresas al iniciar sesion.
+                    </div>
+                }
+                else if (_error is not null)
                 {
                     <div class="text-danger small">@_error</div>
                 }
             </div>
             <div class="modal-foot">
                 <button class="btn btn-outline-secondary" @onclick="Close">Cancelar</button>
-                <button class="btn btn-primary" @onclick="CreateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_adminEmail) || string.IsNullOrWhiteSpace(_adminPassword))">Crear agencia</button>
+                @if (_existingConflict)
+                {
+                    <button class="btn btn-outline-primary" @onclick="LinkExistingAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_adminEmail))">Ligar usuario existente</button>
+                }
+                <button class="btn btn-primary" @onclick="CreateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_adminEmail))">Crear agencia</button>
             </div>
         </div>
     </div>
@@ -241,6 +252,7 @@ else
     private BillingFrequency _createFreq = BillingFrequency.Monthly;
     private bool _busy;
     private string? _error;
+    private bool _existingConflict;
 
     private List<PlanDetail> _plans = new();
     private Dictionary<Guid, string> _planNames = new();
@@ -281,13 +293,19 @@ else
         _adminPassword = string.Empty;
         _createPlanId = Guid.Empty;
         _createFreq = BillingFrequency.Monthly;
+        _existingConflict = false;
         _modalOpen = true;
     }
 
     // El modal solo se cierra con la "X" o "Cancelar" (no al hacer clic fuera/dentro).
-    private void Close() => _modalOpen = false;
+    private void Close() { _modalOpen = false; _existingConflict = false; }
 
-    private async Task CreateAsync()
+    private Task CreateAsync() => OnboardAsync(linkExisting: false);
+
+    // Reintenta el alta ligando el usuario existente en vez de crear uno nuevo.
+    private Task LinkExistingAsync() => OnboardAsync(linkExisting: true);
+
+    private async Task OnboardAsync(bool linkExisting)
     {
         _error = null;
         _busy = true;
@@ -302,12 +320,16 @@ else
                 Country: _country,
                 Currency: _currency,
                 PlanId: _createPlanId == Guid.Empty ? null : _createPlanId,
-                BillingFrequency: _createFreq), actor);
+                BillingFrequency: _createFreq,
+                LinkExistingAdmin: linkExisting), actor);
             if (!outcome.Success)
             {
+                // Si el correo ya existe, ofrecemos ligarlo en vez de mostrar un error seco.
+                _existingConflict = outcome.ExistingUserConflict;
                 _error = outcome.Error ?? "No se pudo crear la agencia.";
                 return;
             }
+            _existingConflict = false;
             _modalOpen = false;
             await ReloadAsync();
         }
