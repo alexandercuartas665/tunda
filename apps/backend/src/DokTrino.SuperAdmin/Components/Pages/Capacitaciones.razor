@@ -58,6 +58,31 @@
         </div>
     }
 
+    @* ---------- Evaluaciones (editor de preguntas y respuesta correcta) ---------- *@
+    <div class="cap-eval-head">
+        <div class="cap-eval-t">Evaluaciones</div>
+        <button class="trx-btn ghost mini" @onclick="NuevaEval">&#65291; Nueva evaluacion</button>
+    </div>
+    @if (_evals.Count == 0)
+    {
+        <div class="cap-vacio">Aun no hay evaluaciones. Crea una para ligarla como evaluacion final de un curso.</div>
+    }
+    else
+    {
+        <div class="cap-eval-list">
+            @foreach (var e in _evals)
+            {
+                <div class="cap-eval-row">
+                    <div class="cap-eval-info">
+                        <div class="cap-eval-nom">@e.Titulo @(e.Activo ? "" : "(inactiva)")</div>
+                        <div class="cap-eval-meta">@e.Preguntas preguntas &middot; aprueba con @e.PuntajeMinimo%</div>
+                    </div>
+                    <button class="trx-btn mini" @onclick="() => AbrirEval(e.Id)">&#9998; Editar preguntas</button>
+                </div>
+            }
+        </div>
+    }
+
     @* ---------- Editor de curso (modal) ---------- *@
     @if (_nuevo || _detalle is not null)
     {
@@ -284,6 +309,99 @@
         </div>
         </div>@* /cap-modal-wrap *@
     }
+
+    @* ---------- Editor de evaluacion (modal) ---------- *@
+    @if (_evalAbierta)
+    {
+        <div class="cap-modal-scrim" @onclick="CerrarEval"></div>
+        <div class="cap-modal-wrap">
+        <div class="cap-modal cap-editor" @onclick:stopPropagation="true">
+            <div class="cap-modal-h">
+                <div class="cap-modal-t">@(_evalForm.Id is null ? "Nueva evaluacion" : "Editar evaluacion")</div>
+                <button class="cap-x" @onclick="CerrarEval">&#10005;</button>
+            </div>
+            <div class="cap-modal-b">
+                @if (_evalError is not null) { <div class="ase-alert">@_evalError</div> }
+
+                <div class="cap-field"><label>Titulo</label>
+                    <input class="cap-input" @bind="_evalForm.Titulo" placeholder="Formacion basica en clasificacion documental" /></div>
+                <div class="cap-field"><label>Descripcion</label>
+                    <input class="cap-input" @bind="_evalForm.Descripcion" placeholder="Opcional" /></div>
+                <div class="cap-row2">
+                    <div class="cap-field"><label>Puntaje minimo para aprobar (%)</label>
+                        <input class="cap-input" type="number" min="0" max="100" @bind="_evalForm.PuntajeMinimo" /></div>
+                    <label class="cap-chk"><input type="checkbox" @bind="_evalForm.Activo" /> Activa</label>
+                </div>
+                <div class="cap-btns"><button class="trx-btn" @onclick="GuardarCabecera">Guardar datos</button></div>
+
+                @if (_evalForm.Id is Guid && _evalDet is not null)
+                {
+                    <div class="cap-sep"></div>
+                    <div class="cap-eval-head">
+                        <div class="cap-eval-t">Preguntas (@_evalDet.Preguntas.Count)</div>
+                        <button class="trx-btn ghost mini" @onclick="NuevaPregunta">&#65291; Agregar pregunta</button>
+                    </div>
+
+                    @if (_evalDet.Preguntas.Count == 0)
+                    {
+                        <div class="cap-vacio">Sin preguntas. Agrega la primera.</div>
+                    }
+                    @foreach (var p in _evalDet.Preguntas)
+                    {
+                        <div class="cap-preg">
+                            <div class="cap-preg-h">
+                                <span class="cap-preg-n">@p.Orden</span>
+                                <span class="cap-preg-e">@p.Enunciado</span>
+                                <span class="cap-preg-acc">
+                                    <button class="trx-btn ghost mini" title="Subir" @onclick="() => MoverPregunta(p.Id, true)">&#8593;</button>
+                                    <button class="trx-btn ghost mini" title="Bajar" @onclick="() => MoverPregunta(p.Id, false)">&#8595;</button>
+                                    <button class="trx-btn ghost mini" title="Editar" @onclick="() => EditarPregunta(p)">&#9998;</button>
+                                    <button class="trx-btn danger mini" title="Eliminar" @onclick="() => EliminarPregunta(p.Id)">&times;</button>
+                                </span>
+                            </div>
+                            <div class="cap-preg-ops">
+                                @for (var i = 0; i < p.Opciones.Count; i++)
+                                {
+                                    <span class="cap-op @(i == p.IndiceCorrecto ? "ok" : "")">@p.Opciones[i]</span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_pregForm is not null)
+                    {
+                        <div class="cap-preg-editor">
+                            <div class="cap-eval-t">@(_pregForm.Id is null ? "Nueva pregunta" : "Editar pregunta")</div>
+                            <div class="cap-field"><label>Enunciado</label><input class="cap-input" @bind="_pregForm.Enunciado" /></div>
+                            <label class="cap-lbl">Opciones (marca la respuesta correcta)</label>
+                            @for (var i = 0; i < _pregOpciones.Count; i++)
+                            {
+                                var idx = i;
+                                <div class="cap-op-edit">
+                                    <input type="radio" name="correcta" checked="@(_pregCorrecta == idx)" @onchange="() => _pregCorrecta = idx" />
+                                    <input class="cap-input" value="@_pregOpciones[idx]"
+                                           @onchange="e => _pregOpciones[idx] = e.Value?.ToString() ?? string.Empty" placeholder="Opcion @(idx + 1)" />
+                                    <button class="trx-btn danger mini" @onclick="() => QuitarOpcion(idx)" disabled="@(_pregOpciones.Count <= 2)">&times;</button>
+                                </div>
+                            }
+                            <button class="trx-btn ghost mini" @onclick="AgregarOpcion">&#65291; Opcion</button>
+                            <div class="cap-field"><label>Retroalimentacion (se muestra si falla)</label>
+                                <input class="cap-input" @bind="_pregForm.Retroalimentacion" placeholder="Opcional" /></div>
+                            <div class="cap-btns">
+                                <button class="trx-btn" @onclick="GuardarPregunta">Guardar pregunta</button>
+                                <button class="trx-btn ghost" @onclick="() => _pregForm = null">Cancelar</button>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <small class="text-muted">Guarda los datos para empezar a agregar preguntas.</small>
+                }
+            </div>
+        </div>
+        </div>@* /cap-modal-wrap *@
+    }
 </div>
 
 <style>
@@ -375,6 +493,34 @@
                      border-radius:11px; padding:11px 15px; }
     .cap-prev-eval-k { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; color:var(--primary); }
     .cap-prev-eval-v { font-size:13px; font-weight:700; color:#1f2433; }
+    /* Editor de evaluacion */
+    .cap-eval-head { display:flex; align-items:center; gap:10px; margin:22px 0 10px; }
+    .cap-eval-t { font-size:13px; font-weight:800; color:#1f2433; text-transform:uppercase; letter-spacing:.4px; flex:1; }
+    .cap-eval-list { display:flex; flex-direction:column; gap:8px; }
+    .cap-eval-row { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--chrome-border); border-radius:12px; padding:11px 14px; }
+    .cap-eval-info { flex:1; min-width:0; }
+    .cap-eval-nom { font-size:13.5px; font-weight:700; color:#1f2433; }
+    .cap-eval-meta { font-size:11.5px; color:#8a93a8; margin-top:2px; }
+    .cap-modal-b { display:flex; flex-direction:column; gap:12px; overflow:auto; }
+    .cap-field label, .cap-lbl { display:block; font-size:11px; font-weight:700; color:#6b7488; text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+    .cap-row2 { display:flex; gap:16px; align-items:flex-end; }
+    .cap-row2 .cap-field { flex:1; }
+    .cap-chk { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:#37415c; white-space:nowrap; }
+    .cap-btns { display:flex; gap:8px; }
+    .cap-sep { height:1px; background:var(--chrome-border); margin:6px 0; }
+    .cap-preg { border:1px solid var(--chrome-border); border-radius:11px; padding:10px 13px; }
+    .cap-preg-h { display:flex; align-items:center; gap:9px; }
+    .cap-preg-n { width:22px; height:22px; border-radius:7px; background:var(--primary-soft); color:var(--primary); font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .cap-preg-e { flex:1; font-size:13px; font-weight:600; color:#2a2f3d; }
+    .cap-preg-acc { display:flex; gap:4px; }
+    .cap-preg-ops { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; padding-left:31px; }
+    .cap-op { font-size:11.5px; padding:2px 9px; border-radius:20px; background:#f1f3f8; color:#6b7488; }
+    .cap-op.ok { background:#e7f6ec; color:#1f8a4c; font-weight:700; }
+    .cap-op.ok::before { content:"\2713  "; }
+    .cap-preg-editor { border:1px dashed var(--primary); border-radius:11px; padding:12px 14px; background:var(--primary-soft); display:flex; flex-direction:column; gap:9px; }
+    .cap-op-edit { display:flex; align-items:center; gap:8px; }
+    .cap-op-edit .cap-input { flex:1; }
+    .cap-x { border:0; background:transparent; cursor:pointer; font-size:16px; color:#9aa3bd; }
 </style>
 
 @code {
@@ -401,9 +547,115 @@
     {
         _cuestionarios = await Curso.CuestionariosAsync();
         await RecargarLista();
+        _evals = (await Curso.CuestionariosAdminAsync()).ToList();
     }
 
     private async Task RecargarLista() => _cursos = (await Curso.ListarCursosAsync()).ToList();
+
+    // ---------- Editor de evaluacion ----------
+    private List<CuestionarioAdminDto> _evals = new();
+    private bool _evalAbierta;
+    private CuestionarioDetalleAdminDto? _evalDet;
+    private GuardarCuestionarioRequest _evalForm = new();
+    private string? _evalError;
+    private GuardarPreguntaRequest? _pregForm;
+    private List<string> _pregOpciones = new();
+    private int _pregCorrecta;
+
+    private async Task RecargarEvals() => _evals = (await Curso.CuestionariosAdminAsync()).ToList();
+
+    private void NuevaEval()
+    {
+        _evalForm = new GuardarCuestionarioRequest();
+        _evalDet = null; _pregForm = null; _evalError = null;
+        _evalAbierta = true;
+    }
+
+    private async Task AbrirEval(Guid id)
+    {
+        _evalError = null; _pregForm = null;
+        _evalDet = await Curso.CuestionarioAsync(id);
+        if (_evalDet is null) { _evalError = "La evaluacion ya no existe."; await RecargarEvals(); return; }
+        var c = _evalDet.Cabecera;
+        _evalForm = new GuardarCuestionarioRequest { Id = c.Id, Modulo = c.Modulo, Titulo = c.Titulo, Descripcion = c.Descripcion, PuntajeMinimo = c.PuntajeMinimo, Activo = c.Activo };
+        _evalAbierta = true;
+    }
+
+    private void CerrarEval() { _evalAbierta = false; _pregForm = null; _evalError = null; }
+
+    private async Task GuardarCabecera()
+    {
+        _evalError = null;
+        try
+        {
+            var id = await Curso.GuardarCuestionarioAsync(_evalForm, await Actor());
+            if (id is Guid g)
+            {
+                _evalForm.Id = g;
+                _evalDet = await Curso.CuestionarioAsync(g);
+                await RecargarEvals();
+            }
+        }
+        catch (InvalidOperationException ex) { _evalError = ex.Message; }
+    }
+
+    private void NuevaPregunta()
+    {
+        if (_evalForm.Id is not Guid g) { return; }
+        _pregForm = new GuardarPreguntaRequest { CuestionarioId = g };
+        _pregOpciones = new List<string> { "", "" };
+        _pregCorrecta = 0;
+        _evalError = null;
+    }
+
+    private void EditarPregunta(PreguntaAdminDto p)
+    {
+        _pregForm = new GuardarPreguntaRequest { Id = p.Id, CuestionarioId = _evalForm.Id ?? Guid.Empty, Enunciado = p.Enunciado, Retroalimentacion = p.Retroalimentacion };
+        _pregOpciones = p.Opciones.ToList();
+        _pregCorrecta = p.IndiceCorrecto;
+        _evalError = null;
+    }
+
+    private void AgregarOpcion() => _pregOpciones.Add("");
+    private void QuitarOpcion(int i)
+    {
+        if (_pregOpciones.Count <= 2) { return; }
+        _pregOpciones.RemoveAt(i);
+        if (_pregCorrecta >= _pregOpciones.Count) { _pregCorrecta = _pregOpciones.Count - 1; }
+    }
+
+    private async Task GuardarPregunta()
+    {
+        if (_pregForm is null) { return; }
+        _evalError = null;
+        _pregForm.Opciones = _pregOpciones.ToList();
+        _pregForm.IndiceCorrecto = _pregCorrecta;
+        try
+        {
+            await Curso.GuardarPreguntaAsync(_pregForm, await Actor());
+            _pregForm = null;
+            await RefrescarEvalDetalle();
+        }
+        catch (InvalidOperationException ex) { _evalError = ex.Message; }
+    }
+
+    private async Task EliminarPregunta(Guid preguntaId)
+    {
+        _evalError = null;
+        await Curso.EliminarPreguntaAsync(preguntaId, await Actor());
+        await RefrescarEvalDetalle();
+    }
+
+    private async Task MoverPregunta(Guid preguntaId, bool arriba)
+    {
+        await Curso.MoverPreguntaAsync(preguntaId, arriba, await Actor());
+        await RefrescarEvalDetalle();
+    }
+
+    private async Task RefrescarEvalDetalle()
+    {
+        if (_evalForm.Id is Guid g) { _evalDet = await Curso.CuestionarioAsync(g); await RecargarEvals(); }
+    }
 
     private void NuevoCurso()
     {

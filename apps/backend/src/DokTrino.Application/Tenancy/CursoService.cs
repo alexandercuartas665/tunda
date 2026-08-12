@@ -217,6 +217,118 @@ public sealed class CursoService : ICursoService
             .Select(q => new { q.Id, q.Titulo }).ToListAsync(ct))
             .Select(q => (q.Id, q.Titulo)).ToList();
 
+    // ---------- Editor de la evaluacion (cuestionario + preguntas) ----------
+
+    public async Task<IReadOnlyList<CuestionarioAdminDto>> CuestionariosAdminAsync(CancellationToken ct = default) =>
+        await _db.Cuestionarios.AsNoTracking().OrderBy(q => q.Titulo)
+            .Select(q => new CuestionarioAdminDto(q.Id, q.Modulo, q.Titulo, q.Descripcion, q.PuntajeMinimo, q.Activo,
+                _db.CuestionarioPreguntas.Count(p => p.CuestionarioId == q.Id)))
+            .ToListAsync(ct);
+
+    public async Task<CuestionarioDetalleAdminDto?> CuestionarioAsync(Guid id, CancellationToken ct = default)
+    {
+        var q = await _db.Cuestionarios.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (q is null) { return null; }
+        var preguntas = await _db.CuestionarioPreguntas.AsNoTracking()
+            .Where(p => p.CuestionarioId == id).OrderBy(p => p.Orden).ToListAsync(ct);
+        var cab = new CuestionarioAdminDto(q.Id, q.Modulo, q.Titulo, q.Descripcion, q.PuntajeMinimo, q.Activo, preguntas.Count);
+        var lista = preguntas.Select(p => new PreguntaAdminDto(
+            p.Id, p.Orden, p.Enunciado, ParseOpciones(p.OpcionesJson), p.IndiceCorrecto, p.Retroalimentacion)).ToList();
+        return new CuestionarioDetalleAdminDto(cab, lista);
+    }
+
+    public async Task<Guid?> GuardarCuestionarioAsync(GuardarCuestionarioRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var titulo = (req.Titulo ?? "").Trim();
+        if (titulo.Length == 0) { throw new InvalidOperationException("El titulo de la evaluacion es obligatorio."); }
+        CuestionarioCapacitacion q;
+        if (req.Id is Guid id)
+        {
+            q = await _db.Cuestionarios.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw new InvalidOperationException("La evaluacion ya no existe.");
+        }
+        else
+        {
+            q = new CuestionarioCapacitacion { TenantId = tenantId, Modulo = string.IsNullOrWhiteSpace(req.Modulo) ? "FORMACION_TRD" : req.Modulo.Trim() };
+            _db.Cuestionarios.Add(q);
+        }
+        q.Titulo = titulo;
+        q.Descripcion = string.IsNullOrWhiteSpace(req.Descripcion) ? null : req.Descripcion.Trim();
+        q.PuntajeMinimo = Math.Clamp(req.PuntajeMinimo, 0, 100);
+        q.Activo = req.Activo;
+        await _db.SaveChangesAsync(ct);
+        return q.Id;
+    }
+
+    public async Task<bool> EliminarCuestionarioAsync(Guid id, Guid actor, CancellationToken ct = default)
+    {
+        var q = await _db.Cuestionarios.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (q is null) { return false; }
+        var preguntas = await _db.CuestionarioPreguntas.Where(p => p.CuestionarioId == id).ToListAsync(ct);
+        _db.CuestionarioPreguntas.RemoveRange(preguntas);
+        _db.Cuestionarios.Remove(q);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<Guid?> GuardarPreguntaAsync(GuardarPreguntaRequest req, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var enunciado = (req.Enunciado ?? "").Trim();
+        var opciones = (req.Opciones ?? new()).Select(o => (o ?? "").Trim()).Where(o => o.Length > 0).ToList();
+        if (enunciado.Length == 0) { throw new InvalidOperationException("El enunciado es obligatorio."); }
+        if (opciones.Count < 2) { throw new InvalidOperationException("La pregunta necesita al menos 2 opciones."); }
+        if (req.IndiceCorrecto < 0 || req.IndiceCorrecto >= opciones.Count) { throw new InvalidOperationException("Marca cual de las opciones es la respuesta correcta."); }
+        if (!await _db.Cuestionarios.AnyAsync(x => x.Id == req.CuestionarioId, ct)) { throw new InvalidOperationException("La evaluacion no existe."); }
+
+        CuestionarioPregunta p;
+        if (req.Id is Guid id)
+        {
+            p = await _db.CuestionarioPreguntas.FirstOrDefaultAsync(x => x.Id == id, ct) ?? throw new InvalidOperationException("La pregunta ya no existe.");
+        }
+        else
+        {
+            var maxOrden = await _db.CuestionarioPreguntas.Where(x => x.CuestionarioId == req.CuestionarioId).Select(x => (int?)x.Orden).MaxAsync(ct) ?? 0;
+            p = new CuestionarioPregunta { TenantId = tenantId, CuestionarioId = req.CuestionarioId, Orden = maxOrden + 1 };
+            _db.CuestionarioPreguntas.Add(p);
+        }
+        p.Enunciado = enunciado;
+        p.OpcionesJson = System.Text.Json.JsonSerializer.Serialize(opciones);
+        p.IndiceCorrecto = req.IndiceCorrecto;
+        p.Retroalimentacion = string.IsNullOrWhiteSpace(req.Retroalimentacion) ? null : req.Retroalimentacion.Trim();
+        await _db.SaveChangesAsync(ct);
+        return p.Id;
+    }
+
+    public async Task<bool> EliminarPreguntaAsync(Guid preguntaId, Guid actor, CancellationToken ct = default)
+    {
+        var p = await _db.CuestionarioPreguntas.FirstOrDefaultAsync(x => x.Id == preguntaId, ct);
+        if (p is null) { return false; }
+        _db.CuestionarioPreguntas.Remove(p);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> MoverPreguntaAsync(Guid preguntaId, bool arriba, Guid actor, CancellationToken ct = default)
+    {
+        var p = await _db.CuestionarioPreguntas.FirstOrDefaultAsync(x => x.Id == preguntaId, ct);
+        if (p is null) { return false; }
+        var vecina = arriba
+            ? await _db.CuestionarioPreguntas.Where(x => x.CuestionarioId == p.CuestionarioId && x.Orden < p.Orden).OrderByDescending(x => x.Orden).FirstOrDefaultAsync(ct)
+            : await _db.CuestionarioPreguntas.Where(x => x.CuestionarioId == p.CuestionarioId && x.Orden > p.Orden).OrderBy(x => x.Orden).FirstOrDefaultAsync(ct);
+        if (vecina is null) { return false; }
+        (p.Orden, vecina.Orden) = (vecina.Orden, p.Orden);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private static IReadOnlyList<string> ParseOpciones(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) { return Array.Empty<string>(); }
+        try { return System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>(); }
+        catch { return Array.Empty<string>(); }
+    }
+
     // ---------- Publicacion (curso vigente para el cliente) ----------
 
     public async Task<ConfigCursoClienteDto> ConfigClienteAsync(Guid trdId, CancellationToken ct = default)
