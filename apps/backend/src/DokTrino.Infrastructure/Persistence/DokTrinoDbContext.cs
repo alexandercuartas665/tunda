@@ -45,6 +45,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TenantConfiguration> TenantConfigurations => Set<TenantConfiguration>();
     public DbSet<TenantEvolutionConfig> TenantEvolutionConfigs => Set<TenantEvolutionConfig>();
     public DbSet<WhatsAppLine> WhatsAppLines => Set<WhatsAppLine>();
+    public DbSet<WhatsAppLineBinding> WhatsAppLineBindings => Set<WhatsAppLineBinding>();
     public DbSet<PipelineStage> PipelineStages => Set<PipelineStage>();
     public DbSet<PipelineFieldDefinition> PipelineFieldDefinitions => Set<PipelineFieldDefinition>();
     public DbSet<Lead> Leads => Set<Lead>();
@@ -357,6 +358,14 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.PhoneNumber).HasMaxLength(40);
             b.HasIndex(x => new { x.TenantId, x.InstanceName }).IsUnique();
             b.HasIndex(x => x.AssignedToTenantUserId);
+        });
+
+        modelBuilder.Entity<WhatsAppLineBinding>(b =>
+        {
+            b.HasOne(x => x.WhatsAppLine).WithMany().HasForeignKey(x => x.WhatsAppLineId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(x => x.Agent).WithMany().HasForeignKey(x => x.AgentId).OnDelete(DeleteBehavior.Cascade);
+            // Una linea la atiende como maximo un agente: unico por (tenant, linea).
+            b.HasIndex(x => new { x.TenantId, x.WhatsAppLineId }).IsUnique();
         });
 
         modelBuilder.Entity<PipelineStage>(b =>

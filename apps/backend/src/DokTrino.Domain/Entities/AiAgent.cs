@@ -26,4 +26,11 @@ public class AiAgent : TenantEntity
     public bool IsActive { get; set; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Herramientas MCP habilitadas para este agente, como arreglo JSON de keys
+    /// (las que expone cada IAgentToolset.GetSpecs().Name). Nulo = ninguna seleccionada.
+    /// Lo administra la Admin Agent API (Capa 6) via PUT .../tools.
+    /// </summary>
+    public string? ToolKeys { get; set; }
 }

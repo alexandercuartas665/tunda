@@ -42,7 +42,13 @@ builder.Services.Configure<JwtSettings>(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
-builder.Services.AddScoped<ITenantContext, HttpContextTenantContext>();
+// Un solo HttpContextTenantContext por scope sirve como ITenantContext (lectura) y
+// ITenantImpersonation (override cross-tenant de la Admin Agent API).
+builder.Services.AddScoped<HttpContextTenantContext>();
+builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<HttpContextTenantContext>());
+builder.Services.AddScoped<ITenantImpersonation>(sp => sp.GetRequiredService<HttpContextTenantContext>());
+// Admin Agent API (Capa 6): solo en este host (tiene el JWT super admin + la impersonacion).
+builder.Services.AddScoped<DokTrino.Application.Tenancy.IAdminAgentService, DokTrino.Application.Tenancy.AdminAgentService>();
 
 JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 builder.Services
@@ -104,6 +110,7 @@ app.UseAuthorization();
 
 app.MapConnectEndpoints();
 app.MapAdminEndpoints();
+app.MapAgentAdminEndpoints();
 app.MapTenantEndpoints();
 app.MapDocumentalEndpoints();
 app.MapChatEndpoints();

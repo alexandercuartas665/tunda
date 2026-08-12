@@ -43,7 +43,7 @@ public sealed class AiAgentService : IAiAgentService
             .OrderBy(p => p.SortOrder)
             .Select(p => MapPrompt(p))
             .ToListAsync(cancellationToken);
-        return new AiAgentDetailDto(Map(agent, resources.Count), resources, prompts);
+        return new AiAgentDetailDto(Map(agent, resources.Count), resources, prompts, ToolsHelper.Parse(agent.ToolKeys));
     }
 
     public async Task<AiAgentDto?> CreateAsync(CreateAiAgentRequest request, Guid actorUserId, CancellationToken cancellationToken = default)
