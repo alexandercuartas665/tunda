@@ -36,31 +36,67 @@
     @if (_error is not null) { <div class="ase-alert">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-    @* --- Alta de transaccion --- *@
+    @* --- Alta de transaccion (modal) --- *@
     @if (_nuevaOpen)
     {
-        <div class="trx-filtros" style="align-items: flex-end;">
-            <div class="trx-f grow">
-                <label>Titulo de la transaccion</label>
-                <input @bind="_nt.Titulo" placeholder="TRD Institucional 2026" />
+        <div class="doktrino-drawer-scrim" style="display: block; z-index: 1990;" @onclick="() => _nuevaOpen = false"></div>
+        <div style="position: fixed; inset: 0; z-index: 1995; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+            <div class="per-modal" style="width: 520px; pointer-events: auto;">
+                <div class="per-h">
+                    <div>
+                        <div class="per-t">Nueva transaccion documental</div>
+                        <div class="per-sub">Crea una TRD para empezar el organigrama y la matriz</div>
+                    </div>
+                    <span class="per-x" @onclick="() => _nuevaOpen = false">&#10005;</span>
+                </div>
+                <div class="per-b">
+                    <div class="ed-lbl">Titulo de la transaccion</div>
+                    <input class="dep-in" @bind="_nt.Titulo" placeholder="TRD Institucional 2026" />
+                    <div class="ed-lbl" style="margin-top: 12px;">Segmento</div>
+                    <select class="dep-in" @bind="_ntSeg">
+                        <option value="">(sin segmento)</option>
+                        @foreach (var s in _segmentos) { <option value="@s.Id">@s.Nombre</option> }
+                    </select>
+                    <div class="doc-grid" style="margin-top: 12px;">
+                        <div><div class="ed-lbl">Vigencia desde</div><input class="dep-in" type="date" @bind="_ntIni" /></div>
+                        <div><div class="ed-lbl">Hasta</div><input class="dep-in" type="date" @bind="_ntFin" /></div>
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
+                        <button class="trx-btn ghost" @onclick="() => _nuevaOpen = false">Cancelar</button>
+                        <button class="trx-btn" @onclick="CrearTrd">Crear transaccion</button>
+                    </div>
+                </div>
             </div>
-            <div class="trx-f">
-                <label>Segmento</label>
-                <select @bind="_ntSeg">
-                    <option value="">(sin segmento)</option>
-                    @foreach (var s in _segmentos) { <option value="@s.Id">@s.Nombre</option> }
-                </select>
+        </div>
+    }
+
+    @* --- Eliminar transaccion (doble confirmacion) --- *@
+    @if (_trdAEliminar is not null)
+    {
+        <div class="doktrino-drawer-scrim" style="display: block; z-index: 2000;" @onclick="() => _trdAEliminar = null"></div>
+        <div style="position: fixed; inset: 0; z-index: 2005; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+            <div class="per-modal" style="width: 480px; pointer-events: auto;">
+                <div class="per-h" style="background: linear-gradient(135deg, #c0392b, #e74c3c);">
+                    <div>
+                        <div class="per-t">Eliminar @_trdAEliminar.Consecutivo</div>
+                        <div class="per-sub">@_trdAEliminar.Titulo</div>
+                    </div>
+                    <span class="per-x" @onclick="() => _trdAEliminar = null">&#10005;</span>
+                </div>
+                <div class="per-b">
+                    <div class="ase-alert" style="margin-bottom: 14px;">
+                        Se eliminara la transaccion con <b>todas sus dependencias, personas y la matriz TRD</b>. Esta accion no se puede deshacer.
+                    </div>
+                    <label class="rev-chk" style="font-size: 12.5px; color: #37415c;">
+                        <input type="checkbox" checked="@_confirmoEliminar" @onchange="e => _confirmoEliminar = (bool)(e.Value ?? false)" />
+                        <span>Entiendo que esta accion es permanente.</span>
+                    </label>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
+                        <button class="trx-btn ghost" @onclick="() => _trdAEliminar = null">Cancelar</button>
+                        <button class="trx-btn danger" @onclick="EliminarTrdConfirmado" disabled="@(!_confirmoEliminar)">Eliminar definitivamente</button>
+                    </div>
+                </div>
             </div>
-            <div class="trx-f">
-                <label>Vigencia desde</label>
-                <input type="date" @bind="_ntIni" />
-            </div>
-            <div class="trx-f">
-                <label>Hasta</label>
-                <input type="date" @bind="_ntFin" />
-            </div>
-            <button class="trx-btn" @onclick="CrearTrd">Crear</button>
-            <button class="trx-btn ghost" @onclick="() => _nuevaOpen = false">Cancelar</button>
         </div>
     }
 
@@ -99,6 +135,7 @@
                     <div class="trx-card-top">
                         <span class="trx-num">@t.Consecutivo</span>
                         <span class="trx-est @t.Estado.ToLowerInvariant()">@t.Estado</span>
+                        <button class="trx-card-del" title="Eliminar transaccion" @onclick:stopPropagation="true" @onclick="() => PedirEliminar(t)">&times;</button>
                     </div>
                     <div class="trx-dep">&#127963; @(t.Segmento ?? "Sin segmento")</div>
                     <div class="trx-obs">@(string.IsNullOrWhiteSpace(t.Observaciones) ? t.Titulo : t.Observaciones)</div>
@@ -1224,9 +1261,11 @@
     .dep-tb th { position:sticky; top:0; background:#1e2436; color:#fff; text-align:left;
                  font-size:10.5px; letter-spacing:.4px; text-transform:uppercase;
                  padding:9px 10px; z-index:1; border-right:1px solid rgba(255,255,255,.12); }
-    /* Encabezado de 2 filas: la fila de grupos arriba, las hojas justo debajo. */
-    .dep-tb thead tr:first-child th { top:0; height:30px; }
-    .dep-tb thead tr:last-child th { top:30px; }
+    /* Encabezado de 2 filas SOLO en la matriz ancha (la fila de grupos arriba, las hojas debajo).
+       Sin acotar a .wide, la tabla simple de dependencias (1 sola fila de header) tomaba top:30px
+       de la regla last-child y su primera fila quedaba tapada. */
+    .dep-tb.wide thead tr:first-child th { top:0; height:30px; }
+    .dep-tb.wide thead tr:last-child th { top:30px; }
     .dep-tb td { padding:12px 13px; border-bottom:1px solid #eef1f7; border-right:1px solid rgba(20,30,60,.07); vertical-align:middle; }
     .dep-tb td.mk, .dep-tb td.c { padding-top:12px; padding-bottom:12px; }
     .dep-tb tbody tr { cursor:pointer; }
@@ -1244,6 +1283,9 @@
     .dep-tb td.vacio { text-align:center; color:#a8b0c4; padding:22px; }
     .dep-badge { font-size:10px; font-weight:800; letter-spacing:.3px; padding:2px 7px;
                  border-radius:20px; background:#e8f5ee; color:#2f7d54; }
+    .trx-card-del { margin-left:auto; border:0; background:transparent; cursor:pointer; font-size:18px; line-height:1;
+                    color:#c3ccdd; padding:0 2px; border-radius:6px; }
+    .trx-card-del:hover { color:#c0392b; background:#fdeceb; }
     .rev-chk { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; font-weight:700; color:#8a93ad; }
     .rev-chk input { accent-color:#c0392b; width:15px; height:15px; cursor:pointer; }
     .rev-chk input:checked + span { color:#c0392b; }
@@ -1686,6 +1728,25 @@
         _error = _ok = null;
         try { await Trd.CambiarEstadoAsync(id, e, await Actor()); _ok = $"Estado -> {e}."; await LoadAll(); }
         catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // Eliminar transaccion con doble confirmacion (abrir modal + marcar casilla + confirmar).
+    private TrdDto? _trdAEliminar;
+    private bool _confirmoEliminar;
+    private void PedirEliminar(TrdDto t) { _trdAEliminar = t; _confirmoEliminar = false; _error = _ok = null; }
+    private async Task EliminarTrdConfirmado()
+    {
+        if (_trdAEliminar is null || !_confirmoEliminar) { return; }
+        var cons = _trdAEliminar.Consecutivo;
+        try
+        {
+            await Trd.EliminarTrdAsync(_trdAEliminar.Id, await Actor());
+            _trdAEliminar = null; _confirmoEliminar = false;
+            if (_sel?.Consecutivo == cons) { _sel = null; }
+            _ok = $"Transaccion {cons} eliminada.";
+            await LoadAll();
+        }
+        catch (Exception ex) { _error = ex.Message; _trdAEliminar = null; }
     }
 
     private bool _duplicando;
@@ -2300,7 +2361,9 @@
         _personasDe = d;
         _perError = _propOk = _propError = null;
         _np = new CrearColaboradorRequest();
-        _prop = new PropForm { CodigoRaizDocumental = d.CodigoRaizDocumental, GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones,
+        // El codigo raiz documental por defecto es el propio codigo de la dependencia (el que se dio al crearla).
+        _prop = new PropForm { CodigoRaizDocumental = string.IsNullOrWhiteSpace(d.CodigoRaizDocumental) ? d.Codigo : d.CodigoRaizDocumental,
+                               GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones,
                                FechaInicio = d.FechaInicioEstimada, FechaFin = d.FechaFinEstimada };
         _ind = null;
         _bitacora = (await Trd.BitacoraRevisionAsync(d.Id)).ToList();

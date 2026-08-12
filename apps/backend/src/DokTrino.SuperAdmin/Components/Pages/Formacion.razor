@@ -86,7 +86,9 @@ else
                         @{ var src = $"/capacitaciones/cliente/leccion/{l.Id}/recurso?token={Token}"; }
                         @if (l.Tipo == "VIDEO" && l.TieneArchivo)
                         {
-                            <video class="lms-video" controls src="@src"></video>
+                            @* preload/playsinline ayudan al render; si el video se ve negro (audio ok) en
+                               Opera/Chrome suele ser el codec: subir el mp4 en H.264 (no HEVC/H.265). *@
+                            <video class="lms-video" controls playsinline preload="metadata" src="@src"></video>
                         }
                         else if (l.Tipo == "IMAGEN" && l.TieneArchivo)
                         {
