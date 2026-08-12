@@ -30,8 +30,22 @@ else
                         Si tienes dudas sobre que seleccionar, abre <b>Formacion Archimente</b> desde el boton de Ayuda: esta disponible siempre.
                     </div>
                 </div>
-                <label for="doktrino-help-toggle" class="tcl-add" style="width: auto; margin: 0; padding: 10px 16px;">Ver formacion</label>
                 <button class="tcl-coach-x" title="No volver a mostrar" @onclick="OcultarHint">&#10005;</button>
+            </div>
+        }
+
+        @* --- Formacion pendiente (bloqueante): el unico enlace a la formacion, con la mascota --- *@
+        @if (_capacitacionPendiente)
+        {
+            <div class="tcl-pend" style="display:flex; align-items:center; gap:14px;">
+                <img src="/img/marca/mascota-superheroe.png" alt="" aria-hidden="true"
+                     style="height:64px; width:auto; flex-shrink:0; filter:drop-shadow(0 4px 10px rgba(0,0,0,.18));" />
+                <div style="flex:1; min-width:0;">
+                    <div class="tcl-pend-h">&#9888; Formacion pendiente</div>
+                    <div class="tcl-pend-s">Antes de diligenciar tu TRD debes superar el cuestionario de formacion documental.</div>
+                    <a class="tcl-add" style="width: auto; display: inline-flex; margin-top: 10px;"
+                       href="@($"formacion?token={Token}")">Ir a la formacion</a>
+                </div>
             </div>
         }
 
@@ -68,18 +82,6 @@ else
                 <span class="who">TRD @_sesion.TrdConsecutivo &middot; @_sesion.TrdTitulo</span>
             </div>
         </div>
-
-        @if (_capacitacionPendiente)
-        {
-            <div class="tcl-pend">
-                <div class="tcl-pend-h">&#9888; Formacion pendiente</div>
-                <div class="tcl-pend-s">
-                    Antes de diligenciar tu TRD debes superar el cuestionario de formacion documental.
-                </div>
-                <a class="tcl-add" style="width: auto; display: inline-flex; margin-top: 10px;"
-                   href="@($"formacion?token={Token}")">Ir a la formacion</a>
-            </div>
-        }
 
         @if (_sesion.Expirado) { <div class="ase-alert">El enlace expiro. Contacta al administrador.</div> }
         else if (_sesion.SoloLectura) { <div class="ase-alert">@(_sesion.MotivoSoloLectura ?? "No se puede editar.") Puedes consultar, pero no diligenciar.</div> }
