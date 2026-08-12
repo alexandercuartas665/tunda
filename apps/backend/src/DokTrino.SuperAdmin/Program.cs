@@ -31,6 +31,29 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddHttpContextAccessor();
+// JWT para la Admin Agent API (Capa 6) re-hospedada en este host. Coexiste con la cookie del
+// Blazor: la cookie es el esquema por defecto (UI); el bearer valida /connect/token y /admin/...
+var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
+if (string.IsNullOrWhiteSpace(jwtSettings.SigningKey))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        jwtSettings.SigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(64));
+    }
+    else
+    {
+        throw new InvalidOperationException("Jwt:SigningKey es obligatorio fuera de Development (Admin Agent API).");
+    }
+}
+builder.Services.Configure<JwtSettings>(o =>
+{
+    o.Issuer = jwtSettings.Issuer;
+    o.Audience = jwtSettings.Audience;
+    o.SigningKey = jwtSettings.SigningKey;
+    o.AccessTokenMinutes = jwtSettings.AccessTokenMinutes;
+});
+System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -39,16 +62,40 @@ builder.Services
         options.AccessDeniedPath = "/login";
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.SlidingExpiration = true;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtSettings.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtSettings.SigningKey)),
+            NameClaimType = "sub"
+        };
     });
 builder.Services.AddAuthorizationBuilder()
     // Operador de plataforma (Super Admin / roles internos): tiene claim platform_role.
     .AddPolicy("PlatformOperator", p => p.RequireClaim("platform_role"))
     // Miembro de una agencia: tiene claim tenant_id.
-    .AddPolicy("TenantMember", p => p.RequireClaim("tenant_id"));
+    .AddPolicy("TenantMember", p => p.RequireClaim("tenant_id"))
+    // Admin Agent API: super admin autenticado por JWT bearer (NO por la cookie del Blazor).
+    .AddPolicy("SuperAdminOnly", p => p
+        .AddAuthenticationSchemes(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
+        .RequireClaim("platform_role", nameof(PlatformRole.SuperAdmin)));
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
-builder.Services.AddScoped<ITenantContext, CookieUserContext>();
+// CookieUserContext sirve como ITenantContext (cookie del Blazor) y ITenantImpersonation (override
+// cross-tenant de la Admin Agent API); el mismo scoped para que el override afecte al DbContext.
+builder.Services.AddScoped<CookieUserContext>();
+builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<CookieUserContext>());
+builder.Services.AddScoped<ITenantImpersonation>(sp => sp.GetRequiredService<CookieUserContext>());
+builder.Services.AddScoped<DokTrino.Application.Tenancy.IAdminAgentService, DokTrino.Application.Tenancy.AdminAgentService>();
 
 // Chat en tiempo real (SignalR): reemplaza el broadcaster no-op por el real.
 builder.Services.AddSignalR();
@@ -124,6 +171,9 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Admin Agent API (Capa 6): login JWT + endpoints cross-tenant, servidos por este host (el que se despliega).
+app.MapAgentAdminApi();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

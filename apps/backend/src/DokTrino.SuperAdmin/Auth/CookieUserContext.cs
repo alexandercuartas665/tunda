@@ -10,12 +10,19 @@ namespace DokTrino.SuperAdmin.Auth;
 ///   operadores de plataforma (Super Admin), que no pertenecen a ningun tenant.
 /// Asi las consultas tenant-scoped quedan aisladas automaticamente para usuarios de agencia.
 /// </summary>
-public sealed class CookieUserContext(IHttpContextAccessor accessor) : ITenantContext
+public sealed class CookieUserContext(IHttpContextAccessor accessor) : ITenantContext, ITenantImpersonation
 {
+    // Override de tenant para la Admin Agent API (JWT super admin, cross-tenant). Scope por-request,
+    // asi que no se filtra entre circuitos Blazor ni entre requests.
+    private Guid? _impersonatedTenantId;
+
+    public void Impersonate(Guid tenantId) => _impersonatedTenantId = tenantId;
+
     public Guid? TenantId =>
-        Guid.TryParse(accessor.HttpContext?.User.FindFirst("tenant_id")?.Value, out var id)
+        _impersonatedTenantId
+        ?? (Guid.TryParse(accessor.HttpContext?.User.FindFirst("tenant_id")?.Value, out var id)
             ? id
-            : null;
+            : null);
 
     public Guid? UserId =>
         Guid.TryParse(accessor.HttpContext?.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id)
