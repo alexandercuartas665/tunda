@@ -16,6 +16,16 @@ public sealed class OnboardingService : IOnboardingService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditWriter _audit;
 
+    // Menu semilla: modulos del menu lateral que nacen APAGADos en toda empresa
+    // nueva (equivale al menu curado de VATIA). El resto queda encendido por
+    // defecto. Ajustar esta lista si cambia el menu por defecto de la plataforma.
+    private static readonly string[] MenuSemillaApagado =
+    {
+        "archivo-digital", "archivo-fisico", "automatizaciones", "bi-servicios",
+        "cfg-subcategorias", "cfg-tipos-profesional", "lineas", "plantillas",
+        "procesos", "radicacion", "relaciones-formularios", "topografia-fisica"
+    };
+
     public OnboardingService(IApplicationDbContext db, IPasswordHasher passwordHasher, IAuditWriter audit)
     {
         _db = db;
@@ -92,6 +102,18 @@ public sealed class OnboardingService : IOnboardingService
             Nombre = "Sede principal",
             Activo = true
         });
+
+        // Sembrar el menu por defecto: se persiste una fila apagada por cada modulo
+        // que NO debe verse. Los no listados quedan encendidos (ausencia = habilitado).
+        foreach (var clave in MenuSemillaApagado)
+        {
+            _db.ModulosTenant.Add(new ModuloTenant
+            {
+                TenantId = tenant.Id,
+                Clave = clave,
+                Habilitado = false
+            });
+        }
 
         Guid? subscriptionId = null;
         if (request.PlanId is Guid plan)
