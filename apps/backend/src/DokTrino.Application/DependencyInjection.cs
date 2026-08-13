@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IGoogleSignInService, GoogleSignInService>();
         services.AddScoped<IPlatformBrandingService, PlatformBrandingService>();
         services.AddScoped<IModuloMenuService, ModuloMenuService>();
+        services.AddScoped<Tenancy.IImportacionEntreEmpresasService, Tenancy.ImportacionEntreEmpresasService>();
         services.AddScoped<IEmailConfigService, EmailConfigService>();
         services.AddScoped<IGoogleAuthConfigService, GoogleAuthConfigService>();
         services.AddScoped<Tenancy.ITenantUserService, Tenancy.TenantUserService>();

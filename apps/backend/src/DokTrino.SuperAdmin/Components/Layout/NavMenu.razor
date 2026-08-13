@@ -1,4 +1,5 @@
 @implements IDisposable
+@using System.Security.Claims
 @inject NavigationManager Navigation
 @inject IServiceScopeFactory ScopeFactory
 @inject IConfiguration Config
@@ -92,6 +93,14 @@
         <NavLink class="doktrino-nav-link" href="capacitaciones">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 8-4 8 4-8 4Z"/><path d="M4 6v6a8 4 0 0 0 16 0V6"/><path d="M20 10v6"/></svg>
             <span>Capacitaciones</span>
+        </NavLink>
+        }
+
+        @if (_puedeImportar && !_deshabilitados.Contains("importar-empresa"))
+        {
+        <NavLink class="doktrino-nav-link" href="importar-empresa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            <span>Importar de otra empresa</span>
         </NavLink>
         }
 
@@ -317,6 +326,10 @@
     /// </summary>
     private bool _crmHabilitado;
 
+    /// <summary>True cuando el usuario pertenece a mas de una empresa: solo entonces
+    /// tiene sentido ofrecer "Importar de otra empresa".</summary>
+    private bool _puedeImportar;
+
     /// <summary>
     /// Claves (href) de los modulos apagados por el tenant activo. La ausencia de
     /// una clave significa habilitado (default encendido). El menu es SSR: se carga
@@ -357,6 +370,22 @@
         _showTenant = isPlatformOperator || isTenantUser;
         var rol = state.User.FindFirst("tenant_role")?.Value ?? "";
         _esAdminAgencia = isPlatformOperator || rol.Equals("Owner", StringComparison.OrdinalIgnoreCase) || rol.Equals("Admin", StringComparison.OrdinalIgnoreCase);
+
+        // "Importar de otra empresa" solo se ofrece cuando el usuario es miembro de
+        // otra empresa desde la cual copiar (scope propio: el menu corre en paralelo).
+        try
+        {
+            if (Guid.TryParse(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid))
+            {
+                using var scope = ScopeFactory.CreateScope();
+                var imp = scope.ServiceProvider.GetRequiredService<DokTrino.Application.Tenancy.IImportacionEntreEmpresasService>();
+                _puedeImportar = (await imp.EmpresasOrigenAsync(uid)).Count > 0;
+            }
+        }
+        catch
+        {
+            // Sin contexto disponible no se muestra la opcion.
+        }
 
         if (isPlatformOperator)
         {
