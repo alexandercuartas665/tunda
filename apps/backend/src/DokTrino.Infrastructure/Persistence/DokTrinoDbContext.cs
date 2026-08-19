@@ -1089,6 +1089,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.FaseArchivistica });
             b.HasIndex(x => new { x.TenantId, x.ExpedienteId });
             b.HasIndex(x => new { x.TenantId, x.DependenciaId });
+            b.Property(x => x.Version).HasDefaultValue(1);
+            b.Property(x => x.EsVersionVigente).HasDefaultValue(true);
+            b.HasIndex(x => new { x.TenantId, x.VersionGrupoId });
         });
 
         // ----- 2.D3 Archivo Central: carpetas de clasificacion, tags y aprobacion -----

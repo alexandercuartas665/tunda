@@ -699,6 +699,19 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
     return Results.File(d.Content, d.Mime, d.FileName);
 }).RequireAuthorization();
 
+// Vista previa de LECTURA (HTML) de office/texto para el visor embebido de la ficha.
+// Excel -> tabla, Word -> parrafos, texto -> pre. Tenant-scoped por el query filter.
+app.MapGet("/archivo-digital/{id:guid}/preview", async (
+    Guid id,
+    DokTrino.Application.Tenancy.IArchivoDigitalService svc,
+    CancellationToken ct) =>
+{
+    var d = await svc.DescargarAsync(id, ct);
+    if (d is null) { return Results.NotFound(); }
+    var html = await DokTrino.Application.Common.OfficeHtmlRenderer.RenderAsync(d.Content, d.Mime, d.FileName, ct);
+    return Results.Content(html, "text/html; charset=utf-8");
+}).RequireAuthorization();
+
 // Recurso (video/imagen/pdf) de una leccion de capacitacion, stream desde MinIO.
 // enableRangeProcessing habilita el seek de <video>. Tenant-scoped por el query
 // filter del DbContext (cookie de sesion).

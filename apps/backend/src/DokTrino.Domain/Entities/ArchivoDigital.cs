@@ -67,4 +67,19 @@ public class ArchivoDigital : TenantEntity
     public DateTimeOffset FechaSubida { get; set; }
     public bool Activo { get; set; } = true;
     public int? LegacyReg { get; set; }
+
+    // --- Versionado documental ---
+    /// <summary>
+    /// Agrupa las versiones de un mismo documento logico. Un documento nuevo arranca
+    /// su propio grupo (VersionGrupoId = su propio Id); "reemplazar" agrega otra
+    /// version al mismo grupo. Varios grupos bajo la misma tipologia = documentos
+    /// distintos (Acta 1, Acta 2...).
+    /// </summary>
+    public Guid VersionGrupoId { get; set; }
+
+    /// <summary>Numero de version dentro del grupo (1, 2, 3...).</summary>
+    public int Version { get; set; } = 1;
+
+    /// <summary>La version vigente del grupo (la que se muestra); las anteriores son historial.</summary>
+    public bool EsVersionVigente { get; set; } = true;
 }

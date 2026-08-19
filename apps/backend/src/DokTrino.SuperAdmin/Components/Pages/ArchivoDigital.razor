@@ -58,9 +58,17 @@
                     </div>
                     <div class="exp-meta">
                         <span class="exp-chip">@(e.Serie ?? "Sin serie")</span>
+                        @if (e.Total > 0)
+                        {
+                            <span class="exp-chip" style="background:#dcfce7;color:#166534;">@e.Pct% completo</span>
+                        }
                         <span class="exp-docs">@e.Documentos docs</span>
                         <span class="exp-fecha">@e.FechaApertura.ToLocalTime().ToString("dd/MM/yyyy")</span>
                     </div>
+                    @if (e.Total > 0)
+                    {
+                        <div class="comp-bar" style="margin-top:9px;"><div class="comp-fill" style="width:@(e.Pct)%;"></div></div>
+                    }
                 </div>
             }
         </div>
@@ -343,102 +351,64 @@
         <div class="cfg-modal-head">
             <div style="flex: 1;">
                 <div class="ttl">@_expSel.Nombre</div>
-                <div class="sub">@_expSel.Codigo &middot; @_expDocs.Count documentos &middot; @_expSel.Estado</div>
+                <div class="sub">@_expSel.Codigo &middot; @_expDocsGrp.Count documento(s) &middot; @_expSel.Estado</div>
             </div>
             <span class="cls" @onclick="() => _expSel = null">&#10005;</span>
         </div>
 
         <div class="cfg-modal-body">
-            @* Tres vistas del expediente, como el prototipo. *@
+            @if (_expComp is not null && _expComp.Total > 0)
+            {
+                <div class="comp-wrap">
+                    <div class="comp-bar"><div class="comp-fill" style="width:@(_expComp.Pct)%;"></div></div>
+                    <div class="comp-txt">@_expComp.Pct% completo &middot; @_expComp.Cubiertos de @_expComp.Total tipologias con documento</div>
+                </div>
+            }
+
             <div class="tcl-tabs" style="margin-bottom: 14px;">
-                <button class="tcl-tab @(_expVista == "cards" ? "on" : "")" @onclick='() => _expVista = "cards"'>&#9638; Tarjetas</button>
-                <button class="tcl-tab @(_expVista == "list" ? "on" : "")" @onclick='() => _expVista = "list"'>&#9776; Lista</button>
-                <button class="tcl-tab @(_expVista == "viewer" ? "on" : "")" @onclick='() => _expVista = "viewer"'>&#128065; Visor</button>
+                <button class="tcl-tab @(_expSubTab == "docs" ? "on" : "")" @onclick='() => _expSubTab = "docs"'>Documentos</button>
+                <button class="tcl-tab @(_expSubTab == "visor" ? "on" : "")" @onclick='() => _expSubTab = "visor"'>&#128065; Visor</button>
             </div>
 
-            @if (_expDocs.Count == 0)
+            @if (_expSubTab == "docs")
             {
-                <div class="trx-empty">
-                    Este expediente aun no tiene documentos. Asignalos desde la pestana Archivo Central.
-                </div>
-            }
-            else if (_expVista == "cards")
-            {
-                <div class="exp-grid">
-                    @foreach (var d in _expDocs)
+                @if (_expEstructura is not null)
+                {
+                    @foreach (var sub in _expEstructura.Subseries)
                     {
-                        <div class="exp-card" @onclick="() => VerDocumento(d)">
-                            <div class="exp-card-top">
-                                <div class="exp-ico">@IconoMime(d.Visor)</div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <div class="exp-name">@d.Nombre</div>
-                                    <div class="exp-code">@(d.SizeBytes / 1024) KB</div>
-                                </div>
-                            </div>
-                            <div class="exp-meta">
-                                <span class="exp-chip">@(d.Tipologia ?? "sin tipologia")</span>
-                                <span class="ad-badge ad-@d.EstadoAprobacion">@d.EstadoAprobacion</span>
-                            </div>
-                        </div>
+                        <div class="doc-sub-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
+                        @foreach (var tip in sub.Tipologias) { @RenderTipoDocs(tip) }
                     }
-                </div>
-            }
-            else if (_expVista == "list")
-            {
-                <div class="trx-list">
-                    <div class="cfg-grid-banco cfg-head">
-                        <div>Documento</div><div>Tipologia</div><div>Estado</div><div>Fecha</div>
-                    </div>
-                    @foreach (var d in _expDocs)
+                    @if (_expEstructura.TipologiasDirectas.Count > 0)
                     {
-                        <div class="cfg-grid-banco cfg-row" @onclick="() => VerDocumento(d)">
-                            <div style="font-weight: 700; font-size: 12.5px;">@d.Nombre</div>
-                            <div class="txt">@(d.Tipologia ?? "-")</div>
-                            <div><span class="ad-badge ad-@d.EstadoAprobacion">@d.EstadoAprobacion</span></div>
-                            <div class="txt">@d.FechaSubida.ToLocalTime().ToString("dd/MM/yyyy")</div>
-                        </div>
+                        <div class="doc-sub-h">Tipologias directas</div>
+                        @foreach (var tip in _expEstructura.TipologiasDirectas) { @RenderTipoDocs(tip) }
                     }
-                </div>
+                }
+
+                @if (OtrosDocs().Count > 0)
+                {
+                    <div class="doc-sub-h">Otros documentos</div>
+                    @foreach (var d in OtrosDocs()) { @RenderDocFila(d) }
+                }
+                @if (_expEstructura is null && OtrosDocs().Count == 0)
+                {
+                    <div class="trx-empty">Este expediente aun no tiene documentos.</div>
+                }
             }
             else
             {
-                @* Visor embebido: la familia sale del MIME del documento. *@
                 <div style="display: flex; gap: 12px; align-items: flex-start;">
                     <div style="width: 230px; flex-shrink: 0; max-height: 460px; overflow: auto;">
-                        @foreach (var d in _expDocs)
+                        @foreach (var d in _expDocsGrp)
                         {
-                            <div class="exp-visor-item @(_docSel?.Id == d.Id ? "on" : "")" @onclick="() => VerDocumento(d)">
-                                <span>@IconoMime(d.Visor)</span>
+                            <div class="exp-visor-item @(_verId == d.VigenteId ? "on" : "")" @onclick="() => VerDoc(d)">
                                 <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@d.Nombre</span>
                             </div>
                         }
+                        @if (_expDocsGrp.Count == 0) { <div class="trx-empty" style="font-size:12px;">Sin documentos.</div> }
                     </div>
-                    <div style="flex: 1; min-width: 0;">
-                        @if (_docSel is null)
-                        {
-                            <div class="trx-empty">Elige un documento de la izquierda.</div>
-                        }
-                        else if (_docSel.Visor is "pdf")
-                        {
-                            <iframe src="@($"/archivo-digital/{_docSel.Id}/contenido")" style="width: 100%; height: 460px; border: 1px solid var(--chrome-border); border-radius: 12px;"></iframe>
-                        }
-                        else if (_docSel.Visor is "imagen")
-                        {
-                            <img src="@($"/archivo-digital/{_docSel.Id}/contenido")" alt="@_docSel.Nombre"
-                                 style="max-width: 100%; max-height: 460px; border-radius: 12px; border: 1px solid var(--chrome-border);" />
-                        }
-                        else if (_docSel.Visor is "texto" or "hoja")
-                        {
-                            <iframe src="@($"/archivo-digital/{_docSel.Id}/contenido")" style="width: 100%; height: 460px; border: 1px solid var(--chrome-border); border-radius: 12px; background: #fff;"></iframe>
-                        }
-                        else
-                        {
-                            <div class="trx-empty">
-                                No hay vista previa para <b>@_docSel.Mime</b>.
-                                <a href="@($"/archivo-digital/{_docSel.Id}/contenido")" target="_blank">Descargar el documento</a>.
-                            </div>
-                        }
-                    </div>
+                    <div style="flex: 1; min-width: 0;">@RenderVisor()</div>
                 </div>
             }
 
@@ -492,6 +462,26 @@
     .exp-visor-item { display:flex; align-items:center; gap:8px; padding:9px 11px; border-radius:10px; cursor:pointer; font-size:12px; color:#37415c; }
     .exp-visor-item:hover { background:#f6f8fc; }
     .exp-visor-item.on { background:var(--primary-soft); color:var(--primary); font-weight:700; }
+    .comp-wrap { margin-bottom:14px; }
+    .comp-bar { height:9px; background:#eef2f7; border-radius:999px; overflow:hidden; }
+    .comp-fill { height:100%; background:linear-gradient(90deg,#22c55e,#16a34a); border-radius:999px; transition:width .3s; }
+    .comp-txt { font-size:12px; color:#475569; margin-top:5px; font-weight:600; }
+    .doc-sub-h { font-size:12px; font-weight:800; color:#0f172a; margin:14px 0 6px; padding-bottom:4px; border-bottom:1px solid #eef2f7; }
+    .doc-tip { margin:0 0 8px; }
+    .doc-tip-h { font-size:13px; font-weight:600; color:#1f2433; margin:8px 0 4px; }
+    .doc-count { font-size:10px; color:#64748b; background:#f1f5f9; padding:1px 7px; border-radius:999px; margin-left:6px; }
+    .doc-fila { border:1px solid #eef2f7; border-radius:10px; padding:8px 10px; margin:5px 0; }
+    .doc-fila-main { display:flex; align-items:center; gap:8px; }
+    .doc-name { font-size:12.5px; font-weight:600; color:#1f2433; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .doc-ver { font-size:10px; font-weight:700; color:#1e40af; background:#dbeafe; padding:1px 7px; border-radius:999px; }
+    .doc-fila-act { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center; }
+    .doc-add { margin:4px 0 2px; }
+    .doc-add-lbl { font-size:12px; color:var(--primary,#0288d1); cursor:pointer; font-weight:600; }
+    .doc-vers { margin-top:8px; border-top:1px dashed #e2e8f0; padding-top:6px; }
+    .doc-ver-row { display:flex; align-items:center; gap:10px; font-size:12px; padding:3px 0; }
+    .btn-xs { padding:1px 8px; font-size:11.5px; line-height:1.5; }
+    .visor-frame { width:100%; height:460px; border:1px solid var(--chrome-border,#e2e8f0); border-radius:12px; background:#fff; }
+    .visor-img { max-width:100%; max-height:460px; border-radius:12px; border:1px solid var(--chrome-border,#e2e8f0); }
     /* Modal del expediente: .cfg-modal no estaba definida, por eso se renderizaba suelto al pie. */
     .cfg-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:2000;
                  max-width:calc(100vw - 32px); max-height:88vh; display:flex; flex-direction:column;
@@ -525,11 +515,20 @@
 
     // --- Expedientes (Fase 2F) ---
     private string _vista = "expedientes";
-    private string _expVista = "cards";
     private List<ExpedienteDto> _expedientes = new();
-    private List<DocumentoExpedienteDto> _expDocs = new();
     private ExpedienteDto? _expSel;
-    private DocumentoExpedienteDto? _docSel;
+    // Detalle de expediente: estructura de la serie, documentos agrupados, completitud, visor.
+    private string _expSubTab = "docs";
+    private EstructuraSerieDto? _expEstructura;
+    private List<DocExpDto> _expDocsGrp = new();
+    private CompletitudDto? _expComp;
+    private Guid? _verId;
+    private string? _verMime;
+    private string? _verNombre;
+    private readonly HashSet<Guid> _versExpandido = new();
+    private Guid? _subiendoTip;
+    private Guid? _subiendoGrupo;
+    private string _expSedeDefault = "PRINCIPAL";
     private string? _error, _ok;
 
     // --- Asistente de expediente (modal guiado desde el TRD activo) ---
@@ -756,16 +755,165 @@
     private async Task AbrirExpediente(ExpedienteDto e)
     {
         _expSel = e;
-        _expVista = "cards";
-        _docSel = null;
-        _expDocs = (await Exp.DocumentosAsync(e.Id)).ToList();
+        _expSubTab = "docs";
+        _verId = null; _verMime = _verNombre = null;
+        _versExpandido.Clear();
+        _expEstructura = e.SerieId is Guid sid ? await Exp.EstructuraSerieAsync(sid) : null;
+        _expSedeDefault = (await Exp.SedesAsync()).FirstOrDefault()?.Nombre ?? "PRINCIPAL";
+        await RecargarDocs();
     }
 
-    private void VerDocumento(DocumentoExpedienteDto d)
+    private async Task RecargarDocs()
     {
-        _docSel = d;
-        _expVista = "viewer";
+        if (_expSel is null) { return; }
+        _expDocsGrp = (await Exp.DocsAgrupadosAsync(_expSel.Id)).ToList();
+        _expComp = await Exp.CompletitudAsync(_expSel.Id);
     }
+
+    private void ToggleVers(Guid g) { if (!_versExpandido.Add(g)) { _versExpandido.Remove(g); } }
+    private void VerDoc(DocExpDto d) { _verId = d.VigenteId; _verMime = d.Mime; _verNombre = d.Nombre; _expSubTab = "visor"; }
+    private void VerVersion(DocVersionDto v) { _verId = v.Id; _verMime = v.Mime; _verNombre = v.Nombre; _expSubTab = "visor"; }
+
+    private bool TipEnEstructura(Guid tipId)
+    {
+        if (_expEstructura is null) { return false; }
+        return _expEstructura.TipologiasDirectas.Any(t => t.Id == tipId)
+            || _expEstructura.Subseries.Any(s => s.Tipologias.Any(t => t.Id == tipId));
+    }
+
+    /// <summary>Documentos que no caen bajo ninguna tipologia de la estructura de la serie.</summary>
+    private List<DocExpDto> OtrosDocs() =>
+        _expDocsGrp.Where(d => d.TipologiaId is null || !TipEnEstructura(d.TipologiaId!.Value)).ToList();
+
+    private async Task OnAgregarDoc(InputFileChangeEventArgs e, Guid tipId)
+    {
+        if (_expSel is null) { return; }
+        _subiendoTip = tipId; _error = _ok = null;
+        try
+        {
+            var file = e.File;
+            var req = new SubirArchivoRequest
+            {
+                Sucursal = _expSedeDefault,
+                Nombre = file.Name,
+                TipologiaId = tipId,
+                Mime = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+            };
+            await using var stream = file.OpenReadStream(MaxBytes);
+            var saved = await Arch.SubirAsync(req, stream, await Actor());
+            if (saved is not null) { await Exp.AsignarDocumentoAsync(saved.Id, _expSel.Id, await Actor()); }
+            await RecargarDocs();
+            await CargarExpedientes();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _subiendoTip = null; }
+    }
+
+    private async Task OnReemplazar(InputFileChangeEventArgs e, Guid grupoId)
+    {
+        if (_expSel is null) { return; }
+        _subiendoGrupo = grupoId; _error = _ok = null;
+        try
+        {
+            var file = e.File;
+            var req = new SubirArchivoRequest
+            {
+                Sucursal = _expSedeDefault,
+                Nombre = file.Name,
+                Mime = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+            };
+            await using var stream = file.OpenReadStream(MaxBytes);
+            await Arch.SubirVersionAsync(grupoId, req, stream, await Actor());
+            await RecargarDocs();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _subiendoGrupo = null; }
+    }
+
+    private static string FamiliaVisor(string? mime, string? nombre)
+    {
+        var ext = System.IO.Path.GetExtension(nombre ?? "").ToLowerInvariant();
+        var m = (mime ?? "").ToLowerInvariant();
+        if (m == "application/pdf" || ext == ".pdf") { return "pdf"; }
+        if (m.StartsWith("image/") || ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp") { return "imagen"; }
+        if (m.Contains("spreadsheet") || m.Contains("ms-excel") || ext is ".xlsx" or ".xls") { return "html"; }
+        if (m.Contains("wordprocessing") || m.Contains("msword") || ext is ".docx" or ".doc") { return "html"; }
+        if (m.StartsWith("text/") || ext is ".txt" or ".csv" or ".md" or ".log") { return "html"; }
+        return "otro";
+    }
+
+    private RenderFragment RenderTipoDocs(TipologiaExpDto tip) =>@<div class="doc-tip">
+        @{ var ds = _expDocsGrp.Where(d => d.TipologiaId == tip.Id).ToList(); }
+        <div class="doc-tip-h">
+            <span class="mono">@tip.Codigo</span> @tip.Nombre
+            @if (ds.Count > 0) { <span class="doc-count">@ds.Count doc(s)</span> }
+        </div>
+        @foreach (var d in ds) { @RenderDocFila(d) }
+        @if (_expSel is not null && _expSel.Estado == "ABIERTO")
+        {
+            <div class="doc-add">
+                @if (_subiendoTip == tip.Id) { <span class="text-muted">Subiendo...</span> }
+                else { <label class="doc-add-lbl">+ Agregar documento<InputFile style="display:none" OnChange="@(e => OnAgregarDoc(e, tip.Id))" /></label> }
+            </div>
+        }
+    </div>;
+
+    private RenderFragment RenderDocFila(DocExpDto d) =>@<div class="doc-fila">
+        <div class="doc-fila-main">
+            <span class="doc-name">@d.Nombre</span>
+            <span class="doc-ver">v@(d.VersionVigente)</span>
+            <span class="ad-badge ad-@d.EstadoAprobacion">@d.EstadoAprobacion</span>
+        </div>
+        <div class="doc-fila-act">
+            <button class="btn btn-outline-primary btn-xs" @onclick="() => VerDoc(d)">Ver</button>
+            @if (_expSel is not null && _expSel.Estado == "ABIERTO")
+            {
+                @if (_subiendoGrupo == d.VersionGrupoId) { <span class="text-muted">Subiendo...</span> }
+                else { <label class="btn btn-outline-secondary btn-xs" style="margin:0;">Reemplazar<InputFile style="display:none" OnChange="@(e => OnReemplazar(e, d.VersionGrupoId))" /></label> }
+            }
+            @if (d.TotalVersiones > 1)
+            {
+                <button class="btn btn-outline-secondary btn-xs" @onclick="() => ToggleVers(d.VersionGrupoId)">Versiones (@d.TotalVersiones)</button>
+            }
+        </div>
+        @if (_versExpandido.Contains(d.VersionGrupoId))
+        {
+            <div class="doc-vers">
+                @foreach (var v in d.Versiones)
+                {
+                    <div class="doc-ver-row">
+                        <span style="font-weight:600;">v@(v.Version) @(v.Vigente ? "(vigente)" : "")</span>
+                        <span class="text-muted">@v.FechaSubida.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        <button class="btn btn-outline-primary btn-xs" @onclick="() => VerVersion(v)">Ver</button>
+                        <a class="btn btn-outline-secondary btn-xs" href="@($"/archivo-digital/{v.Id}/contenido")" target="_blank">Descargar</a>
+                    </div>
+                }
+            </div>
+        }
+    </div>;
+
+    private RenderFragment RenderVisor() =>@<div>
+        @if (_verId is null)
+        {
+            <div class="trx-empty">Elige un documento para verlo.</div>
+        }
+        else if (FamiliaVisor(_verMime, _verNombre) == "pdf")
+        {
+            <iframe src="@($"/archivo-digital/{_verId}/contenido")" class="visor-frame"></iframe>
+        }
+        else if (FamiliaVisor(_verMime, _verNombre) == "imagen")
+        {
+            <img src="@($"/archivo-digital/{_verId}/contenido")" class="visor-img" alt="@_verNombre" />
+        }
+        else if (FamiliaVisor(_verMime, _verNombre) == "html")
+        {
+            <iframe src="@($"/archivo-digital/{_verId}/preview")" class="visor-frame"></iframe>
+        }
+        else
+        {
+            <div class="trx-empty">No hay vista previa. <a href="@($"/archivo-digital/{_verId}/contenido")" target="_blank">Descargar @_verNombre</a>.</div>
+        }
+    </div>;
 
     private async Task CerrarExpediente()
     {

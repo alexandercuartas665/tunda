@@ -64,6 +64,9 @@ public interface IArchivoDigitalService
 {
     Task<IReadOnlyList<ArchivoCentralDto>> ListarAsync(BandejaArchivo bandeja, Guid? carpetaArchivoId = null, string? identificador = null, CancellationToken ct = default);
     Task<ArchivoCentralDto?> SubirAsync(SubirArchivoRequest req, Stream contenido, Guid actor, CancellationToken ct = default);
+    /// <summary>Sube una nueva version dentro de un grupo existente: hereda expediente/tipologia
+    /// del vigente, incrementa el numero de version y desmarca las versiones anteriores.</summary>
+    Task<ArchivoCentralDto?> SubirVersionAsync(Guid grupoId, SubirArchivoRequest req, Stream contenido, Guid actor, CancellationToken ct = default);
     Task<ArchivoDescarga?> DescargarAsync(Guid id, CancellationToken ct = default);
     Task<bool> EliminarAsync(Guid id, Guid actor, CancellationToken ct = default);
 

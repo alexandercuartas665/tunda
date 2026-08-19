@@ -84,12 +84,67 @@ public sealed class ArchivoDigitalService : IArchivoDigitalService
             FechaSubida = _clock.GetUtcNow(),
             Activo = true
         };
+        // Documento nuevo: arranca su propio grupo de versiones (version 1, vigente).
+        entity.VersionGrupoId = entity.Id;
+
         var key = $"{tenantId:N}/{entity.Id:N}";
         var sha = await _blob.PutAsync(key, ms, entity.Mime, ct);
         entity.Bucket = _blob.Bucket;
         entity.BlobKey = key;
         entity.Sha256 = sha;
 
+        _db.ArchivosDigitales.Add(entity);
+        await _db.SaveChangesAsync(ct);
+
+        return new ArchivoCentralDto(entity.Id, entity.Nombre, entity.Descripcion, entity.Mime, entity.SizeBytes,
+            entity.EstadoAprobacion, entity.FlagIdentificado, entity.IdentificadorPrincipal, entity.Concepto,
+            entity.FechaSubida, entity.CarpetaArchivoId, null, entity.TipologiaId, null, "");
+    }
+
+    public async Task<ArchivoCentralDto?> SubirVersionAsync(Guid grupoId, SubirArchivoRequest req, Stream contenido, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var actuales = await _db.ArchivosDigitales.Where(a => a.VersionGrupoId == grupoId && a.Activo).ToListAsync(ct);
+        if (actuales.Count == 0) { throw new InvalidOperationException("El documento a versionar no existe."); }
+
+        var vigente = actuales.FirstOrDefault(a => a.EsVersionVigente) ?? actuales.OrderByDescending(a => a.Version).First();
+        var maxV = actuales.Max(a => a.Version);
+        var nombre = string.IsNullOrWhiteSpace(req.Nombre) ? vigente.Nombre : req.Nombre.Trim();
+
+        using var ms = new MemoryStream();
+        await contenido.CopyToAsync(ms, ct);
+        if (ms.Length == 0) { throw new InvalidOperationException("El archivo esta vacio."); }
+        ms.Position = 0;
+
+        var entity = new ArchivoDigital
+        {
+            TenantId = tenantId,
+            Sucursal = vigente.Sucursal,
+            Nombre = nombre,
+            Descripcion = string.IsNullOrWhiteSpace(req.Descripcion) ? null : req.Descripcion!.Trim(),
+            TipologiaId = vigente.TipologiaId,
+            ExpedienteId = vigente.ExpedienteId,
+            DependenciaId = vigente.DependenciaId,
+            CarpetaId = vigente.CarpetaId,
+            CarpetaArchivoId = vigente.CarpetaArchivoId,
+            Mime = string.IsNullOrWhiteSpace(req.Mime) ? vigente.Mime : req.Mime,
+            SizeBytes = ms.Length,
+            EstadoAprobacion = "PENDIENTE",
+            FlagIdentificado = vigente.TipologiaId is not null,
+            FaseArchivistica = vigente.FaseArchivistica,
+            FechaSubida = _clock.GetUtcNow(),
+            Activo = true,
+            VersionGrupoId = grupoId,
+            Version = maxV + 1,
+            EsVersionVigente = true
+        };
+        var key = $"{tenantId:N}/{entity.Id:N}";
+        var sha = await _blob.PutAsync(key, ms, entity.Mime, ct);
+        entity.Bucket = _blob.Bucket;
+        entity.BlobKey = key;
+        entity.Sha256 = sha;
+
+        foreach (var a in actuales) { a.EsVersionVigente = false; }
         _db.ArchivosDigitales.Add(entity);
         await _db.SaveChangesAsync(ct);
 

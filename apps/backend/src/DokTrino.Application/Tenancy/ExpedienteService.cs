@@ -6,7 +6,27 @@ namespace DokTrino.Application.Tenancy;
 
 public sealed record ExpedienteDto(
     Guid Id, string Codigo, string Nombre, string? Serie, string? Dependencia,
-    string Estado, int Documentos, DateTimeOffset FechaApertura);
+    string Estado, int Documentos, DateTimeOffset FechaApertura,
+    Guid? SerieId = null, int Cubiertos = 0, int Total = 0)
+{
+    /// <summary>Porcentaje de completitud (tipologias de la serie con al menos un documento).</summary>
+    public int Pct => Total == 0 ? 0 : (int)Math.Round(100.0 * Cubiertos / Total, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>Completitud de un expediente contra la estructura de su serie.</summary>
+public sealed record CompletitudDto(int Cubiertos, int Total)
+{
+    public int Pct => Total == 0 ? 0 : (int)Math.Round(100.0 * Cubiertos / Total, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>Una version concreta de un documento.</summary>
+public sealed record DocVersionDto(Guid Id, int Version, string Nombre, string Mime, long SizeBytes, DateTimeOffset FechaSubida, bool Vigente);
+
+/// <summary>Documento (grupo de versiones) dentro de un expediente; expone la version vigente.</summary>
+public sealed record DocExpDto(
+    Guid VersionGrupoId, Guid? TipologiaId, Guid VigenteId, string Nombre, string Mime,
+    long SizeBytes, int VersionVigente, int TotalVersiones, string EstadoAprobacion,
+    IReadOnlyList<DocVersionDto> Versiones);
 
 /// <summary>Documento visto desde el expediente, con lo necesario para el visor.</summary>
 public sealed record DocumentoExpedienteDto(
@@ -51,6 +71,11 @@ public interface IExpedienteService
     Task<bool> AsignarDocumentoAsync(Guid archivoId, Guid? expedienteId, Guid actor, CancellationToken ct = default);
     Task<bool> CerrarAsync(Guid expedienteId, Guid actor, CancellationToken ct = default);
 
+    /// <summary>Completitud del expediente: tipologias de la serie con al menos un documento vigente.</summary>
+    Task<CompletitudDto> CompletitudAsync(Guid expedienteId, CancellationToken ct = default);
+    /// <summary>Documentos del expediente agrupados por grupo de versiones (uno por documento logico).</summary>
+    Task<IReadOnlyList<DocExpDto>> DocsAgrupadosAsync(Guid expedienteId, CancellationToken ct = default);
+
     /// <summary>TRD marcada ACTIVO en el tenant, o null si ninguna lo esta.</summary>
     Task<TrdActivoDto?> TrdActivoAsync(CancellationToken ct = default);
     /// <summary>Series efectivamente caracterizadas en el TRD activo.</summary>
@@ -77,17 +102,75 @@ public sealed class ExpedienteService : IExpedienteService
         _clock = clock;
     }
 
-    public async Task<IReadOnlyList<ExpedienteDto>> ListarAsync(CancellationToken ct = default) =>
-        await _db.Expedientes.AsNoTracking()
+    public async Task<IReadOnlyList<ExpedienteDto>> ListarAsync(CancellationToken ct = default)
+    {
+        var exps = await _db.Expedientes.AsNoTracking()
             .OrderByDescending(e => e.FechaApertura)
-            .Select(e => new ExpedienteDto(
-                e.Id, e.Codigo, e.Nombre,
-                e.Serie != null ? e.Serie.Nombre : null,
-                e.Dependencia != null ? e.Dependencia.NombreCargo : null,
-                e.Estado,
-                _db.ArchivosDigitales.Count(a => a.ExpedienteId == e.Id && a.Activo),
-                e.FechaApertura))
+            .Select(e => new
+            {
+                e.Id, e.Codigo, e.Nombre, e.SerieId,
+                Serie = e.Serie != null ? e.Serie.Nombre : null,
+                Dependencia = e.Dependencia != null ? e.Dependencia.NombreCargo : null,
+                e.Estado, e.FechaApertura,
+                Docs = _db.ArchivosDigitales.Count(a => a.ExpedienteId == e.Id && a.Activo && a.EsVersionVigente)
+            })
             .ToListAsync(ct);
+
+        var lista = new List<ExpedienteDto>(exps.Count);
+        foreach (var e in exps)
+        {
+            var (cub, tot) = await CompletitudRawAsync(e.SerieId, e.Id, ct);
+            lista.Add(new ExpedienteDto(e.Id, e.Codigo, e.Nombre, e.Serie, e.Dependencia,
+                e.Estado, e.Docs, e.FechaApertura, e.SerieId, cub, tot));
+        }
+        return lista;
+    }
+
+    private async Task<(int cubiertos, int total)> CompletitudRawAsync(Guid? serieId, Guid expedienteId, CancellationToken ct)
+    {
+        if (serieId is not Guid sid) { return (0, 0); }
+        var subIds = await _db.Subseries.AsNoTracking()
+            .Where(s => s.SerieId == sid && s.Estado == "MAESTRA").Select(s => s.Id).ToListAsync(ct);
+        var tipIds = await _db.TipologiasDocumentales.AsNoTracking()
+            .Where(t => t.Activo && t.Estado == "MAESTRA"
+                && (t.SerieId == sid || (t.SubserieId != null && subIds.Contains(t.SubserieId.Value))))
+            .Select(t => t.Id).ToListAsync(ct);
+        var total = tipIds.Count;
+        if (total == 0) { return (0, 0); }
+        var cub = await _db.ArchivosDigitales.AsNoTracking()
+            .Where(a => a.ExpedienteId == expedienteId && a.Activo && a.EsVersionVigente
+                && a.TipologiaId != null && tipIds.Contains(a.TipologiaId.Value))
+            .Select(a => a.TipologiaId).Distinct().CountAsync(ct);
+        return (cub, total);
+    }
+
+    public async Task<CompletitudDto> CompletitudAsync(Guid expedienteId, CancellationToken ct = default)
+    {
+        var serieId = await _db.Expedientes.AsNoTracking()
+            .Where(e => e.Id == expedienteId).Select(e => e.SerieId).FirstOrDefaultAsync(ct);
+        var (cub, tot) = await CompletitudRawAsync(serieId, expedienteId, ct);
+        return new CompletitudDto(cub, tot);
+    }
+
+    public async Task<IReadOnlyList<DocExpDto>> DocsAgrupadosAsync(Guid expedienteId, CancellationToken ct = default)
+    {
+        var docs = await _db.ArchivosDigitales.AsNoTracking()
+            .Where(a => a.ExpedienteId == expedienteId && a.Activo)
+            .Select(a => new { a.Id, a.VersionGrupoId, a.TipologiaId, a.Nombre, a.Mime, a.SizeBytes, a.Version, a.EsVersionVigente, a.EstadoAprobacion, a.FechaSubida })
+            .ToListAsync(ct);
+
+        return docs.GroupBy(a => a.VersionGrupoId).Select(g =>
+        {
+            var vig = g.FirstOrDefault(x => x.EsVersionVigente) ?? g.OrderByDescending(x => x.Version).First();
+            var versiones = g.OrderByDescending(x => x.Version)
+                .Select(x => new DocVersionDto(x.Id, x.Version, x.Nombre, x.Mime, x.SizeBytes, x.FechaSubida, x.EsVersionVigente))
+                .ToList();
+            return new DocExpDto(g.Key, vig.TipologiaId, vig.Id, vig.Nombre, vig.Mime, vig.SizeBytes,
+                vig.Version, g.Count(), vig.EstadoAprobacion, versiones);
+        })
+        .OrderBy(d => d.Nombre)
+        .ToList();
+    }
 
     public async Task<ExpedienteDto?> CrearAsync(CrearExpedienteRequest req, Guid actor, CancellationToken ct = default)
     {
