@@ -35,13 +35,8 @@
 
 @if (_vista == "expedientes")
 {
-    <div class="ase-card">
-        <div class="ase-card-h">Nuevo expediente</div>
-        <div class="ad-form">
-            <div class="ad-f ad-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_expNombre" placeholder="Contratacion vigencia 2026" /></div>
-            <div class="ad-f"><label>&nbsp;</label><button class="trx-btn" @onclick="CrearExpediente">+ Abrir expediente</button></div>
-        </div>
-        <small class="text-muted">El codigo EXP-XXXX se emite automaticamente.</small>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <button class="trx-btn" @onclick="AbrirWizard">+ Nuevo expediente</button>
     </div>
 
     @if (_expedientes.Count == 0)
@@ -70,6 +65,121 @@
             }
         </div>
     }
+}
+
+@if (_wizOpen)
+{
+    <div class="wiz-scrim" @onclick="CerrarWizard"></div>
+    <div class="wiz-modal" @onclick:stopPropagation="true">
+        <div class="wiz-head">
+            <div>
+                <div class="wiz-title">Nuevo expediente</div>
+                <div class="wiz-sub">@(_wizTrd is null ? "Sin TRD activo en la entidad" : $"TRD activo: {_wizTrd.Titulo}")</div>
+            </div>
+            <button class="wiz-x" @onclick="CerrarWizard">&#10005;</button>
+        </div>
+
+        <div class="wiz-steps">
+            <span class="wiz-step @(_wizPaso >= 1 ? "on" : "")">1&middot; Datos</span>
+            <span class="wiz-step @(_wizPaso >= 2 ? "on" : "")">2&middot; Serie</span>
+            <span class="wiz-step @(_wizPaso >= 3 ? "on" : "")">3&middot; Documentos</span>
+        </div>
+
+        <div class="wiz-body">
+            @if (_wizError is not null) { <div class="ase-alert">@_wizError</div> }
+
+            @if (_wizPaso == 1)
+            {
+                <div class="wiz-field"><label>Nombre del expediente</label>
+                    <input class="form-control" @bind="_wizNombre" placeholder="Contratacion vigencia 2026" /></div>
+                <div class="wiz-row">
+                    <div class="wiz-field"><label>Sede</label>
+                        <select class="form-select" @bind="_wizSede">
+                            @if (_wizSedes.Count == 0) { <option value="PRINCIPAL">PRINCIPAL</option> }
+                            @foreach (var s in _wizSedes) { <option value="@s.Nombre">@s.Nombre</option> }
+                        </select>
+                    </div>
+                    <div class="wiz-field"><label>Dependencia (opcional)</label>
+                        <select class="form-select" @bind="_wizDepId">
+                            <option value="">(sin dependencia)</option>
+                            @foreach (var d in _wizDeps) { <option value="@d.Id">@d.Codigo - @d.Nombre</option> }
+                        </select>
+                    </div>
+                </div>
+                @if (_wizTrd is null)
+                {
+                    <div class="ase-alert" style="margin-top:10px;">No hay un TRD marcado ACTIVO. Activalo en Transacciones para poder elegir series caracterizadas.</div>
+                }
+            }
+            else if (_wizPaso == 2)
+            {
+                <div class="wiz-field"><label>Serie documental (del TRD activo)</label>
+                    <select class="form-select" value="@_wizSerieId" @onchange="OnWizSerie">
+                        <option value="">-- Selecciona una serie --</option>
+                        @foreach (var s in _wizSeries) { <option value="@s.Id">@s.Codigo - @s.Nombre</option> }
+                    </select>
+                </div>
+                @if (_wizSeries.Count == 0)
+                {
+                    <div class="ase-alert">El TRD activo no tiene series caracterizadas todavia.</div>
+                }
+                @if (_wizEstructura is not null)
+                {
+                    <div class="wiz-preview">
+                        <div class="wiz-preview-h">Estructura de la serie</div>
+                        @foreach (var sub in _wizEstructura.Subseries)
+                        {
+                            <div class="wiz-sub"><span class="mono">@sub.Codigo</span> @sub.Nombre <span class="wiz-count">@sub.Tipologias.Count tipologia(s)</span></div>
+                        }
+                        @if (_wizEstructura.TipologiasDirectas.Count > 0)
+                        {
+                            <div class="wiz-sub"><em>Tipologias directas</em> <span class="wiz-count">@_wizEstructura.TipologiasDirectas.Count</span></div>
+                        }
+                        @if (_wizEstructura.Subseries.Count == 0 && _wizEstructura.TipologiasDirectas.Count == 0)
+                        {
+                            <div class="text-muted">Esta serie no tiene subseries ni tipologias en el catalogo.</div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="wiz-created">Expediente <strong>@_wizExpCodigo</strong> creado. Sube el documento de cada tipologia.</div>
+
+                @if (_wizEstructura is not null)
+                {
+                    @foreach (var sub in _wizEstructura.Subseries)
+                    {
+                        <div class="wiz-group-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
+                        @foreach (var tip in sub.Tipologias) { @RenderTipologia(tip) }
+                    }
+                    @if (_wizEstructura.TipologiasDirectas.Count > 0)
+                    {
+                        <div class="wiz-group-h">Tipologias directas</div>
+                        @foreach (var tip in _wizEstructura.TipologiasDirectas) { @RenderTipologia(tip) }
+                    }
+                }
+            }
+        </div>
+
+        <div class="wiz-foot">
+            @if (_wizPaso == 1)
+            {
+                <button class="btn btn-outline-secondary btn-sm" @onclick="CerrarWizard">Cancelar</button>
+                <button class="trx-btn" disabled="@(string.IsNullOrWhiteSpace(_wizNombre))" @onclick="WizIrSerie">Siguiente</button>
+            }
+            else if (_wizPaso == 2)
+            {
+                <button class="btn btn-outline-secondary btn-sm" @onclick="() => _wizPaso = 1">Atras</button>
+                <button class="trx-btn" disabled="@(string.IsNullOrWhiteSpace(_wizSerieId) || _wizBusy)" @onclick="WizCrearExpediente">Crear expediente y continuar</button>
+            }
+            else
+            {
+                <span class="text-muted" style="margin-right:auto;">@_wizCargadas.Count documento(s) cargado(s)</span>
+                <button class="trx-btn" @onclick="WizFinalizar">Finalizar</button>
+            }
+        </div>
+    </div>
 }
 
 <div class="ase-card" style="@(_vista == "central" ? "" : "display:none")">
@@ -343,6 +453,31 @@
 }
 
 <style>
+    .wiz-scrim { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1990; }
+    .wiz-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:2000; width:640px; max-width:calc(100vw - 32px); max-height:90vh; display:flex; flex-direction:column; background:#fff; border-radius:16px; box-shadow:0 30px 80px rgba(15,23,42,.35); overflow:hidden; }
+    .wiz-head { display:flex; align-items:flex-start; justify-content:space-between; padding:18px 20px; background:var(--primary,#0288d1); color:#fff; }
+    .wiz-title { font-size:17px; font-weight:800; }
+    .wiz-sub { font-size:12px; opacity:.9; margin-top:2px; }
+    .wiz-x { background:none; border:none; color:#fff; font-size:16px; cursor:pointer; }
+    .wiz-steps { display:flex; gap:6px; padding:12px 20px; border-bottom:1px solid #eef2f7; }
+    .wiz-step { font-size:12px; font-weight:700; color:#94a3b8; padding:4px 10px; border-radius:999px; background:#f1f5f9; }
+    .wiz-step.on { color:#fff; background:var(--primary,#0288d1); }
+    .wiz-body { padding:18px 20px; overflow-y:auto; }
+    .wiz-field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+    .wiz-field label { font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; }
+    .wiz-row { display:flex; gap:12px; } .wiz-row .wiz-field { flex:1; }
+    .wiz-preview { margin-top:12px; border:1px solid #eef2f7; border-radius:10px; padding:12px; }
+    .wiz-preview-h { font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px; }
+    .wiz-sub { font-size:13px; padding:4px 0; }
+    .wiz-count { font-size:11px; color:#64748b; background:#f1f5f9; padding:1px 7px; border-radius:999px; margin-left:6px; }
+    .wiz-created { font-size:13px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+    .wiz-group-h { font-size:12px; font-weight:800; color:#0f172a; margin:12px 0 6px; }
+    .wiz-tip { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border:1px solid #eef2f7; border-radius:10px; margin-bottom:7px; }
+    .wiz-tip-name { font-size:13px; font-weight:600; color:#1f2433; }
+    .wiz-fmts { display:flex; gap:5px; flex-wrap:wrap; margin-top:3px; }
+    .wiz-fmt { font-size:10px; color:#1e40af; background:#dbeafe; padding:1px 7px; border-radius:999px; }
+    .wiz-done { font-size:12px; font-weight:700; color:#166534; }
+    .wiz-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; padding:14px 20px; border-top:1px solid #eef2f7; }
     .exp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
     .exp-card { background:#fff; border:1px solid #e9ecf5; border-radius:15px; padding:17px; cursor:pointer; box-shadow:0 1px 3px oklch(0.35 0.06 237 / .05); transition:box-shadow .15s; }
     .exp-card:hover { box-shadow:0 10px 26px oklch(0.35 0.06 237 / .12); }
@@ -395,8 +530,26 @@
     private List<DocumentoExpedienteDto> _expDocs = new();
     private ExpedienteDto? _expSel;
     private DocumentoExpedienteDto? _docSel;
-    private string _expNombre = "";
     private string? _error, _ok;
+
+    // --- Asistente de expediente (modal guiado desde el TRD activo) ---
+    private bool _wizOpen;
+    private int _wizPaso = 1;
+    private string _wizNombre = "";
+    private string _wizSede = "PRINCIPAL";
+    private string _wizDepId = "";
+    private string _wizSerieId = "";
+    private TrdActivoDto? _wizTrd;
+    private List<SerieExpDto> _wizSeries = new();
+    private List<SedeExpDto> _wizSedes = new();
+    private List<DependenciaExpDto> _wizDeps = new();
+    private EstructuraSerieDto? _wizEstructura;
+    private Guid? _wizExpId;
+    private string _wizExpCodigo = "";
+    private readonly HashSet<Guid> _wizCargadas = new();
+    private Guid? _wizSubiendo;
+    private bool _wizBusy;
+    private string? _wizError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -508,18 +661,97 @@
 
     private async Task CargarExpedientes() => _expedientes = (await Exp.ListarAsync()).ToList();
 
-    private async Task CrearExpediente()
+    // ---------------- Asistente de expediente ----------------
+
+    private async Task AbrirWizard()
     {
-        _error = _ok = null;
+        _wizError = _error = _ok = null;
+        _wizPaso = 1;
+        _wizNombre = ""; _wizDepId = ""; _wizSerieId = "";
+        _wizEstructura = null; _wizExpId = null; _wizExpCodigo = "";
+        _wizCargadas.Clear(); _wizSubiendo = null;
+        _wizTrd = await Exp.TrdActivoAsync();
+        _wizSeries = (await Exp.SeriesDelTrdActivoAsync()).ToList();
+        _wizSedes = (await Exp.SedesAsync()).ToList();
+        _wizDeps = (await Exp.DependenciasDelTrdActivoAsync()).ToList();
+        _wizSede = _wizSedes.FirstOrDefault()?.Nombre ?? "PRINCIPAL";
+        _wizOpen = true;
+    }
+
+    private void CerrarWizard() => _wizOpen = false;
+
+    private void WizIrSerie() { if (!string.IsNullOrWhiteSpace(_wizNombre)) { _wizError = null; _wizPaso = 2; } }
+
+    private async Task OnWizSerie(ChangeEventArgs e)
+    {
+        _wizSerieId = e.Value?.ToString() ?? "";
+        _wizEstructura = null;
+        if (Guid.TryParse(_wizSerieId, out var sid)) { _wizEstructura = await Exp.EstructuraSerieAsync(sid); }
+    }
+
+    private async Task WizCrearExpediente()
+    {
+        _wizError = null;
+        if (!Guid.TryParse(_wizSerieId, out var serieId)) { _wizError = "Selecciona una serie."; return; }
+        _wizBusy = true;
         try
         {
-            var e = await Exp.CrearAsync(new CrearExpedienteRequest { Nombre = _expNombre }, await Actor());
-            if (e is not null) { _ok = $"Expediente {e.Codigo} abierto."; }
-            _expNombre = "";
+            Guid? depId = Guid.TryParse(_wizDepId, out var d) ? d : null;
+            var exp = await Exp.CrearAsync(new CrearExpedienteRequest { Nombre = _wizNombre, SerieId = serieId, DependenciaId = depId }, await Actor());
+            if (exp is null) { _wizError = "No se pudo crear el expediente."; return; }
+            _wizExpId = exp.Id; _wizExpCodigo = exp.Codigo; _wizPaso = 3;
             await CargarExpedientes();
         }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
+        catch (InvalidOperationException ex) { _wizError = ex.Message; }
+        finally { _wizBusy = false; }
     }
+
+    private async Task OnWizArchivo(InputFileChangeEventArgs e, TipologiaExpDto tip)
+    {
+        if (_wizExpId is not Guid expId) { return; }
+        _wizError = null;
+        _wizSubiendo = tip.Id;
+        try
+        {
+            var file = e.File;
+            var req = new SubirArchivoRequest
+            {
+                Sucursal = _wizSede,
+                Nombre = $"{tip.Codigo} - {file.Name}",
+                TipologiaId = tip.Id,
+                Mime = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType
+            };
+            await using var stream = file.OpenReadStream(MaxBytes);
+            var saved = await Arch.SubirAsync(req, stream, await Actor());
+            if (saved is null) { _wizError = "Sin tenant activo."; return; }
+            await Exp.AsignarDocumentoAsync(saved.Id, expId, await Actor());
+            _wizCargadas.Add(tip.Id);
+        }
+        catch (Exception ex) { _wizError = ex.Message; }
+        finally { _wizSubiendo = null; }
+    }
+
+    private async Task WizFinalizar()
+    {
+        _wizOpen = false;
+        _ok = $"Expediente {_wizExpCodigo} listo con {_wizCargadas.Count} documento(s).";
+        await CargarExpedientes();
+    }
+
+    private RenderFragment RenderTipologia(TipologiaExpDto tip) =>@<div class="wiz-tip">
+        <div class="wiz-tip-info">
+            <div class="wiz-tip-name"><span class="mono">@tip.Codigo</span> @tip.Nombre</div>
+            @if (tip.Formatos.Count > 0)
+            {
+                <div class="wiz-fmts">@foreach (var f in tip.Formatos) { <span class="wiz-fmt">@f</span> }</div>
+            }
+        </div>
+        <div class="wiz-tip-action">
+            @if (_wizCargadas.Contains(tip.Id)) { <span class="wiz-done">&#10003; Cargado</span> }
+            else if (_wizSubiendo == tip.Id) { <span class="text-muted">Subiendo...</span> }
+            else { <InputFile OnChange="@(e => OnWizArchivo(e, tip))" /> }
+        </div>
+    </div>;
 
     private async Task AbrirExpediente(ExpedienteDto e)
     {

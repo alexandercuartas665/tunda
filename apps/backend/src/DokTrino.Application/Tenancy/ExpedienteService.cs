@@ -33,6 +33,16 @@ public sealed class CrearExpedienteRequest
     public Guid? DependenciaId { get; set; }
 }
 
+// --- Asistente de expediente (modal guiado desde el TRD activo) ---
+
+public sealed record TrdActivoDto(Guid Id, string Titulo);
+public sealed record SerieExpDto(Guid Id, string Codigo, string Nombre);
+public sealed record TipologiaExpDto(Guid Id, string Codigo, string Nombre, IReadOnlyList<string> Formatos);
+public sealed record SubserieExpDto(Guid Id, string Codigo, string Nombre, IReadOnlyList<TipologiaExpDto> Tipologias);
+public sealed record EstructuraSerieDto(IReadOnlyList<SubserieExpDto> Subseries, IReadOnlyList<TipologiaExpDto> TipologiasDirectas);
+public sealed record SedeExpDto(Guid Id, string Nombre);
+public sealed record DependenciaExpDto(Guid Id, string Codigo, string Nombre);
+
 public interface IExpedienteService
 {
     Task<IReadOnlyList<ExpedienteDto>> ListarAsync(CancellationToken ct = default);
@@ -40,6 +50,15 @@ public interface IExpedienteService
     Task<IReadOnlyList<DocumentoExpedienteDto>> DocumentosAsync(Guid expedienteId, CancellationToken ct = default);
     Task<bool> AsignarDocumentoAsync(Guid archivoId, Guid? expedienteId, Guid actor, CancellationToken ct = default);
     Task<bool> CerrarAsync(Guid expedienteId, Guid actor, CancellationToken ct = default);
+
+    /// <summary>TRD marcada ACTIVO en el tenant, o null si ninguna lo esta.</summary>
+    Task<TrdActivoDto?> TrdActivoAsync(CancellationToken ct = default);
+    /// <summary>Series efectivamente caracterizadas en el TRD activo.</summary>
+    Task<IReadOnlyList<SerieExpDto>> SeriesDelTrdActivoAsync(CancellationToken ct = default);
+    /// <summary>Subseries y tipologias (con sus formatos) del catalogo bajo una serie.</summary>
+    Task<EstructuraSerieDto> EstructuraSerieAsync(Guid serieId, CancellationToken ct = default);
+    Task<IReadOnlyList<SedeExpDto>> SedesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<DependenciaExpDto>> DependenciasDelTrdActivoAsync(CancellationToken ct = default);
 }
 
 /// <summary>
@@ -142,5 +161,73 @@ public sealed class ExpedienteService : IExpedienteService
         exp.UpdatedBy = actor;
         await _db.SaveChangesAsync(ct);
         return true;
+    }
+
+    public async Task<TrdActivoDto?> TrdActivoAsync(CancellationToken ct = default) =>
+        await _db.TablasRetencionDocumental.AsNoTracking()
+            .Where(t => t.Estado == "ACTIVO")
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new TrdActivoDto(t.Id, t.Titulo))
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<SerieExpDto>> SeriesDelTrdActivoAsync(CancellationToken ct = default)
+    {
+        var trd = await TrdActivoAsync(ct);
+        if (trd is null) { return Array.Empty<SerieExpDto>(); }
+
+        var serieIds = await _db.RespuestasTablaDocumental.AsNoTracking()
+            .Where(r => r.TrdId == trd.Id)
+            .Select(r => r.SerieId).Distinct().ToListAsync(ct);
+        if (serieIds.Count == 0) { return Array.Empty<SerieExpDto>(); }
+
+        return await _db.Series.AsNoTracking()
+            .Where(s => serieIds.Contains(s.Id))
+            .OrderBy(s => s.Codigo)
+            .Select(s => new SerieExpDto(s.Id, s.Codigo, s.Nombre))
+            .ToListAsync(ct);
+    }
+
+    public async Task<EstructuraSerieDto> EstructuraSerieAsync(Guid serieId, CancellationToken ct = default)
+    {
+        var subs = await _db.Subseries.AsNoTracking()
+            .Where(x => x.SerieId == serieId && x.Estado == "MAESTRA")
+            .OrderBy(x => x.Codigo).ToListAsync(ct);
+        var subIds = subs.Select(x => x.Id).ToList();
+
+        var tips = await _db.TipologiasDocumentales.AsNoTracking()
+            .Where(t => t.Activo && t.Estado == "MAESTRA"
+                && ((t.SubserieId != null && subIds.Contains(t.SubserieId.Value)) || t.SerieId == serieId))
+            .OrderBy(t => t.Codigo).ToListAsync(ct);
+
+        var subDtos = subs.Select(s => new SubserieExpDto(s.Id, s.Codigo, s.Nombre,
+            tips.Where(t => t.SubserieId == s.Id).Select(ToTipDto).ToList())).ToList();
+        var directas = tips.Where(t => t.SubserieId == null && t.SerieId == serieId).Select(ToTipDto).ToList();
+        return new EstructuraSerieDto(subDtos, directas);
+    }
+
+    public async Task<IReadOnlyList<SedeExpDto>> SedesAsync(CancellationToken ct = default) =>
+        await _db.Sucursales.AsNoTracking()
+            .Where(s => s.Activo)
+            .OrderBy(s => s.Nombre)
+            .Select(s => new SedeExpDto(s.Id, s.Nombre))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<DependenciaExpDto>> DependenciasDelTrdActivoAsync(CancellationToken ct = default)
+    {
+        var trd = await TrdActivoAsync(ct);
+        if (trd is null) { return Array.Empty<DependenciaExpDto>(); }
+        return await _db.Dependencias.AsNoTracking()
+            .Where(d => d.TrdId == trd.Id)
+            .OrderBy(d => d.Codigo)
+            .Select(d => new DependenciaExpDto(d.Id, d.Codigo, d.NombreCargo))
+            .ToListAsync(ct);
+    }
+
+    private static TipologiaExpDto ToTipDto(TipologiaDocumental t)
+    {
+        string[] formatos;
+        try { formatos = System.Text.Json.JsonSerializer.Deserialize<string[]>(t.FormatosJson ?? "[]") ?? Array.Empty<string>(); }
+        catch { formatos = Array.Empty<string>(); }
+        return new TipologiaExpDto(t.Id, t.Codigo, t.Nombre, formatos);
     }
 }

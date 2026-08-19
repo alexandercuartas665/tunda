@@ -10,113 +10,157 @@
 <div class="ase-head">
     <div>
         <div class="ase-eyebrow">Gestion Documental</div>
-        <h1 class="ase-title">Archivo fisico (bodega / caja / carpeta)</h1>
+        <h1 class="ase-title">Topografia de bodega</h1>
+        <p class="page-sub" style="margin:2px 0 0;">Bodega &rarr; caja &rarr; carpeta. Expande cada nodo y agrega o elimina desde el arbol.</p>
     </div>
+    <button class="btn btn-primary btn-sm" @onclick="AbrirBodega">+ Bodega</button>
 </div>
 
 @if (_error is not null) { <div class="ase-alert">@_error</div> }
 @if (_ok is not null) { <div class="ase-ok">@_ok</div> }
 
-<div class="ase-card">
-    <div class="ase-card-h">Bodegas (@_bodegas.Count)</div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead><tr><th>Sede</th><th>Codigo</th><th>Nombre</th><th>Direccion</th><th class="text-center">Cajas</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var b in _bodegas)
-                {
-                    <tr>
-                        <td><span class="mono">@b.Sucursal</span></td><td><span class="mono">@b.Codigo</span></td>
-                        <td>@b.Nombre</td><td>@(b.Direccion ?? "-")</td><td class="text-center">@b.Cajas</td>
-                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelBodega(b.Id)">&times;</button></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        @if (_bodegas.Count == 0) { <div class="ase-empty">Sin bodegas.</div> }
+@if (_addMode == "bodega")
+{
+    <div class="tree-form">
+        <div class="af-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_fSede" /></div>
+        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_fCodigo" placeholder="BOD-01" /></div>
+        <div class="af-f af-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_fNombre" placeholder="Deposito central" /></div>
+        <div class="af-f af-grow"><label>Direccion</label><input class="form-control form-control-sm" @bind="_fDireccion" /></div>
+        <div class="af-f"><label>&nbsp;</label>
+            <div style="display:flex;gap:6px;">
+                <button class="btn btn-primary btn-sm" @onclick="GuardarBodega">Guardar</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="CancelarForm">Cancelar</button>
+            </div>
+        </div>
     </div>
-    <div class="af-form">
-        <div class="af-f"><label>Sede</label><input class="form-control form-control-sm" @bind="_nb.Sucursal" /></div>
-        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nb.Codigo" placeholder="BOD-01" /></div>
-        <div class="af-f af-grow"><label>Nombre</label><input class="form-control form-control-sm" @bind="_nb.Nombre" placeholder="Deposito central" /></div>
-        <div class="af-f af-grow"><label>Direccion</label><input class="form-control form-control-sm" @bind="_nb.Direccion" /></div>
-        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddBodega">Agregar</button></div>
-    </div>
-</div>
+}
 
-<div class="ase-card">
-    <div class="ase-card-h">Cajas (@_cajas.Count)</div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead><tr><th>Codigo</th><th>Bodega</th><th class="text-center">Carpetas</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var c in _cajas)
-                {
-                    <tr>
-                        <td><span class="mono">@c.Codigo</span></td><td>@(c.BodegaNombre ?? "-")</td>
-                        <td class="text-center">@c.Carpetas</td>
-                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelCaja(c.Id)">&times;</button></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        @if (_cajas.Count == 0) { <div class="ase-empty">Sin cajas.</div> }
-    </div>
-    <div class="af-form">
-        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_nc.Codigo" placeholder="CAJA-0001" /></div>
-        <div class="af-f af-grow"><label>Bodega</label>
-            <select class="form-select form-select-sm" @bind="_ncBodega">
-                <option value="">(sin bodega)</option>
-                @foreach (var o in _bodOpc) { <option value="@o.Id">@o.Etiqueta</option> }
-            </select>
-        </div>
-        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddCaja">Agregar</button></div>
-    </div>
-</div>
+<div class="ase-card" style="padding:8px 6px;">
+    @if (_bodegas.Count == 0)
+    {
+        <div class="ase-empty">Sin bodegas. Crea la primera con "+ Bodega".</div>
+    }
+    else
+    {
+        @foreach (var b in _bodegas)
+        {
+            var cajas = _cajas.Where(c => c.BodegaId == b.Id).ToList();
+            <div class="tree-node lvl-0">
+                <button class="tree-caret" @onclick="() => Toggle(b.Id)">@if (Abierto(b.Id)) { <text>&#9662;</text> } else { <text>&#9656;</text> }</button>
+                <span class="tree-ico">&#127970;</span>
+                <span class="mono tree-code">@b.Codigo</span>
+                <span class="tree-name">@b.Nombre</span>
+                <span class="tree-badge">@cajas.Count caja(s)</span>
+                <span class="tree-actions">
+                    <button class="btn btn-outline-primary btn-xs" @onclick="() => AbrirCaja(b.Id)">+ Caja</button>
+                    <button class="btn btn-outline-danger btn-xs" @onclick="() => DelBodega(b.Id)">&times;</button>
+                </span>
+            </div>
 
-<div class="ase-card">
-    <div class="ase-card-h">Carpetas (@_carpetas.Count)</div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead><tr><th>Codigo</th><th>Titulo</th><th>Caja</th><th>Tipologia (TRD)</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var c in _carpetas)
+            @if (Abierto(b.Id))
+            {
+                @if (_addMode == "caja" && _addParent == b.Id)
                 {
-                    <tr>
-                        <td><span class="mono">@c.Codigo</span></td><td>@(c.Titulo ?? "-")</td>
-                        <td><span class="mono">@(c.CajaCodigo ?? "-")</span></td><td>@(c.TipologiaNombre ?? "-")</td>
-                        <td class="ase-row-actions"><button class="btn btn-outline-danger btn-sm" @onclick="() => DelCarpeta(c.Id)">&times;</button></td>
-                    </tr>
+                    <div class="tree-form lvl-1">
+                        <div class="af-f"><label>Codigo caja</label><input class="form-control form-control-sm mono" @bind="_fCodigo" placeholder="CAJA-0001" /></div>
+                        <div class="af-f"><label>&nbsp;</label>
+                            <div style="display:flex;gap:6px;">
+                                <button class="btn btn-primary btn-sm" @onclick="GuardarCaja">Guardar</button>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="CancelarForm">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
                 }
-            </tbody>
-        </table>
-        @if (_carpetas.Count == 0) { <div class="ase-empty">Sin carpetas.</div> }
-    </div>
-    <div class="af-form">
-        <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_ncar.Codigo" placeholder="CARP-0001" /></div>
-        <div class="af-f af-grow"><label>Titulo</label><input class="form-control form-control-sm" @bind="_ncar.Titulo" /></div>
-        <div class="af-f af-grow"><label>Caja</label>
-            <select class="form-select form-select-sm" @bind="_ncarCaja">
-                <option value="">(sin caja)</option>
-                @foreach (var o in _cajaOpc) { <option value="@o.Id">@o.Etiqueta</option> }
-            </select>
-        </div>
-        <div class="af-f af-grow"><label>Tipologia</label>
-            <select class="form-select form-select-sm" @bind="_ncarTip">
-                <option value="">(sin tipologia)</option>
-                @foreach (var o in _tipOpc) { <option value="@o.Id">@o.Etiqueta</option> }
-            </select>
-        </div>
-        <div class="af-f"><label>&nbsp;</label><button class="btn btn-primary btn-sm" @onclick="AddCarpeta">Agregar</button></div>
-    </div>
+
+                @if (cajas.Count == 0 && !(_addMode == "caja" && _addParent == b.Id))
+                {
+                    <div class="tree-empty lvl-1">Sin cajas.</div>
+                }
+
+                @foreach (var cj in cajas)
+                {
+                    var carps = _carpetas.Where(c => c.CajaId == cj.Id).ToList();
+                    <div class="tree-node lvl-1">
+                        <button class="tree-caret" @onclick="() => Toggle(cj.Id)">@if (Abierto(cj.Id)) { <text>&#9662;</text> } else { <text>&#9656;</text> }</button>
+                        <span class="tree-ico">&#128230;</span>
+                        <span class="mono tree-code">@cj.Codigo</span>
+                        <span class="tree-badge">@carps.Count carpeta(s)</span>
+                        <span class="tree-actions">
+                            <button class="btn btn-outline-primary btn-xs" @onclick="() => AbrirCarpeta(cj.Id)">+ Carpeta</button>
+                            <button class="btn btn-outline-danger btn-xs" @onclick="() => DelCaja(cj.Id)">&times;</button>
+                        </span>
+                    </div>
+
+                    @if (Abierto(cj.Id))
+                    {
+                        @if (_addMode == "carpeta" && _addParent == cj.Id)
+                        {
+                            <div class="tree-form lvl-2">
+                                <div class="af-f"><label>Codigo</label><input class="form-control form-control-sm mono" @bind="_fCodigo" placeholder="CARP-0001" /></div>
+                                <div class="af-f af-grow"><label>Titulo</label><input class="form-control form-control-sm" @bind="_fTitulo" /></div>
+                                <div class="af-f af-grow"><label>Tipologia (TRD)</label>
+                                    <select class="form-select form-select-sm" @bind="_fTip">
+                                        <option value="">(sin tipologia)</option>
+                                        @foreach (var o in _tipOpc) { <option value="@o.Id">@o.Etiqueta</option> }
+                                    </select>
+                                </div>
+                                <div class="af-f"><label>&nbsp;</label>
+                                    <div style="display:flex;gap:6px;">
+                                        <button class="btn btn-primary btn-sm" @onclick="GuardarCarpeta">Guardar</button>
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="CancelarForm">Cancelar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (carps.Count == 0 && !(_addMode == "carpeta" && _addParent == cj.Id))
+                        {
+                            <div class="tree-empty lvl-2">Sin carpetas.</div>
+                        }
+
+                        @foreach (var cp in carps)
+                        {
+                            <div class="tree-node lvl-2 leaf">
+                                <span class="tree-ico">&#128193;</span>
+                                <span class="mono tree-code">@cp.Codigo</span>
+                                <span class="tree-name">@(cp.Titulo ?? "-")</span>
+                                <span class="tree-tip">@(cp.TipologiaNombre ?? "sin tipologia")</span>
+                                <span class="tree-actions">
+                                    <button class="btn btn-outline-danger btn-xs" @onclick="() => DelCarpeta(cp.Id)">&times;</button>
+                                </span>
+                            </div>
+                        }
+                    }
+                }
+            }
+        }
+    }
 </div>
 
 <style>
-    .af-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 8px; }
-    .af-f { display: flex; flex-direction: column; gap: 3px; }
-    .af-f label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted-foreground); }
-    .af-grow { flex: 1; min-width: 160px; }
-    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+    .tree-node { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; }
+    .tree-node:hover { background: var(--muted, #f1f5f9); }
+    .tree-node.lvl-1 { margin-left: 26px; }
+    .tree-node.lvl-2 { margin-left: 52px; }
+    .tree-node.leaf { padding-left: 20px; }
+    .tree-caret { border:none; background:none; cursor:pointer; width:18px; font-size:12px; color: var(--muted-foreground,#64748b); padding:0; }
+    .tree-ico { font-size:15px; }
+    .tree-code { font-weight:700; }
+    .tree-name { color: var(--foreground,#0f172a); }
+    .tree-badge { font-size:11px; color: var(--muted-foreground,#64748b); background: var(--muted,#f1f5f9); padding:2px 8px; border-radius:999px; }
+    .tree-tip { font-size:12px; color:#1e40af; background:#dbeafe; padding:2px 8px; border-radius:999px; }
+    .tree-actions { margin-left:auto; display:flex; gap:6px; }
+    .btn-xs { padding:1px 8px; font-size:12px; line-height:1.4; }
+    .tree-empty { color: var(--muted-foreground,#94a3b8); font-size:12px; padding:4px 10px; font-style:italic; }
+    .tree-empty.lvl-1 { margin-left:26px; }
+    .tree-empty.lvl-2 { margin-left:52px; }
+    .tree-form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin:8px 0; padding:12px; background: var(--muted,#f8fafc); border-radius:10px; }
+    .tree-form.lvl-1 { margin-left:26px; }
+    .tree-form.lvl-2 { margin-left:52px; }
+    .af-f { display:flex; flex-direction:column; gap:3px; }
+    .af-f label { font-size:11px; font-weight:700; text-transform:uppercase; color: var(--muted-foreground,#64748b); }
+    .af-grow { flex:1; min-width:160px; }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
 </style>
 
 @code {
@@ -124,11 +168,12 @@
     private List<BodegaDto> _bodegas = new();
     private List<CajaDto> _cajas = new();
     private List<CarpetaDto> _carpetas = new();
-    private List<OpcionDto> _bodOpc = new(), _cajaOpc = new(), _tipOpc = new();
-    private SaveBodegaRequest _nb = new() { Sucursal = "PRINCIPAL", Activo = true };
-    private SaveCajaRequest _nc = new() { Activo = true };
-    private SaveCarpetaRequest _ncar = new() { Activo = true };
-    private string _ncBodega = "", _ncarCaja = "", _ncarTip = "";
+    private List<OpcionDto> _tipOpc = new();
+
+    private readonly HashSet<Guid> _expanded = new();
+    private string? _addMode;          // "bodega" | "caja" | "carpeta"
+    private Guid _addParent;           // bodega o caja segun el modo
+    private string _fSede = "PRINCIPAL", _fCodigo = "", _fNombre = "", _fDireccion = "", _fTitulo = "", _fTip = "";
     private string? _error, _ok;
 
     protected override async Task OnInitializedAsync() => await LoadAll();
@@ -138,10 +183,16 @@
         _bodegas = (await Arch.ListBodegasAsync()).ToList();
         _cajas = (await Arch.ListCajasAsync()).ToList();
         _carpetas = (await Arch.ListCarpetasAsync()).ToList();
-        _bodOpc = (await Arch.BodegasParaSelectAsync()).ToList();
-        _cajaOpc = (await Arch.CajasParaSelectAsync()).ToList();
         _tipOpc = (await Arch.TipologiasParaSelectAsync()).ToList();
     }
+
+    private bool Abierto(Guid id) => _expanded.Contains(id);
+    private void Toggle(Guid id) { if (!_expanded.Add(id)) { _expanded.Remove(id); } }
+
+    private void AbrirBodega() { CancelarForm(); _addMode = "bodega"; }
+    private void AbrirCaja(Guid bodegaId) { CancelarForm(); _addMode = "caja"; _addParent = bodegaId; _expanded.Add(bodegaId); }
+    private void AbrirCarpeta(Guid cajaId) { CancelarForm(); _addMode = "carpeta"; _addParent = cajaId; _expanded.Add(cajaId); }
+    private void CancelarForm() { _addMode = null; _fCodigo = _fNombre = _fDireccion = _fTitulo = _fTip = ""; _fSede = "PRINCIPAL"; }
 
     private async Task<Guid> Actor()
     {
@@ -150,30 +201,50 @@
         return Guid.TryParse(st.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : Guid.Empty;
     }
 
-    private async Task AddBodega()
+    private async Task GuardarBodega()
     {
         _error = _ok = null;
-        try { var s = await Arch.SaveBodegaAsync(_nb, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Bodega '{s.Codigo}' creada."; _nb = new() { Sucursal = "PRINCIPAL", Activo = true }; await LoadAll(); }
+        try
+        {
+            var s = await Arch.SaveBodegaAsync(new SaveBodegaRequest { Sucursal = _fSede, Codigo = _fCodigo, Nombre = _fNombre, Direccion = _fDireccion, Activo = true }, await Actor());
+            if (s is null) { _error = "Sin tenant activo."; return; }
+            _ok = $"Bodega '{s.Codigo}' creada."; CancelarForm(); await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
-    private async Task DelBodega(Guid id) { _error = _ok = null; await Arch.DeleteBodegaAsync(id, await Actor()); await LoadAll(); }
 
-    private async Task AddCaja()
+    private async Task GuardarCaja()
     {
         _error = _ok = null;
-        _nc.BodegaId = Guid.TryParse(_ncBodega, out var g) ? g : null;
-        try { var s = await Arch.SaveCajaAsync(_nc, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Caja '{s.Codigo}' creada."; _nc = new() { Activo = true }; _ncBodega = ""; await LoadAll(); }
+        try
+        {
+            var s = await Arch.SaveCajaAsync(new SaveCajaRequest { Codigo = _fCodigo, BodegaId = _addParent, Activo = true }, await Actor());
+            if (s is null) { _error = "Sin tenant activo."; return; }
+            _ok = $"Caja '{s.Codigo}' creada."; CancelarForm(); await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
-    private async Task DelCaja(Guid id) { _error = _ok = null; await Arch.DeleteCajaAsync(id, await Actor()); await LoadAll(); }
 
-    private async Task AddCarpeta()
+    private async Task GuardarCarpeta()
     {
         _error = _ok = null;
-        _ncar.CajaId = Guid.TryParse(_ncarCaja, out var g) ? g : null;
-        _ncar.TipologiaId = Guid.TryParse(_ncarTip, out var t) ? t : null;
-        try { var s = await Arch.SaveCarpetaAsync(_ncar, await Actor()); if (s is null) { _error = "Sin tenant activo."; return; } _ok = $"Carpeta '{s.Codigo}' creada."; _ncar = new() { Activo = true }; _ncarCaja = ""; _ncarTip = ""; await LoadAll(); }
+        try
+        {
+            var s = await Arch.SaveCarpetaAsync(new SaveCarpetaRequest
+            {
+                Codigo = _fCodigo,
+                Titulo = string.IsNullOrWhiteSpace(_fTitulo) ? null : _fTitulo,
+                CajaId = _addParent,
+                TipologiaId = Guid.TryParse(_fTip, out var t) ? t : null,
+                Activo = true
+            }, await Actor());
+            if (s is null) { _error = "Sin tenant activo."; return; }
+            _ok = $"Carpeta '{s.Codigo}' creada."; CancelarForm(); await LoadAll();
+        }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
-    private async Task DelCarpeta(Guid id) { _error = _ok = null; await Arch.DeleteCarpetaAsync(id, await Actor()); await LoadAll(); }
+
+    private async Task DelBodega(Guid id) { _error = _ok = null; try { await Arch.DeleteBodegaAsync(id, await Actor()); await LoadAll(); } catch (InvalidOperationException ex) { _error = ex.Message; } }
+    private async Task DelCaja(Guid id) { _error = _ok = null; try { await Arch.DeleteCajaAsync(id, await Actor()); await LoadAll(); } catch (InvalidOperationException ex) { _error = ex.Message; } }
+    private async Task DelCarpeta(Guid id) { _error = _ok = null; try { await Arch.DeleteCarpetaAsync(id, await Actor()); await LoadAll(); } catch (InvalidOperationException ex) { _error = ex.Message; } }
 }
