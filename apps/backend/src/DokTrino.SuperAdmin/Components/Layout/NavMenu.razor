@@ -296,6 +296,7 @@
     {
         <div class="nm">Plataforma</div>
         <div class="mt">Consola de gobierno</div>
+        <div class="mt" style="opacity:.65; font-size:10px; margin-top:5px;">build @_buildSha &middot; @_buildTime</div>
     }
     else
     {
@@ -330,6 +331,10 @@
     /// tiene sentido ofrecer "Importar de otra empresa".</summary>
     private bool _puedeImportar;
 
+    // Sello de version desplegada (inyectado en la imagen por el CI).
+    private string _buildSha = "dev";
+    private string _buildTime = "-";
+
     /// <summary>
     /// Claves (href) de los modulos apagados por el tenant activo. La ausencia de
     /// una clave significa habilitado (default encendido). El menu es SSR: se carga
@@ -341,6 +346,10 @@
     {
         Navigation.LocationChanged += OnLocationChanged;
         _crmHabilitado = Config.GetValue("Modulos:EnableCrm", false);
+
+        var sha = Environment.GetEnvironmentVariable("APP_BUILD_SHA") ?? "dev";
+        _buildSha = sha.Length > 7 ? sha[..7] : sha;
+        _buildTime = Environment.GetEnvironmentVariable("APP_BUILD_TIME") ?? "-";
 
         // Scope propio: el menu se inicializa en paralelo con la pagina y no puede
         // compartir con ella el DbContext scoped. ITenantContext resuelve el tenant

@@ -699,6 +699,14 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
     return Results.File(d.Content, d.Mime, d.FileName);
 }).RequireAuthorization();
 
+// Version desplegada: SHA de git + fecha de build (inyectados en la imagen via build-args).
+// Anonimo y minimo, para confirmar de un vistazo que produccion corre el ultimo commit.
+app.MapGet("/version", () => Results.Json(new
+{
+    sha = Environment.GetEnvironmentVariable("APP_BUILD_SHA") ?? "dev",
+    buildTime = Environment.GetEnvironmentVariable("APP_BUILD_TIME") ?? "-"
+})).AllowAnonymous();
+
 // Vista previa de LECTURA (HTML) de office/texto para el visor embebido de la ficha.
 // Excel -> tabla, Word -> parrafos, texto -> pre. Tenant-scoped por el query filter.
 app.MapGet("/archivo-digital/{id:guid}/preview", async (

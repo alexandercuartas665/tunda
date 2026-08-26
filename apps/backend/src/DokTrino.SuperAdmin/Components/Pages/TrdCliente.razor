@@ -193,23 +193,17 @@ else
                             }
                         </div>
 
-                        @* --- Matriz archivistica de la seleccion --- *@
+                        @* El cliente solo registra la ESTRUCTURA (serie/subserie/tipologia + formato).
+                           La caracterizacion archivistica (retencion AG/AC, disposicion, valoracion) la
+                           completa el administrador; por eso no aparece en este formulario. *@
                         @if (!_sesion.SoloLectura)
                         {
                             <div class="cl-form">
-                                <div class="cl-f cl-sm"><label>AG</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAg" /></div>
-                                <div class="cl-f cl-sm"><label>AC</label><input type="number" min="0" step="0.5" class="form-control form-control-sm" @bind="_cmd.TiempoAc" /></div>
-                                <div class="cl-f cl-chk"><label>CT</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispCt" /></div>
-                                <div class="cl-f cl-chk"><label>S</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispS" /></div>
-                                <div class="cl-f cl-chk"><label>E</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispE" /></div>
-                                <div class="cl-f cl-chk"><label>D</label><input type="checkbox" class="form-check-input" @bind="_cmd.DispD" /></div>
-                                <div class="cl-f cl-chk"><label>V.Adm</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val1Admin" /></div>
-                                <div class="cl-f cl-chk"><label>V.Hist</label><input type="checkbox" class="form-check-input" @bind="_cmd.Val2Historica" /></div>
-                                <div class="cl-f"><label>&nbsp;</label><button class="tcl-add" style="width: auto; margin: 0; padding: 9px 16px;" @onclick="Guardar">Cargar Estructura &rarr;</button></div>
+                                <button class="tcl-add" style="width: auto; margin: 0; padding: 9px 16px;" @onclick="Guardar">Cargar Estructura &rarr;</button>
                             </div>
                             <small class="text-muted">
-                                AG/AC en anios. Disposicion: CT conservacion total, S seleccion, E eliminacion, D digitalizacion
-                                (Ley 594/2000, AGN).
+                                Registra la serie, subserie y tipologia. La retencion y disposicion documental
+                                las define el administrador.
                             </small>
                         }
                     }

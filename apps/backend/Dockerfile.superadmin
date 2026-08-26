@@ -26,6 +26,14 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=build /app/publish ./
+
+# Sello de version: el CI pasa el SHA de git y la fecha de build; se exponen como env
+# para el endpoint /version y el pie del menu. Asi se confirma que prod corre el ultimo commit.
+ARG GIT_SHA=dev
+ARG BUILD_TIME=-
+ENV APP_BUILD_SHA=$GIT_SHA
+ENV APP_BUILD_TIME=$BUILD_TIME
+
 # Railway inyecta PORT; definir en Railway ASPNETCORE_HTTP_PORTS=${{PORT}}.
 # Este valor es solo fallback local.
 ENV ASPNETCORE_HTTP_PORTS=8080
