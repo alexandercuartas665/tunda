@@ -703,8 +703,9 @@ app.MapGet("/archivo-digital/{id:guid}/contenido", async (
 // Anonimo y minimo, para confirmar de un vistazo que produccion corre el ultimo commit.
 app.MapGet("/version", () => Results.Json(new
 {
-    sha = Environment.GetEnvironmentVariable("APP_BUILD_SHA") ?? "dev",
-    buildTime = Environment.GetEnvironmentVariable("APP_BUILD_TIME") ?? "-"
+    version = DokTrino.SuperAdmin.AppInfo.Version,
+    sha = DokTrino.SuperAdmin.AppInfo.BuildSha,
+    buildTime = DokTrino.SuperAdmin.AppInfo.BuildTime
 })).AllowAnonymous();
 
 // Vista previa de LECTURA (HTML) de office/texto para el visor embebido de la ficha.
