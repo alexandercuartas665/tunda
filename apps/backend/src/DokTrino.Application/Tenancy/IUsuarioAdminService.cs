@@ -16,6 +16,14 @@ public sealed record CrearUsuarioRequest(
     string Email, string? DisplayName, string Password, Guid? RolId,
     IReadOnlyList<Guid> SucursalIds, bool EsGlobal);
 
+/// <summary>
+/// Resultado de crear/ligar un usuario. Si el correo ya existia en la plataforma,
+/// se LIGA esa cuenta a esta empresa (no se crea otra) y, si ya tenia clave, se
+/// CONSERVA su clave actual: la clave escrita en el alta no se aplica (por seguridad,
+/// un admin de una empresa no debe cambiar la clave de un usuario de otras empresas).
+/// </summary>
+public sealed record CrearUsuarioResultado(UsuarioDto? Usuario, bool LigadoExistente, bool ClaveConservada);
+
 /// <summary>Payload para actualizar perfil completo del usuario (campos personales).</summary>
 public sealed record ActualizarPerfilUsuarioRequest(
     string? DisplayName, string? Username, string? Documento,
@@ -30,7 +38,7 @@ public sealed record ActualizarPermisosCoordinacionRequest(
 public interface IUsuarioAdminService
 {
     Task<IReadOnlyList<UsuarioDto>> ListAsync(CancellationToken ct = default);
-    Task<UsuarioDto?> CrearAsync(CrearUsuarioRequest req, Guid actor, CancellationToken ct = default);
+    Task<CrearUsuarioResultado?> CrearAsync(CrearUsuarioRequest req, Guid actor, CancellationToken ct = default);
     Task<UsuarioDto?> AsignarAsync(Guid tenantUserId, Guid? rolId, IReadOnlyList<Guid> sucursalIds, bool esGlobal, Guid actor, CancellationToken ct = default);
     Task<bool> EliminarAsync(Guid tenantUserId, Guid actor, CancellationToken ct = default);
 

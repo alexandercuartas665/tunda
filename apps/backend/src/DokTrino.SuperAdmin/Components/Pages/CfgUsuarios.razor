@@ -86,6 +86,13 @@
    ============================================================ *@
 @if (_selectedRow is Row sel)
 {
+    <div class="usu-modal-backdrop" @onclick="CerrarDetalle"></div>
+    <div class="usu-modal usu-modal-lg">
+        <div class="usu-modal-h">
+            <h3>&#9998; Editar usuario &middot; @(string.IsNullOrWhiteSpace(sel.DisplayName) ? sel.Email : sel.DisplayName)</h3>
+            <button class="usu-modal-close" @onclick="CerrarDetalle">&times;</button>
+        </div>
+        <div class="usu-modal-body">
     <div class="usu-det-grid">
         @* --- Sidebar izquierdo: avatar + foto --- *@
         <div class="ase-card usu-det-side">
@@ -147,22 +154,7 @@
                 </div>
             </div>
 
-            @* Permisos de uso modulo (coordinacion) *@
-            <div class="ase-card">
-                <div class="ase-card-h">Permisos de uso modulo</div>
-                <div class="usu-perm-sub">
-                    <div class="usu-perm-t">Activa los permisos por modulo</div>
-                    <div class="usu-perm-h">Habilita permisos granulares por modulo segun la configuracion general del sistema.</div>
-                </div>
-                <div class="usu-perm-list">
-                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaTerapias" /> <span class="usu-perm-lbl">COORDINADOR_TERAPIAS</span></label>
-                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaEnfermeria" /> <span class="usu-perm-lbl">COORDINADOR_ENFERMERIA</span></label>
-                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaConsultas" /> <span class="usu-perm-lbl">COORDINADOR_CONSULTAS</span></label>
-                    <label class="usu-perm-row"><input type="checkbox" @bind="sel.CoordinaEquipos" /> <span class="usu-perm-lbl">COORDINADOR_EQUIPOS</span></label>
-                </div>
-                <div class="ase-actions">
-                    <button class="btn btn-primary btn-sm" @onclick="GuardarPermisosCoord" disabled="@_busy">@(_busy ? "Guardando..." : "Actualizar permisos del usuario")</button>
-                </div>
+        </div>
             </div>
         </div>
     </div>
@@ -255,6 +247,7 @@
 <style>
     .usu-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 950; }
     .usu-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 720px; max-width: 95vw; max-height: 90vh; background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(15,23,42,.25); z-index: 951; display: flex; flex-direction: column; }
+    .usu-modal-lg { width: 920px; }
     .usu-modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; }
     .usu-modal-h h3 { margin: 0; font-size: 16px; font-weight: 700; color: #0f172a; }
     .usu-modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: #64748b; }
@@ -269,7 +262,7 @@
     .usu-sede-edit { font-size: 12px; padding: 0 4px; }
 
     /* ====== Panel de detalle (campos + permisos coordinacion) ====== */
-    .usu-det-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; margin-top: 14px; align-items: stretch; }
+    .usu-det-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: stretch; }
     .usu-det-side { display: flex; flex-direction: column; align-items: center; padding: 18px; text-align: center; }
     .usu-det-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
     .usu-avatar-circle { width: 96px; height: 96px; border-radius: 50%; background: #d1fae5; color: #047857; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; margin-bottom: 12px; }
@@ -290,15 +283,6 @@
     .usu-help { color: #94a3b8; font-size: 11px; margin-top: 4px; }
     .ase-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
     .ase-chk { display: inline-flex; align-items: center; gap: 6px; }
-
-    /* Permisos coordinacion */
-    .usu-perm-sub { padding: 0 0 12px; }
-    .usu-perm-t { font-weight: 600; color: #0f172a; font-size: 14px; }
-    .usu-perm-h { color: #64748b; font-size: 12px; margin-top: 2px; }
-    .usu-perm-list { display: flex; flex-direction: column; gap: 6px; }
-    .usu-perm-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; }
-    .usu-perm-row:has(input:checked) { background: #eff6ff; border-color: #93c5fd; }
-    .usu-perm-lbl { font-family: monospace; font-size: 13px; font-weight: 700; color: #1e40af; letter-spacing: 0.5px; }
     .asg-input-row { display:flex; gap:6px; }
     .asg-input-row > input { flex:1; }
 </style>
@@ -372,9 +356,21 @@
         {
             Guid? rol = Guid.TryParse(_nRol, out var rg) ? rg : null;
             var sedes = _nSedes.ToList();
-            var u = await Svc.CrearAsync(new CrearUsuarioRequest(_nEmail, _nNombre, _nPass, rol, sedes, _nGlobal), await Actor());
-            if (u is null) { _modalError = "No se pudo crear (sin tenant activo)."; return; }
-            await Load(); _ok = $"Usuario \"{u.Email}\" creado.";
+            var res = await Svc.CrearAsync(new CrearUsuarioRequest(_nEmail, _nNombre, _nPass, rol, sedes, _nGlobal), await Actor());
+            if (res is null || res.Usuario is null) { _modalError = "No se pudo crear (sin tenant activo)."; return; }
+            await Load();
+            if (res.LigadoExistente && res.ClaveConservada)
+            {
+                _ok = $"El usuario \"{res.Usuario.Email}\" ya existia en la plataforma: se agrego a esta empresa y CONSERVA su clave actual (la clave que escribiste no se aplico). Si necesitas cambiarla, usa el boton de reiniciar clave (candado) en su fila.";
+            }
+            else if (res.LigadoExistente)
+            {
+                _ok = $"El usuario \"{res.Usuario.Email}\" ya existia y se agrego a esta empresa con la clave indicada.";
+            }
+            else
+            {
+                _ok = $"Usuario \"{res.Usuario.Email}\" creado.";
+            }
             _showCreateModal = false;
         }
         catch (InvalidOperationException ex) { _modalError = ex.Message; }
@@ -457,26 +453,6 @@
             {
                 _detalleOk = $"Clave de \"{u.Email}\" reiniciada.";
                 _resetPwd = "";
-            }
-        }
-        catch (InvalidOperationException ex) { _detalleError = ex.Message; }
-        finally { _busy = false; }
-    }
-
-    private async Task GuardarPermisosCoord()
-    {
-        if (_selectedRow is not Row u) { return; }
-        _detalleError = null; _detalleOk = null; _busy = true;
-        try
-        {
-            var req = new ActualizarPermisosCoordinacionRequest(
-                u.CoordinaTerapias, u.CoordinaEnfermeria, u.CoordinaConsultas, u.CoordinaEquipos);
-            var updated = await Svc.ActualizarPermisosCoordinacionAsync(u.Id, req, await Actor());
-            if (updated is not null)
-            {
-                _detalleOk = "Permisos de coordinacion actualizados.";
-                await Load();
-                _selectedRow = _users.FirstOrDefault(x => x.Id == u.Id);
             }
         }
         catch (InvalidOperationException ex) { _detalleError = ex.Message; }

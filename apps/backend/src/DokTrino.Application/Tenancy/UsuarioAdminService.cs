@@ -119,7 +119,7 @@ public sealed class UsuarioAdminService : IUsuarioAdminService
         return lista;
     }
 
-    public async Task<UsuarioDto?> CrearAsync(CrearUsuarioRequest req, Guid actor, CancellationToken ct = default)
+    public async Task<CrearUsuarioResultado?> CrearAsync(CrearUsuarioRequest req, Guid actor, CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tid) { return null; }
         var email = (req.Email ?? "").Trim().ToLowerInvariant();
@@ -127,6 +127,11 @@ public sealed class UsuarioAdminService : IUsuarioAdminService
         if (string.IsNullOrWhiteSpace(req.Password) || req.Password.Length < 6) { throw new InvalidOperationException("La clave debe tener al menos 6 caracteres."); }
 
         var pu = await _db.PlatformUsers.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Email == email, ct);
+        // Si el correo ya existe en la plataforma, se LIGA esa cuenta (no se crea otra).
+        // Si ademas ya tenia clave, la clave escrita en el alta NO se aplica: se conserva
+        // la actual y hay que avisarlo, para que el admin no crea que la cambio.
+        var ligadoExistente = pu is not null;
+        var claveConservada = pu is not null && !string.IsNullOrWhiteSpace(pu.PasswordHash);
         if (pu is null)
         {
             pu = new PlatformUser
@@ -175,7 +180,8 @@ public sealed class UsuarioAdminService : IUsuarioAdminService
         }
         await _db.SaveChangesAsync(ct);
 
-        return (await ListAsync(ct)).FirstOrDefault(u => u.Id == tu.Id);
+        var dto = (await ListAsync(ct)).FirstOrDefault(u => u.Id == tu.Id);
+        return new CrearUsuarioResultado(dto, ligadoExistente, claveConservada);
     }
 
     public async Task<UsuarioDto?> AsignarAsync(Guid tenantUserId, Guid? rolId, IReadOnlyList<Guid> sucursalIds, bool esGlobal, Guid actor, CancellationToken ct = default)
