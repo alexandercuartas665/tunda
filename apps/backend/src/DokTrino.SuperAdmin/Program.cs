@@ -780,6 +780,24 @@ app.MapGet("/api/doktrino/agenda/{id:guid}/excel", async (
             archivo.Value.FileName);
 }).RequireAuthorization();
 
+// Listado de usuarios (colaboradores) de las dependencias del TRD, con la URL de su
+// enlace. baseUrl sale del request para que la URL funcione en cada entorno.
+app.MapGet("/api/doktrino/trd/{id:guid}/usuarios-excel", async (
+    Guid id,
+    DokTrino.Application.Trd.IUsuariosExcelExporter exporter,
+    HttpContext http,
+    CancellationToken ct) =>
+{
+    var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
+    var archivo = await exporter.ExportarAsync(id, baseUrl, ct);
+    return archivo is null
+        ? Results.NotFound()
+        : Results.File(
+            archivo.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            archivo.Value.FileName);
+}).RequireAuthorization();
+
 app.MapGet("/api/public/bi/{token}", async (
     string token,
     HttpRequest request,
