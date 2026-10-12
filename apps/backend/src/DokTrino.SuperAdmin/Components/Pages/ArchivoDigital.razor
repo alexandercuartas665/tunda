@@ -122,10 +122,20 @@
             else if (_wizPaso == 2)
             {
                 <div class="wiz-field"><label>Serie documental (del TRD activo)</label>
-                    <select class="form-select" value="@_wizSerieId" @onchange="OnWizSerie">
-                        <option value="">-- Selecciona una serie --</option>
-                        @foreach (var s in _wizSeries) { <option value="@s.Id">@s.Codigo - @s.Nombre</option> }
-                    </select>
+                    <input class="form-control" placeholder="Escribe para filtrar por codigo o nombre"
+                           @bind="_wizSerieFiltro" @bind:event="oninput" />
+                    <div class="combo-list">
+                        @foreach (var s in SeriesFiltradas())
+                        {
+                            <button type="button" class="combo-item @(_wizSerieId == s.Id.ToString() ? "on" : "")" @onclick="() => SeleccionarSerie(s)">
+                                <span class="mono">@s.Codigo</span> @s.Nombre
+                            </button>
+                        }
+                        @if (_wizSeries.Count > 0 && SeriesFiltradas().Count == 0)
+                        {
+                            <div class="combo-empty">Ninguna serie coincide con la busqueda.</div>
+                        }
+                    </div>
                 </div>
                 @if (_wizSeries.Count == 0)
                 {
@@ -154,17 +164,25 @@
             {
                 <div class="wiz-created">Expediente <strong>@_wizExpCodigo</strong> creado. Sube el documento de cada tipologia.</div>
 
+                @if (_wizEstructura is not null && (_wizEstructura.Subseries.Count + _wizEstructura.TipologiasDirectas.Count) > 6)
+                {
+                    <div class="wiz-field"><input class="form-control" placeholder="Filtrar tipologias" @bind="_wizTipFiltro" @bind:event="oninput" /></div>
+                }
                 @if (_wizEstructura is not null)
                 {
                     @foreach (var sub in _wizEstructura.Subseries)
                     {
-                        <div class="wiz-group-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
-                        @foreach (var tip in sub.Tipologias) { @RenderTipologia(tip) }
+                        var tf = TipsFiltradas(sub.Tipologias, _wizTipFiltro);
+                        if (tf.Count > 0)
+                        {
+                            <div class="wiz-group-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
+                            @foreach (var tip in tf) { @RenderTipologia(tip) }
+                        }
                     }
-                    @if (_wizEstructura.TipologiasDirectas.Count > 0)
+                    @if (TipsFiltradas(_wizEstructura.TipologiasDirectas, _wizTipFiltro).Count > 0)
                     {
                         <div class="wiz-group-h">Tipologias directas</div>
-                        @foreach (var tip in _wizEstructura.TipologiasDirectas) { @RenderTipologia(tip) }
+                        @foreach (var tip in TipsFiltradas(_wizEstructura.TipologiasDirectas, _wizTipFiltro)) { @RenderTipologia(tip) }
                     }
                 }
             }
@@ -372,17 +390,25 @@
 
             @if (_expSubTab == "docs")
             {
+                @if (_expEstructura is not null && (_expEstructura.Subseries.Count + _expEstructura.TipologiasDirectas.Count) > 6)
+                {
+                    <div class="wiz-field" style="margin-bottom:10px;"><input class="form-control form-control-sm" placeholder="Filtrar tipologias" @bind="_expTipFiltro" @bind:event="oninput" /></div>
+                }
                 @if (_expEstructura is not null)
                 {
                     @foreach (var sub in _expEstructura.Subseries)
                     {
-                        <div class="doc-sub-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
-                        @foreach (var tip in sub.Tipologias) { @RenderTipoDocs(tip) }
+                        var tf = TipsFiltradas(sub.Tipologias, _expTipFiltro);
+                        if (tf.Count > 0)
+                        {
+                            <div class="doc-sub-h"><span class="mono">@sub.Codigo</span> @sub.Nombre</div>
+                            @foreach (var tip in tf) { @RenderTipoDocs(tip) }
+                        }
                     }
-                    @if (_expEstructura.TipologiasDirectas.Count > 0)
+                    @if (TipsFiltradas(_expEstructura.TipologiasDirectas, _expTipFiltro).Count > 0)
                     {
                         <div class="doc-sub-h">Tipologias directas</div>
-                        @foreach (var tip in _expEstructura.TipologiasDirectas) { @RenderTipoDocs(tip) }
+                        @foreach (var tip in TipsFiltradas(_expEstructura.TipologiasDirectas, _expTipFiltro)) { @RenderTipoDocs(tip) }
                     }
                 }
 
@@ -436,6 +462,11 @@
     .wiz-field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
     .wiz-field label { font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; }
     .wiz-row { display:flex; gap:12px; } .wiz-row .wiz-field { flex:1; }
+    .combo-list { margin-top:8px; max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+    .combo-item { display:block; width:100%; text-align:left; background:#fff; border:1px solid #e9ecf5; border-radius:9px; padding:9px 12px; font-size:13px; cursor:pointer; color:#1f2433; }
+    .combo-item:hover { border-color:var(--primary,#0288d1); background:var(--primary-soft,#e7f0f6); }
+    .combo-item.on { border-color:var(--primary,#0288d1); background:var(--primary-soft,#e7f0f6); font-weight:700; }
+    .combo-empty { font-size:12.5px; color:#64748b; padding:10px; border:1px dashed #e2e8f0; border-radius:9px; text-align:center; }
     .wiz-preview { margin-top:12px; border:1px solid #eef2f7; border-radius:10px; padding:12px; }
     .wiz-preview-h { font-size:11px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:8px; }
     .wiz-sub { font-size:13px; padding:4px 0; }
@@ -519,6 +550,7 @@
     private ExpedienteDto? _expSel;
     // Detalle de expediente: estructura de la serie, documentos agrupados, completitud, visor.
     private string _expSubTab = "docs";
+    private string _expTipFiltro = "";
     private EstructuraSerieDto? _expEstructura;
     private List<DocExpDto> _expDocsGrp = new();
     private CompletitudDto? _expComp;
@@ -538,6 +570,8 @@
     private string _wizSede = "PRINCIPAL";
     private string _wizDepId = "";
     private string _wizSerieId = "";
+    private string _wizSerieFiltro = "";
+    private string _wizTipFiltro = "";
     private TrdActivoDto? _wizTrd;
     private List<SerieExpDto> _wizSeries = new();
     private List<SedeExpDto> _wizSedes = new();
@@ -667,6 +701,7 @@
         _wizError = _error = _ok = null;
         _wizPaso = 1;
         _wizNombre = ""; _wizDepId = ""; _wizSerieId = "";
+        _wizSerieFiltro = ""; _wizTipFiltro = "";
         _wizEstructura = null; _wizExpId = null; _wizExpCodigo = "";
         _wizCargadas.Clear(); _wizSubiendo = null;
         _wizTrd = await Exp.TrdActivoAsync();
@@ -681,11 +716,38 @@
 
     private void WizIrSerie() { if (!string.IsNullOrWhiteSpace(_wizNombre)) { _wizError = null; _wizPaso = 2; } }
 
-    private async Task OnWizSerie(ChangeEventArgs e)
+    private List<SerieExpDto> SeriesFiltradas()
     {
-        _wizSerieId = e.Value?.ToString() ?? "";
-        _wizEstructura = null;
-        if (Guid.TryParse(_wizSerieId, out var sid)) { _wizEstructura = await Exp.EstructuraSerieAsync(sid); }
+        if (string.IsNullOrWhiteSpace(_wizSerieFiltro)) { return _wizSeries; }
+        var f = Normaliza(_wizSerieFiltro);
+        return _wizSeries.Where(s => Normaliza(s.Codigo + " " + s.Nombre).Contains(f, StringComparison.Ordinal)).ToList();
+    }
+
+    private async Task SeleccionarSerie(SerieExpDto s)
+    {
+        _wizSerieId = s.Id.ToString();
+        _wizTipFiltro = "";
+        _wizEstructura = await Exp.EstructuraSerieAsync(s.Id);
+    }
+
+    private List<TipologiaExpDto> TipsFiltradas(IReadOnlyList<TipologiaExpDto> tips, string filtro)
+    {
+        if (string.IsNullOrWhiteSpace(filtro)) { return tips.ToList(); }
+        var f = Normaliza(filtro);
+        return tips.Where(t => Normaliza(t.Codigo + " " + t.Nombre).Contains(f, StringComparison.Ordinal)).ToList();
+    }
+
+    /// <summary>Minusculas y sin acentos, para una busqueda tolerante a tildes.</summary>
+    private static string Normaliza(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) { return ""; }
+        var d = s.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(d.Length);
+        foreach (var ch in d)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark) { sb.Append(ch); }
+        }
+        return sb.ToString();
     }
 
     private async Task WizCrearExpediente()
@@ -756,6 +818,7 @@
     {
         _expSel = e;
         _expSubTab = "docs";
+        _expTipFiltro = "";
         _verId = null; _verMime = _verNombre = null;
         _versExpandido.Clear();
         _expEstructura = e.SerieId is Guid sid ? await Exp.EstructuraSerieAsync(sid) : null;
