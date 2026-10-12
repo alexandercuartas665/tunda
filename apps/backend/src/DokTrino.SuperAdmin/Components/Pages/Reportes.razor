@@ -1,0 +1,74 @@
+@page "/reportes"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@inject ITrdAdminService Trd
+
+<PageTitle>Reportes - Archimente</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Analitica</div>
+        <h1 class="ase-title">Reportes</h1>
+        <p class="page-sub" style="margin:2px 0 0;">Descarga reportes del sistema en Excel.</p>
+    </div>
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Listado de usuarios por transaccion (TRD)</div>
+    <p class="text-muted" style="margin:0 0 12px;">
+        Excel con los colaboradores de cada TRD: empresa, dependencia, codigo, nombre,
+        usuario (correo), telefono, rol y la URL del enlace de cada persona.
+    </p>
+    @if (_trds is null)
+    {
+        <p><em>Cargando...</em></p>
+    }
+    else if (_trds.Count == 0)
+    {
+        <div class="ase-empty">No hay transacciones (TRD) todavia.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle" style="max-width:760px;">
+                <thead>
+                    <tr><th>TRD</th><th>Titulo</th><th>Estado</th><th class="text-center">Dependencias</th><th class="text-end">Reporte</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in _trds)
+                    {
+                        <tr>
+                            <td class="mono">@t.Consecutivo</td>
+                            <td>@t.Titulo</td>
+                            <td>@t.Estado</td>
+                            <td class="text-center">@t.Dependencias</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-primary" href="@($"/api/doktrino/trd/{t.Id}/usuarios-excel")" target="_blank">&#8681; Excel</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="ase-card">
+    <div class="ase-card-h">Mas reportes</div>
+    <p class="text-muted" style="margin:0;">
+        Proximamente: documentos cargados por mes, completitud de expedientes y progreso
+        de capacitacion. Dime cuales necesitas y los agrego aqui.
+    </p>
+</div>
+
+<style>
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    private List<TrdDto>? _trds;
+
+    protected override async Task OnInitializedAsync() =>
+        _trds = (await Trd.ListarTrdAsync()).ToList();
+}
