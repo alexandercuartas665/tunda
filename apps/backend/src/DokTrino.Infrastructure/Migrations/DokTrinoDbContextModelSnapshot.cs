@@ -1407,6 +1407,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(160)")
                         .HasColumnName("email");
 
+                    b.Property<bool>("ExentoCapacitacion")
+                        .HasColumnType("boolean")
+                        .HasColumnName("exento_capacitacion");
+
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

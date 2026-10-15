@@ -14,10 +14,11 @@ public sealed record CursoGateDto(
     bool Aprobado,
     bool Bloqueado,
     int Intentos,
-    int IntentosMax)
+    int IntentosMax,
+    bool Exento = false)
 {
-    /// <summary>Puede diligenciar si no hay curso obligatorio, o si ya aprobo.</summary>
-    public bool PuedeDiligenciar => !HayCurso || !Obligatorio || Aprobado;
+    /// <summary>Puede diligenciar si no hay curso obligatorio, si ya aprobo, o si la persona esta eximida.</summary>
+    public bool PuedeDiligenciar => !HayCurso || !Obligatorio || Aprobado || Exento;
 }
 
 /// <summary>Leccion tal como la ve el colaborador en el reproductor del curso.</summary>
@@ -75,7 +76,7 @@ public sealed class ClienteCursoService : IClienteCursoService
         var bloqueado = !aprobado && (intentos - perdonados) >= cfg.IntentosMax;
 
         return new CursoGateDto(true, cfg.Obligatorio, curso.Id, curso.Titulo, curso.CuestionarioId,
-            aprobado, bloqueado, intentos, cfg.IntentosMax);
+            aprobado, bloqueado && !s.ExentoCapacitacion, intentos, cfg.IntentosMax, s.ExentoCapacitacion);
     }
 
     public async Task<CursoClienteDto?> CursoAsync(string token, CancellationToken ct = default)

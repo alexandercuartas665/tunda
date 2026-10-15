@@ -19,4 +19,9 @@ public class ColaboradorDependencia : TenantEntity
 
     /// <summary>RESPONSABLE | REVISOR | ...</summary>
     public string Rol { get; set; } = "RESPONSABLE";
+
+    /// <summary>Exime a ESTA persona de la capacitacion obligatoria: con la marca
+    /// activa el enlace entra directo a la tabla aunque la dependencia no haya
+    /// aprobado el curso. Pensado para usuarios administrativos.</summary>
+    public bool ExentoCapacitacion { get; set; }
 }

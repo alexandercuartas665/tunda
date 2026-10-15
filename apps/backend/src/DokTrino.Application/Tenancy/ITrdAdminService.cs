@@ -13,6 +13,8 @@ public interface ITrdAdminService
     /// <summary>Duplica una encuesta completa (organigrama, personas y matriz TRD) menos la agenda de fechas. La copia nace en DESARROLLO.</summary>
     Task<TrdDto?> DuplicarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default);
     Task<bool> CambiarEstadoAsync(Guid trdId, string estado, Guid actor, CancellationToken ct = default);
+    /// <summary>Reabre una transaccion CERRADA, volviendola a DESARROLLO o ACTIVO (accion con doble confirmacion en la UI).</summary>
+    Task<bool> ReabrirAsync(Guid trdId, string nuevoEstado, Guid actor, CancellationToken ct = default);
     Task<bool> EliminarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default);
 
     // Organigrama de dependencias (arbol por orden/nivel)
@@ -50,6 +52,8 @@ public interface ITrdAdminService
     Task<ColaboradorDto?> AgregarColaboradorAsync(CrearColaboradorRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> ActualizarColaboradorAsync(EditarColaboradorRequest req, Guid actor, CancellationToken ct = default);
     Task<bool> EliminarColaboradorAsync(Guid id, Guid actor, CancellationToken ct = default);
+    /// <summary>Exime (o vuelve a exigir) la capacitacion obligatoria para una persona puntual.</summary>
+    Task<bool> MarcarExentoCapacitacionAsync(Guid colaboradorId, bool exento, Guid actor, CancellationToken ct = default);
 
     /// <summary>Emite (o reemite) el enlace de trabajo de una persona concreta.</summary>
     Task<TokenGeneradoDto?> GenerarTokenColaboradorAsync(Guid colaboradorId, string baseUrl, Guid actor, CancellationToken ct = default);

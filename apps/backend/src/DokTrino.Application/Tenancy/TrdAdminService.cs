@@ -196,6 +196,40 @@ public sealed class TrdAdminService : ITrdAdminService
         return true;
     }
 
+    public async Task<bool> ReabrirAsync(Guid trdId, string nuevoEstado, Guid actor, CancellationToken ct = default)
+    {
+        nuevoEstado = (nuevoEstado ?? "").Trim().ToUpperInvariant();
+        if (nuevoEstado != "ACTIVO" && nuevoEstado != "DESARROLLO")
+        {
+            throw new InvalidOperationException("Al reabrir solo se permite volver a DESARROLLO o ACTIVO.");
+        }
+        var trd = await _db.TablasRetencionDocumental.FirstOrDefaultAsync(x => x.Id == trdId, ct);
+        if (trd is null) { return false; }
+        if (trd.Estado != "CERRADO")
+        {
+            throw new InvalidOperationException("Solo se puede reabrir una transaccion que este CERRADA.");
+        }
+
+        // Si se reabre como ACTIVO, se respeta la regla de una sola activa a la vez.
+        if (nuevoEstado == "ACTIVO")
+        {
+            var vigente = await _db.TablasRetencionDocumental.AsNoTracking()
+                .Where(x => x.Estado == "ACTIVO" && x.Id != trdId)
+                .Select(x => x.Consecutivo)
+                .FirstOrDefaultAsync(ct);
+            if (vigente is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Ya hay una transaccion activa ({vigente}). Cierrala antes de reactivar esta.");
+            }
+        }
+
+        trd.Estado = nuevoEstado;
+        trd.FechaNovedad = _clock.GetUtcNow();
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<bool> EliminarTrdAsync(Guid trdId, Guid actor, CancellationToken ct = default)
     {
         var trd = await _db.TablasRetencionDocumental.FirstOrDefaultAsync(x => x.Id == trdId, ct);
@@ -406,7 +440,7 @@ public sealed class TrdAdminService : ITrdAdminService
         var cols = await _db.ColaboradoresDependencia.AsNoTracking()
             .Where(c => c.DependenciaId == dependenciaId)
             .OrderBy(c => c.Nombre)
-            .Select(c => new { c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol, c.Telefono })
+            .Select(c => new { c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol, c.Telefono, c.ExentoCapacitacion })
             .ToListAsync(ct);
 
         // Ultimo enlace vigente de cada persona: el enlace es por persona, no por
@@ -423,8 +457,20 @@ public sealed class TrdAdminService : ITrdAdminService
 
         return cols.Select(c => new ColaboradorDto(
                 c.Id, c.DependenciaId, c.Nombre, c.Email, c.Rol, c.Telefono,
-                porColaborador.TryGetValue(c.Id, out var tk) ? $"{baseUrl.TrimEnd('/')}/trd-cliente?token={tk}" : null))
+                porColaborador.TryGetValue(c.Id, out var tk) ? $"{baseUrl.TrimEnd('/')}/trd-cliente?token={tk}" : null,
+                c.ExentoCapacitacion))
             .ToList();
+    }
+
+    /// <summary>Marca/desmarca a una persona como exenta de la capacitacion obligatoria.</summary>
+    public async Task<bool> MarcarExentoCapacitacionAsync(Guid colaboradorId, bool exento, Guid actor, CancellationToken ct = default)
+    {
+        var col = await _db.ColaboradoresDependencia.FirstOrDefaultAsync(c => c.Id == colaboradorId, ct);
+        if (col is null) { return false; }
+        col.ExentoCapacitacion = exento;
+        col.UpdatedBy = actor;
+        await _db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<ColaboradorDto?> AgregarColaboradorAsync(CrearColaboradorRequest req, Guid actor, CancellationToken ct = default)

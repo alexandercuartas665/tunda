@@ -100,6 +100,43 @@
         </div>
     }
 
+    @* --- Reabrir transaccion CERRADA (doble confirmacion) --- *@
+    @if (_trdAReabrir is not null)
+    {
+        <div class="doktrino-drawer-scrim" style="display: block; z-index: 2000;" @onclick="() => _trdAReabrir = null"></div>
+        <div style="position: fixed; inset: 0; z-index: 2005; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none;">
+            <div class="per-modal" style="width: 500px; pointer-events: auto;">
+                <div class="per-h" style="background: linear-gradient(135deg, oklch(0.45 0.24 241), oklch(0.55 0.22 237));">
+                    <div>
+                        <div class="per-t">Reabrir @_trdAReabrir.Consecutivo</div>
+                        <div class="per-sub">@_trdAReabrir.Titulo</div>
+                    </div>
+                    <span class="per-x" @onclick="() => _trdAReabrir = null">&#10005;</span>
+                </div>
+                <div class="per-b">
+                    <div class="ase-alert" style="margin-bottom: 14px; background:#fff7ed; border-color:#fed7aa; color:#9a3412;">
+                        Esta transaccion esta <b>CERRADA</b>. Reabrirla es una accion administrativa y queda registrada (fecha de novedad). Si la reactivas, cualquier otra transaccion activa debe estar cerrada primero.
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin-bottom:4px;">Reabrir como</label>
+                        <select class="form-select form-select-sm" @bind="_reabrirEstado" style="max-width:280px;">
+                            <option value="ACTIVO">ACTIVO - vuelve a ser la TRD vigente</option>
+                            <option value="DESARROLLO">DESARROLLO - para seguir editandola</option>
+                        </select>
+                    </div>
+                    <label class="rev-chk" style="font-size: 12.5px; color: #37415c;">
+                        <input type="checkbox" checked="@_confirmoReabrir" @onchange="e => _confirmoReabrir = (bool)(e.Value ?? false)" />
+                        <span>Confirmo que quiero reabrir esta transaccion cerrada.</span>
+                    </label>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
+                        <button class="trx-btn ghost" @onclick="() => _trdAReabrir = null">Cancelar</button>
+                        <button class="trx-btn" @onclick="ReabrirConfirmado" disabled="@(!_confirmoReabrir)">Reabrir a @_reabrirEstado</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     @* --- Filtros --- *@
     <div class="trx-filtros">
         <div class="trx-f grow">
@@ -230,6 +267,10 @@
                             else if (_sel.Estado == "ACTIVO")
                             {
                                 <button class="trx-btn danger" @onclick='() => Estado(_sel!.Id, "CERRADO")'>Cerrar transaccion</button>
+                            }
+                            else if (_sel.Estado == "CERRADO")
+                            {
+                                <button class="trx-btn ghost" @onclick="() => PedirReabrir(_sel!)">Reabrir transaccion</button>
                             }
                         </div>
                     </div>
@@ -1187,6 +1228,11 @@
                                     <a href="@enlace" target="_blank">@Trunc(enlace)</a>
                                 </div>
                             }
+                            <label class="per-exento @(p.ExentoCapacitacion ? "on" : "")">
+                                <input type="checkbox" checked="@p.ExentoCapacitacion"
+                                       @onchange="e => ToggleExento(p, (bool)(e.Value ?? false))" />
+                                <span>Exento de capacitacion</span>
+                            </label>
                         </div>
                         <div class="per-acc">
                             <button class="trx-btn ghost mini" @onclick="() => TokenPersona(p.Id)">
@@ -1411,6 +1457,9 @@
     .per-campos { display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr; gap:4px; }
     .per-link { font-size:10.5px; margin-top:3px; padding-left:6px; }
     .per-link a { color:var(--primary); }
+    .per-exento { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:#64748b; margin-top:6px; padding-left:6px; cursor:pointer; user-select:none; }
+    .per-exento.on { color:var(--primary); font-weight:600; }
+    .per-exento input { width:14px; height:14px; cursor:pointer; }
     .per-acc { display:flex; gap:5px; flex-shrink:0; }
     .per-alta { margin-top:14px; padding-top:14px; border-top:1px dashed #e0e4ee;
                 display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr auto; gap:8px; align-items:center; }
@@ -1752,6 +1801,26 @@
             await LoadAll();
         }
         catch (Exception ex) { _error = ex.Message; _trdAEliminar = null; }
+    }
+
+    // Reabrir transaccion CERRADA con doble confirmacion (modal + casilla + boton).
+    private TrdDto? _trdAReabrir;
+    private bool _confirmoReabrir;
+    private string _reabrirEstado = "ACTIVO";
+    private void PedirReabrir(TrdDto t) { _trdAReabrir = t; _confirmoReabrir = false; _reabrirEstado = "ACTIVO"; _error = _ok = null; }
+    private async Task ReabrirConfirmado()
+    {
+        if (_trdAReabrir is null || !_confirmoReabrir) { return; }
+        var cons = _trdAReabrir.Consecutivo;
+        var destino = _reabrirEstado;
+        try
+        {
+            await Trd.ReabrirAsync(_trdAReabrir.Id, destino, await Actor());
+            _trdAReabrir = null; _confirmoReabrir = false;
+            _ok = $"Transaccion {cons} reabierta a {destino}.";
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; _trdAReabrir = null; }
     }
 
     private bool _duplicando;
@@ -2429,6 +2498,17 @@
         try
         {
             await Trd.GenerarTokenColaboradorAsync(colaboradorId, Nav.BaseUri.TrimEnd('/'), await Actor());
+            await RecargarPersonas();
+        }
+        catch (InvalidOperationException ex) { _perError = ex.Message; }
+    }
+
+    private async Task ToggleExento(ColaboradorDto p, bool exento)
+    {
+        _perError = null;
+        try
+        {
+            await Trd.MarcarExentoCapacitacionAsync(p.Id, exento, await Actor());
             await RecargarPersonas();
         }
         catch (InvalidOperationException ex) { _perError = ex.Message; }

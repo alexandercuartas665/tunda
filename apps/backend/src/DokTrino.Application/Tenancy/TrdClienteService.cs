@@ -38,8 +38,17 @@ public sealed class TrdClienteService : ITrdClienteService
             : dep.Estado == "CERRADO" ? "Tu dependencia esta cerrada."
             : trd.Estado == "DESARROLLO" ? "La encuesta aun esta en desarrollo; el administrador debe activarla."
             : "La encuesta esta cerrada.";
+        // Colaborador del enlace (si el token esta ligado a una persona): su marca
+        // de exencion permite saltar la capacitacion obligatoria de forma individual.
+        var exento = false;
+        if (tok.ColaboradorId is Guid colId)
+        {
+            exento = await _db.ColaboradoresDependencia.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.Id == colId).Select(c => c.ExentoCapacitacion).FirstOrDefaultAsync(ct);
+        }
+
         return new TokenSesionDto(tok.TenantId, trd.Id, trd.Consecutivo, trd.Titulo, trd.Estado,
-            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado, motivo);
+            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado, motivo, tok.ColaboradorId, exento);
     }
 
     public async Task<IReadOnlyList<RespuestaTrdDto>> ListarRespuestasAsync(string token, CancellationToken ct = default)
@@ -362,6 +371,9 @@ public sealed class TrdClienteService : ITrdClienteService
     /// </summary>
     private async Task EnsureCapacitacionAsync(TokenSesionDto s, CancellationToken ct)
     {
+        // Persona eximida: entra directo a la tabla sin pasar la capacitacion.
+        if (s.ExentoCapacitacion) { return; }
+
         var cfg = await _db.ConfiguracionesCursoCliente.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
         if (cfg is null || !cfg.Obligatorio) { return; }

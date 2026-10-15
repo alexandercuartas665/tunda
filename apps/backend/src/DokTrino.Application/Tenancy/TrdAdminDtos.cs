@@ -52,7 +52,7 @@ public sealed record IndicadoresDependenciaDto(
     int IngresosTotales,
     int ColaboradoresQueIngresaron);
 public sealed record ColaboradorDto(Guid Id, Guid DependenciaId, string Nombre, string Email, string Rol,
-    string? Telefono = null, string? TokenUrl = null);
+    string? Telefono = null, string? TokenUrl = null, bool ExentoCapacitacion = false);
 
 /// <summary>
 /// Fila de la TRD tal como la ve el administrador: lo que diligencio cada
