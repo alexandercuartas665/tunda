@@ -28,6 +28,20 @@ public sealed record ArchivoCentralDto(
     string? TipologiaNombre,
     string Tags);
 
+/// <summary>Documento para la galeria de busqueda del Archivo Central (todos los del tenant).</summary>
+public sealed record GaleriaDocDto(
+    Guid Id, string Nombre, string Mime, long SizeBytes, string EstadoAprobacion,
+    string? Tipologia, string? ExpedienteCodigo, string? IdentificadorPrincipal, DateTimeOffset FechaSubida)
+{
+    /// <summary>Familia para la miniatura: pdf | imagen | otro.</summary>
+    public string Visor => Mime switch
+    {
+        "application/pdf" => "pdf",
+        var m when m.StartsWith("image/", StringComparison.Ordinal) => "imagen",
+        _ => "otro"
+    };
+}
+
 public sealed record CarpetaArchivoDto(Guid Id, Guid? PadreId, string Nombre, int Orden, int Archivos);
 public sealed record TagDto(Guid Id, string Codigo, string Nombre, string? ColorHex, bool Privado);
 
@@ -63,6 +77,8 @@ public sealed record ArchivoDescarga(Stream Content, string FileName, string Mim
 public interface IArchivoDigitalService
 {
     Task<IReadOnlyList<ArchivoCentralDto>> ListarAsync(BandejaArchivo bandeja, Guid? carpetaArchivoId = null, string? identificador = null, CancellationToken ct = default);
+    /// <summary>Galeria: todos los documentos vigentes del tenant, con busqueda por nombre, identificador, tipologia y expediente.</summary>
+    Task<IReadOnlyList<GaleriaDocDto>> GaleriaAsync(string? filtro, CancellationToken ct = default);
     Task<ArchivoCentralDto?> SubirAsync(SubirArchivoRequest req, Stream contenido, Guid actor, CancellationToken ct = default);
     /// <summary>Sube una nueva version dentro de un grupo existente: hereda expediente/tipologia
     /// del vigente, incrementa el numero de version y desmarca las versiones anteriores.</summary>

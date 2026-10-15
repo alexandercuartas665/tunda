@@ -53,6 +53,20 @@ public sealed class CrearExpedienteRequest
     public Guid? DependenciaId { get; set; }
 }
 
+/// <summary>
+/// Formato del numero de radicado del expediente: se arma con prefijo + anio +
+/// consecutivo (longitud ajustable). El consecutivo reinicia por anio cuando
+/// <see cref="ReinicioAnual"/> esta activo. Se guarda en TenantConfigurations (por empresa).
+/// </summary>
+public sealed class RadicadoConfigDto
+{
+    public string Prefijo { get; set; } = "EXP";
+    public bool IncluirAnio { get; set; } = true;
+    public string Separador { get; set; } = "-";
+    public int LongitudConsecutivo { get; set; } = 4;
+    public bool ReinicioAnual { get; set; } = true;
+}
+
 // --- Asistente de expediente (modal guiado desde el TRD activo) ---
 
 public sealed record TrdActivoDto(Guid Id, string Titulo);
@@ -67,6 +81,10 @@ public interface IExpedienteService
 {
     Task<IReadOnlyList<ExpedienteDto>> ListarAsync(CancellationToken ct = default);
     Task<ExpedienteDto?> CrearAsync(CrearExpedienteRequest req, Guid actor, CancellationToken ct = default);
+
+    /// <summary>Formato del radicado del expediente para la empresa activa.</summary>
+    Task<RadicadoConfigDto> GetConfigRadicadoAsync(CancellationToken ct = default);
+    Task GuardarConfigRadicadoAsync(RadicadoConfigDto cfg, CancellationToken ct = default);
     Task<IReadOnlyList<DocumentoExpedienteDto>> DocumentosAsync(Guid expedienteId, CancellationToken ct = default);
     Task<bool> AsignarDocumentoAsync(Guid archivoId, Guid? expedienteId, Guid actor, CancellationToken ct = default);
     Task<bool> CerrarAsync(Guid expedienteId, Guid actor, CancellationToken ct = default);
@@ -116,25 +134,26 @@ public sealed class ExpedienteService : IExpedienteService
             })
             .ToListAsync(ct);
 
+        var trdId = (await TrdActivoAsync(ct))?.Id;
         var lista = new List<ExpedienteDto>(exps.Count);
         foreach (var e in exps)
         {
-            var (cub, tot) = await CompletitudRawAsync(e.SerieId, e.Id, ct);
+            var (cub, tot) = await CompletitudRawAsync(e.SerieId, trdId, e.Id, ct);
             lista.Add(new ExpedienteDto(e.Id, e.Codigo, e.Nombre, e.Serie, e.Dependencia,
                 e.Estado, e.Docs, e.FechaApertura, e.SerieId, cub, tot));
         }
         return lista;
     }
 
-    private async Task<(int cubiertos, int total)> CompletitudRawAsync(Guid? serieId, Guid expedienteId, CancellationToken ct)
+    // La completitud se mide contra las tipologias que la TRD activa CARACTERIZO
+    // para la serie (sus respuestas), no contra el catalogo maestro completo. Una
+    // serie del banco puede traer decenas de tipologias y la TRD usar solo algunas.
+    private async Task<(int cubiertos, int total)> CompletitudRawAsync(Guid? serieId, Guid? trdId, Guid expedienteId, CancellationToken ct)
     {
-        if (serieId is not Guid sid) { return (0, 0); }
-        var subIds = await _db.Subseries.AsNoTracking()
-            .Where(s => s.SerieId == sid && s.Estado == "MAESTRA").Select(s => s.Id).ToListAsync(ct);
-        var tipIds = await _db.TipologiasDocumentales.AsNoTracking()
-            .Where(t => t.Activo && t.Estado == "MAESTRA"
-                && (t.SerieId == sid || (t.SubserieId != null && subIds.Contains(t.SubserieId.Value))))
-            .Select(t => t.Id).ToListAsync(ct);
+        if (serieId is not Guid sid || trdId is not Guid tid) { return (0, 0); }
+        var tipIds = await _db.RespuestasTablaDocumental.AsNoTracking()
+            .Where(r => r.TrdId == tid && r.SerieId == sid && r.TipologiaId != null)
+            .Select(r => r.TipologiaId!.Value).Distinct().ToListAsync(ct);
         var total = tipIds.Count;
         if (total == 0) { return (0, 0); }
         var cub = await _db.ArchivosDigitales.AsNoTracking()
@@ -148,7 +167,8 @@ public sealed class ExpedienteService : IExpedienteService
     {
         var serieId = await _db.Expedientes.AsNoTracking()
             .Where(e => e.Id == expedienteId).Select(e => e.SerieId).FirstOrDefaultAsync(ct);
-        var (cub, tot) = await CompletitudRawAsync(serieId, expedienteId, ct);
+        var trdId = (await TrdActivoAsync(ct))?.Id;
+        var (cub, tot) = await CompletitudRawAsync(serieId, trdId, expedienteId, ct);
         return new CompletitudDto(cub, tot);
     }
 
@@ -172,16 +192,55 @@ public sealed class ExpedienteService : IExpedienteService
         .ToList();
     }
 
+    private const string RadicadoKey = "expediente.radicado";
+
+    public async Task<RadicadoConfigDto> GetConfigRadicadoAsync(CancellationToken ct = default)
+    {
+        var raw = await _db.TenantConfigurations.AsNoTracking()
+            .Where(c => c.ConfigKey == RadicadoKey).Select(c => c.ConfigValue).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(raw)) { return new RadicadoConfigDto(); }
+        try { return System.Text.Json.JsonSerializer.Deserialize<RadicadoConfigDto>(raw) ?? new RadicadoConfigDto(); }
+        catch { return new RadicadoConfigDto(); }
+    }
+
+    public async Task GuardarConfigRadicadoAsync(RadicadoConfigDto cfg, CancellationToken ct = default)
+    {
+        cfg.Prefijo = (cfg.Prefijo ?? "").Trim();
+        cfg.Separador ??= "";
+        cfg.LongitudConsecutivo = Math.Clamp(cfg.LongitudConsecutivo, 1, 10);
+        var json = System.Text.Json.JsonSerializer.Serialize(cfg);
+        var row = await _db.TenantConfigurations.FirstOrDefaultAsync(c => c.ConfigKey == RadicadoKey, ct);
+        if (row is null) { _db.TenantConfigurations.Add(new TenantConfiguration { ConfigKey = RadicadoKey, ConfigValue = json }); }
+        else { row.ConfigValue = json; }
+        await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Arma el radicado: [prefijo][sep][anio][sep][consecutivo con relleno].</summary>
+    public static string ConstruirRadicado(RadicadoConfigDto c, int anio, int consecutivo)
+    {
+        var cons = consecutivo.ToString().PadLeft(Math.Clamp(c.LongitudConsecutivo, 1, 10), '0');
+        var partes = new List<string>(3);
+        var pref = (c.Prefijo ?? "").Trim();
+        if (pref.Length > 0) { partes.Add(pref); }
+        if (c.IncluirAnio) { partes.Add(anio.ToString()); }
+        partes.Add(cons);
+        return string.Join(c.Separador ?? "", partes);
+    }
+
     public async Task<ExpedienteDto?> CrearAsync(CrearExpedienteRequest req, Guid actor, CancellationToken ct = default)
     {
         var nombre = (req.Nombre ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("El nombre del expediente es obligatorio."); }
 
-        var siguiente = await _db.Expedientes.CountAsync(ct) + 1;
-        var codigo = $"EXP-{siguiente:D4}";
+        var cfg = await GetConfigRadicadoAsync(ct);
+        var anio = _clock.GetUtcNow().Year;
+        var siguiente = cfg.ReinicioAnual
+            ? await _db.Expedientes.CountAsync(e => e.FechaApertura.Year == anio, ct) + 1
+            : await _db.Expedientes.CountAsync(ct) + 1;
+        var codigo = ConstruirRadicado(cfg, anio, siguiente);
         while (await _db.Expedientes.AnyAsync(e => e.Codigo == codigo, ct))
         {
-            codigo = $"EXP-{++siguiente:D4}";
+            codigo = ConstruirRadicado(cfg, anio, ++siguiente);
         }
 
         var entidad = new Expediente
@@ -272,19 +331,30 @@ public sealed class ExpedienteService : IExpedienteService
 
     public async Task<EstructuraSerieDto> EstructuraSerieAsync(Guid serieId, CancellationToken ct = default)
     {
-        var subs = await _db.Subseries.AsNoTracking()
-            .Where(x => x.SerieId == serieId && x.Estado == "MAESTRA")
-            .OrderBy(x => x.Codigo).ToListAsync(ct);
-        var subIds = subs.Select(x => x.Id).ToList();
+        // La estructura del expediente son las tipologias que la TRD ACTIVA
+        // caracterizo para la serie (sus respuestas), agrupadas por la subserie de
+        // la respuesta. No es el catalogo maestro completo de la serie.
+        var trd = await TrdActivoAsync(ct);
+        if (trd is null) { return new EstructuraSerieDto(Array.Empty<SubserieExpDto>(), Array.Empty<TipologiaExpDto>()); }
 
+        var resp = await _db.RespuestasTablaDocumental.AsNoTracking()
+            .Where(r => r.TrdId == trd.Id && r.SerieId == serieId && r.TipologiaId != null)
+            .Select(r => new { r.SubserieId, TipologiaId = r.TipologiaId!.Value })
+            .Distinct().ToListAsync(ct);
+        if (resp.Count == 0) { return new EstructuraSerieDto(Array.Empty<SubserieExpDto>(), Array.Empty<TipologiaExpDto>()); }
+
+        var tipIds = resp.Select(r => r.TipologiaId).Distinct().ToList();
         var tips = await _db.TipologiasDocumentales.AsNoTracking()
-            .Where(t => t.Activo && t.Estado == "MAESTRA"
-                && ((t.SubserieId != null && subIds.Contains(t.SubserieId.Value)) || t.SerieId == serieId))
-            .OrderBy(t => t.Codigo).ToListAsync(ct);
+            .Where(t => tipIds.Contains(t.Id)).OrderBy(t => t.Codigo).ToListAsync(ct);
+
+        var subIds = resp.Where(r => r.SubserieId != null).Select(r => r.SubserieId!.Value).Distinct().ToList();
+        var subs = await _db.Subseries.AsNoTracking()
+            .Where(s => subIds.Contains(s.Id)).OrderBy(s => s.Codigo).ToListAsync(ct);
 
         var subDtos = subs.Select(s => new SubserieExpDto(s.Id, s.Codigo, s.Nombre,
-            tips.Where(t => t.SubserieId == s.Id).Select(ToTipDto).ToList())).ToList();
-        var directas = tips.Where(t => t.SubserieId == null && t.SerieId == serieId).Select(ToTipDto).ToList();
+            tips.Where(t => resp.Any(r => r.TipologiaId == t.Id && r.SubserieId == s.Id)).Select(ToTipDto).ToList()))
+            .Where(s => s.Tipologias.Count > 0).ToList();
+        var directas = tips.Where(t => resp.Any(r => r.TipologiaId == t.Id && r.SubserieId == null)).Select(ToTipDto).ToList();
         return new EstructuraSerieDto(subDtos, directas);
     }
 

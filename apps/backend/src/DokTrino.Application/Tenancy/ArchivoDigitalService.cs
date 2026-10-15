@@ -51,6 +51,26 @@ public sealed class ArchivoDigitalService : IArchivoDigitalService
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<GaleriaDocDto>> GaleriaAsync(string? filtro, CancellationToken ct = default)
+    {
+        var rows = await _db.ArchivosDigitales.AsNoTracking()
+            .Where(a => a.Activo && a.EsVersionVigente)
+            .OrderByDescending(a => a.FechaSubida)
+            .Take(1000)
+            .Select(a => new GaleriaDocDto(
+                a.Id, a.Nombre, a.Mime, a.SizeBytes, a.EstadoAprobacion,
+                a.TipologiaId == null ? null : _db.TipologiasDocumentales.Where(t => t.Id == a.TipologiaId).Select(t => t.Codigo + " - " + t.Nombre).FirstOrDefault(),
+                a.ExpedienteId == null ? null : _db.Expedientes.Where(e => e.Id == a.ExpedienteId).Select(e => e.Codigo).FirstOrDefault(),
+                a.IdentificadorPrincipal, a.FechaSubida))
+            .ToListAsync(ct);
+
+        if (string.IsNullOrWhiteSpace(filtro)) { return rows; }
+        var f = filtro.Trim();
+        return rows.Where(r => string.Join(" ",
+                r.Nombre, r.Tipologia ?? "", r.ExpedienteCodigo ?? "", r.IdentificadorPrincipal ?? "")
+            .Contains(f, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
     public async Task<ArchivoCentralDto?> SubirAsync(SubirArchivoRequest req, Stream contenido, Guid actor, CancellationToken ct = default)
     {
         if (_tenant.TenantId is not Guid tenantId) { return null; }
