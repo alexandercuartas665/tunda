@@ -7051,6 +7051,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(160)")
                         .HasColumnName("email_colaborador");
 
+                    b.Property<bool>("EsAdministrativo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("es_administrativo");
+
                     b.Property<DateTimeOffset?>("ExpiraEn")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expira_en");

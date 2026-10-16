@@ -24,4 +24,9 @@ public class TokenDependencia : TenantEntity
     public string? EmailColaborador { get; set; }
     public DateTimeOffset? ExpiraEn { get; set; }
     public DateTimeOffset? ConsumidoEn { get; set; }
+
+    /// <summary>Enlace ADMINISTRATIVO de la dependencia: lo abre el usuario que
+    /// administra el sistema, no esta ligado a una persona, nunca exige la
+    /// capacitacion y los registros que carga quedan en esta dependencia.</summary>
+    public bool EsAdministrativo { get; set; }
 }

@@ -1106,9 +1106,17 @@
                     </div>
                     <div class="dep-prop-acc">
                         <button class="trx-btn" @onclick="GuardarPropiedades">Guardar propiedades</button>
+                        <button class="dep-url-admin" @onclick="AbrirUrlAdministrativa" title="Enlace de la dependencia solo para el administrador: no exige capacitacion y asigna los registros a esta dependencia.">Abrir url administrativa</button>
                         @if (_propOk is not null) { <span class="dep-ok">@_propOk</span> }
                         @if (_propError is not null) { <span class="dep-err">@_propError</span> }
                     </div>
+                    @if (_urlAdmin is not null)
+                    {
+                        <div class="dep-url-admin-box">
+                            <span class="dep-url-admin-lbl">Enlace administrativo (solo tu lo gestionas):</span>
+                            <a href="@_urlAdmin" target="_blank" rel="noopener">@_urlAdmin</a>
+                        </div>
+                    }
                 </div>
 
                 @* --- Indicadores de la dependencia --- *@
@@ -1460,6 +1468,10 @@
     .per-exento { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:#64748b; margin-top:6px; padding-left:6px; cursor:pointer; user-select:none; }
     .per-exento.on { color:var(--primary); font-weight:600; }
     .per-exento input { width:14px; height:14px; cursor:pointer; }
+    .dep-url-admin { background:none; border:none; color:var(--primary); font-size:12.5px; font-weight:600; cursor:pointer; text-decoration:underline; padding:0 6px; }
+    .dep-url-admin:hover { color:var(--primary-deep,var(--primary)); }
+    .dep-url-admin-box { margin-top:8px; font-size:11.5px; color:#64748b; display:flex; flex-direction:column; gap:3px; }
+    .dep-url-admin-box a { color:var(--primary); word-break:break-all; }
     .per-acc { display:flex; gap:5px; flex-shrink:0; }
     .per-alta { margin-top:14px; padding-top:14px; border-top:1px dashed #e0e4ee;
                 display:grid; grid-template-columns:1.2fr 1.4fr .9fr .9fr auto; gap:8px; align-items:center; }
@@ -1624,7 +1636,7 @@
 
     /// <summary>Vocabulario de formatos, el mismo del editor de series y del cliente.</summary>
     private static readonly string[] FormatosDisponibles =
-        ["Papel", "PDF", "Word", "Excel", "Imagen", "Video", "Audio", "Correo"];
+        ["Papel", "PDF", "Word", "Excel", "PowerPoint", "CSV", "TXT", "DWG", "Imagen", "Video", "Audio", "Correo", "Power BI", "Electronico"];
 
     // Modal de personas de una dependencia.
     private DependenciaDto? _personasDe;
@@ -1966,7 +1978,7 @@
     }
 
     // Formatos por tipologia (fila): alterna un formato (papel/extension) y lo guarda.
-    private static readonly string[] FormatosMatriz = ["Papel", "PDF", "Word", "Excel", "XML", "Imagen", "Video", "Audio", "Correo"];
+    private static readonly string[] FormatosMatriz = ["Papel", "PDF", "Word", "Excel", "PowerPoint", "XML", "CSV", "TXT", "DWG", "Imagen", "Video", "Audio", "Correo", "Power BI", "Electronico"];
     private async Task ToggleFormatoFila(DocumentoTrdDto d, string formato)
     {
         _docError = null;
@@ -2434,6 +2446,7 @@
         _depSel = d;
         _personasDe = d;
         _perError = _propOk = _propError = null;
+        _urlAdmin = null;
         _np = new CrearColaboradorRequest();
         // El codigo raiz documental por defecto es el propio codigo de la dependencia (el que se dio al crearla).
         _prop = new PropForm { CodigoRaizDocumental = string.IsNullOrWhiteSpace(d.CodigoRaizDocumental) ? d.Codigo : d.CodigoRaizDocumental,
@@ -2446,6 +2459,22 @@
     }
 
     private List<TrazaRevisionDto> _bitacora = new();
+
+    // Enlace administrativo de la dependencia (lo genera/abre solo el administrador).
+    private string? _urlAdmin;
+    private async Task AbrirUrlAdministrativa()
+    {
+        _propOk = _propError = null;
+        if (_personasDe is null) { return; }
+        try
+        {
+            var r = await Trd.GenerarTokenAdministrativoAsync(_personasDe.Id, Nav.BaseUri.TrimEnd('/'), await Actor());
+            if (r is null) { _propError = "No se pudo generar el enlace."; return; }
+            _urlAdmin = r.Url;
+            await JS.InvokeVoidAsync("open", r.Url, "_blank");
+        }
+        catch (InvalidOperationException ex) { _propError = ex.Message; }
+    }
 
     private async Task GuardarPropiedades()
     {
@@ -2514,7 +2543,7 @@
         catch (InvalidOperationException ex) { _perError = ex.Message; }
     }
 
-    private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = _propOk = _propError = null; _ind = null; }
+    private void CerrarPersonas() { _personasDe = null; _personas.Clear(); _perError = _propOk = _propError = null; _ind = null; _urlAdmin = null; }
 
     /// <summary>Porcentaje entero de parte/total, acotado a [0,100]. 0 si el total es 0.</summary>
     private static int Pct(int parte, int total) => total <= 0 ? 0 : Math.Clamp((int)Math.Round(parte * 100.0 / total), 0, 100);

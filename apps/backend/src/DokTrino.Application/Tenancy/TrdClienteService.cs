@@ -38,10 +38,10 @@ public sealed class TrdClienteService : ITrdClienteService
             : dep.Estado == "CERRADO" ? "Tu dependencia esta cerrada."
             : trd.Estado == "DESARROLLO" ? "La encuesta aun esta en desarrollo; el administrador debe activarla."
             : "La encuesta esta cerrada.";
-        // Colaborador del enlace (si el token esta ligado a una persona): su marca
-        // de exencion permite saltar la capacitacion obligatoria de forma individual.
-        var exento = false;
-        if (tok.ColaboradorId is Guid colId)
+        // Exencion de la capacitacion: el enlace ADMINISTRATIVO de la dependencia
+        // nunca la exige; para un enlace de persona, depende de su marca individual.
+        var exento = tok.EsAdministrativo;
+        if (!exento && tok.ColaboradorId is Guid colId)
         {
             exento = await _db.ColaboradoresDependencia.IgnoreQueryFilters().AsNoTracking()
                 .Where(c => c.Id == colId).Select(c => c.ExentoCapacitacion).FirstOrDefaultAsync(ct);

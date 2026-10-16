@@ -233,7 +233,23 @@ else
                                         <button class="tcl-chip @(puesto ? "on" : "")"
                                                 @onclick="() => AlternarChip(c.Id, f)">@f</button>
                                     }
+                                    @if (_formatos.TryGetValue(c.Id, out var dec))
+                                    {
+                                        @foreach (var extra in dec.Where(x => !FormatosDisponibles.Contains(x.Formato)))
+                                        {
+                                            <button class="tcl-chip on" @onclick="() => AlternarChip(c.Id, extra.Formato)">@extra.Formato &#10005;</button>
+                                        }
+                                    }
+                                    <button class="tcl-chip otro" @onclick="() => AbrirOtro(c.Id)">&#43; Otro</button>
                                 </div>
+                                @if (_otroAbierto == c.Id)
+                                {
+                                    <div class="tcl-otro-box">
+                                        <input class="tcl-otro-in" @bind="_otroTexto" placeholder="Cual formato? (ej. CAD, JSON...)" />
+                                        <button class="tcl-otro-ok" @onclick="() => AgregarOtro(c.Id)">Agregar</button>
+                                        <button class="tcl-otro-x" @onclick="CerrarOtro">Cancelar</button>
+                                    </div>
+                                }
                             </div>
                         }
 
@@ -553,7 +569,7 @@ else
 
     /// <summary>Vocabulario de formatos del editor de series, para hablar igual en los dos lados.</summary>
     private static readonly string[] FormatosDisponibles =
-        ["Papel", "PDF", "Word", "Excel", "Imagen", "Video", "Audio", "Correo"];
+        ["Papel", "PDF", "Word", "Excel", "PowerPoint", "CSV", "TXT", "DWG", "Imagen", "Video", "Audio", "Correo", "Power BI", "Electronico"];
 
     /// <summary>El unico soporte fisico es el papel; el resto son digitales.</summary>
     private static string SoporteDe(string formato) =>
@@ -577,6 +593,26 @@ else
             {
                 await Cliente.DeclararFormatoAsync(Token ?? "", respuestaId, SoporteDe(formato), formato);
             }
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // "Otro" formato: el cliente pulsa el chip y el sistema le pregunta cual (texto libre).
+    private Guid? _otroAbierto;
+    private string _otroTexto = "";
+    private void AbrirOtro(Guid respuestaId) { _otroAbierto = respuestaId; _otroTexto = ""; _error = null; }
+    private void CerrarOtro() { _otroAbierto = null; _otroTexto = ""; }
+
+    private async Task AgregarOtro(Guid respuestaId)
+    {
+        var val = (_otroTexto ?? "").Trim();
+        if (val.Length == 0) { return; }
+        _error = null;
+        try
+        {
+            await Cliente.DeclararFormatoAsync(Token ?? "", respuestaId, "DIGITAL", val);
+            _otroAbierto = null; _otroTexto = "";
             await Recargar();
         }
         catch (InvalidOperationException ex) { _error = ex.Message; }

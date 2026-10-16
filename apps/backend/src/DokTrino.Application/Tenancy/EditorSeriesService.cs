@@ -100,7 +100,7 @@ public sealed class EditorSeriesService : IEditorSeriesService
 {
     /// <summary>Catalogo de formatos que ofrece el editor.</summary>
     public static readonly string[] FormatosDisponibles =
-        ["Papel", "PDF", "Word", "Excel", "Imagen", "Video", "Audio", "Correo"];
+        ["Papel", "PDF", "Word", "Excel", "PowerPoint", "CSV", "TXT", "DWG", "Imagen", "Video", "Audio", "Correo", "Power BI", "Electronico"];
 
     private static readonly string[] TiposCampo = ["Texto", "Numero", "Fecha", "SiNo", "Lista"];
 

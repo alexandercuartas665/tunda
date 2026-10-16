@@ -57,6 +57,8 @@ public interface ITrdAdminService
 
     /// <summary>Emite (o reemite) el enlace de trabajo de una persona concreta.</summary>
     Task<TokenGeneradoDto?> GenerarTokenColaboradorAsync(Guid colaboradorId, string baseUrl, Guid actor, CancellationToken ct = default);
+    /// <summary>Enlace administrativo de la dependencia (sin persona, sin expiracion, exento de capacitacion).</summary>
+    Task<TokenGeneradoDto?> GenerarTokenAdministrativoAsync(Guid dependenciaId, string baseUrl, Guid actor, CancellationToken ct = default);
 
     /// <summary>
     /// Cuantas personas de la TRD siguen sin cuenta de acceso. Son las que se

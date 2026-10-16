@@ -621,6 +621,42 @@ public sealed class TrdAdminService : ITrdAdminService
         return new TokenGeneradoDto(token, $"{baseUrl.TrimEnd('/')}/trd-cliente?token={token}");
     }
 
+    /// <summary>
+    /// Enlace ADMINISTRATIVO de la dependencia: unico por dependencia, sin persona,
+    /// sin expiracion y exento de la capacitacion. Lo usa el administrador para
+    /// cargar/gestionar los registros de la dependencia. Reutiliza el existente.
+    /// </summary>
+    public async Task<TokenGeneradoDto?> GenerarTokenAdministrativoAsync(Guid dependenciaId, string baseUrl, Guid actor, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { return null; }
+        var dep = await _db.Dependencias.AsNoTracking().FirstOrDefaultAsync(d => d.Id == dependenciaId, ct);
+        if (dep is null) { throw new InvalidOperationException("La dependencia no existe."); }
+
+        var existente = await _db.TokensDependencia.AsNoTracking()
+            .Where(t => t.DependenciaId == dep.Id && t.EsAdministrativo && t.ConsumidoEn == null)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => t.Token)
+            .FirstOrDefaultAsync(ct);
+        if (existente is not null)
+        {
+            return new TokenGeneradoDto(existente, $"{baseUrl.TrimEnd('/')}/trd-cliente?token={existente}");
+        }
+
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
+        _db.TokensDependencia.Add(new TokenDependencia
+        {
+            TenantId = tenantId,
+            TrdId = dep.TrdId,
+            DependenciaId = dep.Id,
+            ColaboradorId = null,
+            Token = token,
+            EsAdministrativo = true,
+            ExpiraEn = null
+        });
+        await _db.SaveChangesAsync(ct);
+        return new TokenGeneradoDto(token, $"{baseUrl.TrimEnd('/')}/trd-cliente?token={token}");
+    }
+
     public async Task<bool> EliminarColaboradorAsync(Guid id, Guid actor, CancellationToken ct = default)
     {
         var col = await _db.ColaboradoresDependencia.FirstOrDefaultAsync(c => c.Id == id, ct);
