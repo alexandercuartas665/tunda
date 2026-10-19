@@ -1,5 +1,6 @@
 using DokTrino.Application.Common;
 using DokTrino.Domain.Common;
+using DokTrino.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -67,6 +68,19 @@ public sealed class AuditableTenantInterceptor : SaveChangesInterceptor
                     entry.Entity.UpdatedAt = now;
                     entry.Entity.UpdatedBy = userId;
                     break;
+            }
+
+            // Normaliza el nombre de los catalogos documentales al crear o editar
+            // (una sola compuerta para editor, admin, cliente "propia" e importadores):
+            //  Serie -> MAYUSCULAS; Subserie -> Tipo Titulo; Tipologia -> sentence case.
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                switch (entry.Entity)
+                {
+                    case Serie serie: serie.Nombre = CasingDocumental.Serie(serie.Nombre); break;
+                    case Subserie subserie: subserie.Nombre = CasingDocumental.Subserie(subserie.Nombre); break;
+                    case TipologiaDocumental tipologia: tipologia.Nombre = CasingDocumental.Tipologia(tipologia.Nombre); break;
+                }
             }
         }
     }
