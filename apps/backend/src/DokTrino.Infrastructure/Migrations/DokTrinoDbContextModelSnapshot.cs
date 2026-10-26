@@ -1705,6 +1705,14 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("aprobado");
 
+                    b.Property<Guid?>("ColaboradorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("colaborador_id");
+
+                    b.Property<int>("Correctas")
+                        .HasColumnType("integer")
+                        .HasColumnName("correctas");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1738,6 +1746,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
 
+                    b.Property<int>("Total")
+                        .HasColumnType("integer")
+                        .HasColumnName("total");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1754,6 +1766,9 @@ namespace DokTrino.Infrastructure.Migrations
 
                     b.HasIndex("DependenciaId")
                         .HasDatabaseName("ix_cuestionario_intentos_dependencia_id");
+
+                    b.HasIndex("TenantId", "ColaboradorId")
+                        .HasDatabaseName("ix_cuestionario_intentos_tenant_id_colaborador_id");
 
                     b.HasIndex("TenantId", "DependenciaId")
                         .HasDatabaseName("ix_cuestionario_intentos_tenant_id_dependencia_id");

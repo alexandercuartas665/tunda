@@ -163,7 +163,10 @@ public sealed class CuestionarioService : ICuestionarioService
             TenantId = s.TenantId,
             CuestionarioId = cuestionario.Id,
             DependenciaId = s.DependenciaId,
+            ColaboradorId = s.ColaboradorId,
             Puntaje = puntaje,
+            Correctas = correctas,
+            Total = preguntas.Count,
             Aprobado = aprobado,
             RespuestasJson = JsonSerializer.Serialize(respuestas),
             FechaIntento = _clock.GetUtcNow()

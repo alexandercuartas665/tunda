@@ -827,6 +827,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Cuestionario).WithMany().HasForeignKey(x => x.CuestionarioId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.DependenciaId });
+            b.HasIndex(x => new { x.TenantId, x.ColaboradorId });
         });
 
         modelBuilder.Entity<Curso>(b =>

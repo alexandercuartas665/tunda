@@ -1,0 +1,413 @@
+@page "/reportes/indicadores"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.Globalization
+@using DokTrino.Application.Tenancy
+@inject IIndicadoresService Indicadores
+
+<PageTitle>Indicadores - Archimente</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow"><a href="/reportes" style="color:inherit;text-decoration:none;">Reportes</a> &#8250; Indicadores</div>
+        <h1 class="ase-title">Indicadores de gestion</h1>
+        <p class="page-sub" style="margin:2px 0 0;">Ingresos a la plataforma, capacitacion cursada y documentos cargados.</p>
+    </div>
+    <div class="ind-dl">
+        <a class="btn btn-sm btn-outline-primary" href="@Url("excel")" target="_blank">&#8681; Excel</a>
+        <a class="btn btn-sm btn-primary" href="@Url("pdf")" target="_blank">&#8681; PDF</a>
+    </div>
+</div>
+
+@* ===== Filtros ===== *@
+<div class="ase-card ind-filtros">
+    <div class="ind-f">
+        <label>TRD</label>
+        <select class="form-select form-select-sm" @bind="_trdSel">
+            <option value="">Todas</option>
+            @if (_opts is not null)
+            {
+                @foreach (var t in _opts.Trds)
+                {
+                    <option value="@t.Id">@t.Etiqueta</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="ind-f">
+        <label>Dependencia</label>
+        <select class="form-select form-select-sm" @bind="_depSel">
+            <option value="">Todas</option>
+            @foreach (var d in DependenciasVisibles)
+            {
+                <option value="@d.Id">@d.Nombre</option>
+            }
+        </select>
+    </div>
+    <div class="ind-f">
+        <label>Serie / documento</label>
+        <select class="form-select form-select-sm" @bind="_serieSel">
+            <option value="">Todas</option>
+            @if (_opts is not null)
+            {
+                @foreach (var s in _opts.Series)
+                {
+                    <option value="@s.Id">@s.Etiqueta</option>
+                }
+            }
+        </select>
+    </div>
+    <div class="ind-f">
+        <label>Desde</label>
+        <input type="date" class="form-control form-control-sm" @bind="_desde" />
+    </div>
+    <div class="ind-f">
+        <label>Hasta</label>
+        <input type="date" class="form-control form-control-sm" @bind="_hasta" />
+    </div>
+    <div class="ind-f ind-f-btns">
+        <button class="btn btn-sm btn-primary" @onclick="Aplicar" disabled="@_loading">Aplicar</button>
+        <button class="btn btn-sm btn-light" @onclick="Limpiar" disabled="@_loading">Limpiar</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p style="margin-top:16px;"><em>Calculando indicadores...</em></p>
+}
+else if (_r is null)
+{
+    <p class="text-muted" style="margin-top:16px;">No hay datos para mostrar todavia.</p>
+}
+else
+{
+    @* ===== KPIs ===== *@
+    <div class="kpi-grid" style="margin:18px 0 22px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));max-width:none;">
+        <div class="kpi-card">
+            <div class="kpi-label">Colaboradores</div>
+            <div class="kpi-value">@N(_r.TotalColaboradores)</div>
+            <div class="kpi-hint">@N(_r.ColaboradoresIngresaron) ingresaron</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Ingresos a la plataforma</div>
+            <div class="kpi-value">@N(_r.IngresosTotales)</div>
+            <div class="kpi-hint">por enlace de cada persona</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Capacitacion aprobada</div>
+            <div class="kpi-value">@N(_r.CapacitacionAprobados)</div>
+            <div class="kpi-hint">de @N(_r.CapacitacionIntentos) intentos</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Documentos cargados</div>
+            <div class="kpi-value">@N(_r.DocumentosCargados)</div>
+            <div class="kpi-hint">@N(_r.SeriesDistintas) series distintas</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Dependencias con actividad</div>
+            <div class="kpi-value">@N(_r.DependenciasConActividad)</div>
+            <div class="kpi-hint">cargaron, ingresaron o aprobaron</div>
+        </div>
+    </div>
+
+    <div class="rep-grid">
+        @* ===== Documentos por mes ===== *@
+        <div class="rep-card rep-wide">
+            <div class="rep-title">Documentos cargados por mes</div>
+            <div class="rep-sub">Hasta 12 meses con actividad</div>
+            @if (_r.DocumentosPorMes.Count == 0)
+            {
+                <div class="rep-empty">Sin documentos en el rango.</div>
+            }
+            else
+            {
+                var maxD = Math.Max(1, _r.DocumentosPorMes.Max(m => m.Valor));
+                <div class="rep-cols">
+                    @foreach (var m in _r.DocumentosPorMes)
+                    {
+                        <div class="rep-col">
+                            <div class="rep-col-val">@N(m.Valor)</div>
+                            <div class="rep-col-bar-track">
+                                <div class="rep-col-bar" style="height:@(Pct(m.Valor, maxD))%;"></div>
+                            </div>
+                            <div class="rep-col-lbl">@m.Etiqueta</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ===== Ingresos por mes ===== *@
+        <div class="rep-card rep-wide">
+            <div class="rep-title">Ingresos a la plataforma por mes</div>
+            <div class="rep-sub">Enlaces consumidos por los colaboradores</div>
+            @if (_r.IngresosPorMes.Count == 0)
+            {
+                <div class="rep-empty">Sin ingresos en el rango.</div>
+            }
+            else
+            {
+                var maxI = Math.Max(1, _r.IngresosPorMes.Max(m => m.Valor));
+                <div class="rep-cols">
+                    @foreach (var m in _r.IngresosPorMes)
+                    {
+                        <div class="rep-col">
+                            <div class="rep-col-val">@N(m.Valor)</div>
+                            <div class="rep-col-bar-track">
+                                <div class="rep-col-bar" style="height:@(Pct(m.Valor, maxI))%;background:#4e80b5;"></div>
+                            </div>
+                            <div class="rep-col-lbl">@m.Etiqueta</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ===== Top series ===== *@
+        <div class="rep-card">
+            <div class="rep-title">Top series por documentos</div>
+            <div class="rep-sub">Las series mas diligenciadas</div>
+            @if (_r.TopSeries.Count == 0)
+            {
+                <div class="rep-empty">Sin documentos en el rango.</div>
+            }
+            else
+            {
+                var maxS = Math.Max(1, _r.TopSeries.Max(s => s.Valor));
+                <div class="rep-bars">
+                    @foreach (var s in _r.TopSeries)
+                    {
+                        <div class="rep-bar-row">
+                            <div class="rep-bar-lbl" title="@s.Etiqueta">@s.Etiqueta</div>
+                            <div class="rep-bar-track"><div class="rep-bar" style="width:@(Pct(s.Valor, maxS))%;"></div></div>
+                            <div class="rep-bar-val">@N(s.Valor)</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ===== Capacitacion (aprobados vs pendientes) ===== *@
+        <div class="rep-card">
+            <div class="rep-title">Capacitacion</div>
+            <div class="rep-sub">Intentos de la evaluacion</div>
+            @{
+                var aprob = _r.CapacitacionAprobados;
+                var noAprob = Math.Max(0, _r.CapacitacionIntentos - aprob);
+                var maxC = Math.Max(1, Math.Max(aprob, noAprob));
+            }
+            <div class="rep-bars">
+                <div class="rep-bar-row">
+                    <div class="rep-bar-lbl">Aprobados</div>
+                    <div class="rep-bar-track"><div class="rep-bar k-won" style="width:@(Pct(aprob, maxC))%;"></div></div>
+                    <div class="rep-bar-val">@N(aprob)</div>
+                </div>
+                <div class="rep-bar-row">
+                    <div class="rep-bar-lbl">No aprobados</div>
+                    <div class="rep-bar-track"><div class="rep-bar k-loss" style="width:@(Pct(noAprob, maxC))%;"></div></div>
+                    <div class="rep-bar-val">@N(noAprob)</div>
+                </div>
+            </div>
+        </div>
+
+        @* ===== Detalle por dependencia ===== *@
+        <div class="rep-card rep-wide">
+            <div class="rep-title">Detalle por dependencia</div>
+            @if (_r.PorDependencia.Count == 0)
+            {
+                <div class="rep-empty">No hay dependencias en el alcance.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="data-table" style="width:100%;font-size:12.5px;">
+                        <thead>
+                            <tr>
+                                <th>Codigo</th><th>Dependencia</th>
+                                <th class="text-end">Personas</th><th class="text-end">Ingresaron</th>
+                                <th class="text-end">Ingresos</th><th class="text-end">Aprobados</th>
+                                <th class="text-end">Documentos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in _r.PorDependencia)
+                            {
+                                <tr>
+                                    <td class="mono">@d.Codigo</td>
+                                    <td>@d.Nombre</td>
+                                    <td class="text-end">@N(d.Personas)</td>
+                                    <td class="text-end">@N(d.Ingresaron)</td>
+                                    <td class="text-end">@N(d.Ingresos)</td>
+                                    <td class="text-end">@N(d.Aprobados)</td>
+                                    <td class="text-end">@N(d.Documentos)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @* ===== Capacitacion: resumen por persona ===== *@
+        <div class="rep-card rep-wide">
+            <div class="rep-title">Capacitacion - por persona</div>
+            <div class="rep-sub">Quienes cursaron, cuantos intentos hicieron y su mejor resultado. Solo intentos con persona identificada.</div>
+            @if (_r.CapacitacionPorPersona.Count == 0)
+            {
+                <div class="rep-empty">Sin personas con intentos identificados en el rango. Los intentos previos a esta funcion no tienen persona asociada; se ven en el detalle como "(no identificado)".</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="data-table" style="width:100%;font-size:12.5px;">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th><th>Dependencia</th>
+                                <th class="text-end">Intentos</th><th class="text-end">Mejor aciertos</th>
+                                <th class="text-end">Mejor puntaje</th><th>Aprobo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in _r.CapacitacionPorPersona)
+                            {
+                                <tr>
+                                    <td>@p.Usuario</td>
+                                    <td>@p.Dependencia</td>
+                                    <td class="text-end">@N(p.Intentos)</td>
+                                    <td class="text-end">@p.MejorCorrectas / @p.Total</td>
+                                    <td class="text-end">@N(p.MejorPuntaje)%</td>
+                                    <td><span class="ind-pill @(p.Aprobado ? "ok" : "no")">@(p.Aprobado ? "Si" : "No")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @* ===== Capacitacion: detalle de intentos ===== *@
+        <div class="rep-card rep-wide">
+            <div class="rep-title">Capacitacion - detalle de intentos</div>
+            <div class="rep-sub">Cada intento con su usuario, respuestas correctas y resultado.</div>
+            @if (_r.IntentosCapacitacion.Count == 0)
+            {
+                <div class="rep-empty">Sin intentos de capacitacion en el rango.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="data-table" style="width:100%;font-size:12.5px;">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Usuario</th><th>Dependencia</th><th>Cuestionario</th>
+                                <th class="text-end">Correctas</th><th class="text-end">Puntaje</th><th>Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var it in _r.IntentosCapacitacion)
+                            {
+                                <tr>
+                                    <td>@it.Fecha.ToLocalTime().ToString("dd/MM/yy HH:mm")</td>
+                                    <td>@it.Usuario</td>
+                                    <td>@it.Dependencia</td>
+                                    <td>@it.Cuestionario</td>
+                                    <td class="text-end">@it.Correctas / @it.Total</td>
+                                    <td class="text-end">@N(it.Puntaje)%</td>
+                                    <td>
+                                        <span class="ind-pill @(it.Aprobado ? "ok" : "no")">@(it.Aprobado ? "Aprobado" : "No aprobado")</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .ind-dl { display: flex; gap: 8px; }
+    .ind-filtros { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+    .ind-f { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+    .ind-f > label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-foreground); }
+    .ind-f-btns { flex-direction: row; gap: 8px; align-items: center; }
+    .mono { font-family: 'JetBrains Mono','Consolas',monospace; font-size: 12px; }
+    .rep-empty { font-size: 12.5px; color: var(--muted-foreground); padding: 14px 0; }
+    .ind-pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+    .ind-pill.ok { color: #1f7a46; background: color-mix(in srgb, #3fae6b 16%, transparent); }
+    .ind-pill.no { color: #a32a3e; background: color-mix(in srgb, #d0455f 16%, transparent); }
+</style>
+
+@code {
+    private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
+
+    private IndicadoresOpcionesDto? _opts;
+    private IndicadoresReporteDto? _r;
+    private bool _loading = true;
+
+    private string _trdSel = "";
+    private string _depSel = "";
+    private string _serieSel = "";
+    private DateOnly? _desde;
+    private DateOnly? _hasta;
+
+    private IEnumerable<OpcionDependenciaDto> DependenciasVisibles
+    {
+        get
+        {
+            if (_opts is null) { return Array.Empty<OpcionDependenciaDto>(); }
+            if (Guid.TryParse(_trdSel, out var trd)) { return _opts.Dependencias.Where(d => d.TrdId == trd); }
+            return _opts.Dependencias;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _opts = await Indicadores.OpcionesAsync();
+        await Aplicar();
+    }
+
+    private async Task Aplicar()
+    {
+        // Si la dependencia elegida ya no pertenece a la TRD seleccionada, la soltamos.
+        if (Guid.TryParse(_depSel, out var depSel) && !DependenciasVisibles.Any(d => d.Id == depSel))
+        {
+            _depSel = "";
+        }
+
+        _loading = true;
+        StateHasChanged();
+        _r = await Indicadores.GenerarAsync(Filtro());
+        _loading = false;
+    }
+
+    private async Task Limpiar()
+    {
+        _trdSel = _depSel = _serieSel = "";
+        _desde = _hasta = null;
+        await Aplicar();
+    }
+
+    private IndicadoresFiltro Filtro() => new(
+        Guid.TryParse(_trdSel, out var t) ? t : (Guid?)null,
+        Guid.TryParse(_depSel, out var d) ? d : (Guid?)null,
+        Guid.TryParse(_serieSel, out var s) ? s : (Guid?)null,
+        _desde,
+        _hasta);
+
+    private string Url(string formato)
+    {
+        var q = new List<string>();
+        if (Guid.TryParse(_trdSel, out _)) { q.Add("trd=" + _trdSel); }
+        if (Guid.TryParse(_depSel, out _)) { q.Add("dep=" + _depSel); }
+        if (Guid.TryParse(_serieSel, out _)) { q.Add("serie=" + _serieSel); }
+        if (_desde is DateOnly de) { q.Add("desde=" + de.ToString("yyyy-MM-dd")); }
+        if (_hasta is DateOnly ha) { q.Add("hasta=" + ha.ToString("yyyy-MM-dd")); }
+        var qs = q.Count > 0 ? "?" + string.Join("&", q) : "";
+        return $"/api/doktrino/indicadores/{formato}{qs}";
+    }
+
+    private static string N(int v) => v.ToString("N0", Co);
+    private static int Pct(int value, int max) => max <= 0 ? 0 : (int)Math.Round(100.0 * value / max);
+}

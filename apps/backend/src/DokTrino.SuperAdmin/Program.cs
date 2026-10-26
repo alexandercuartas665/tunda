@@ -798,6 +798,47 @@ app.MapGet("/api/doktrino/trd/{id:guid}/usuarios-excel", async (
             archivo.Value.FileName);
 }).RequireAuthorization();
 
+// Reporte de indicadores de gestion (ingresos, capacitacion, documentos) del tenant en
+// sesion, con filtros por TRD, dependencia, serie y rango de fechas. Excel y PDF comparten
+// los mismos parametros de consulta: trd, dep, serie (guid) y desde, hasta (yyyy-MM-dd).
+static DokTrino.Application.Tenancy.IndicadoresFiltro LeerFiltroIndicadores(HttpRequest req)
+{
+    static Guid? Guid_(string? v) => Guid.TryParse(v, out var g) ? g : (Guid?)null;
+    static DateOnly? Fecha_(string? v) => DateOnly.TryParse(v, out var d) ? d : (DateOnly?)null;
+    return new DokTrino.Application.Tenancy.IndicadoresFiltro(
+        Guid_(req.Query["trd"]),
+        Guid_(req.Query["dep"]),
+        Guid_(req.Query["serie"]),
+        Fecha_(req.Query["desde"]),
+        Fecha_(req.Query["hasta"]));
+}
+
+app.MapGet("/api/doktrino/indicadores/excel", async (
+    HttpRequest req,
+    DokTrino.Application.Tenancy.IIndicadoresService svc,
+    DokTrino.Application.Trd.IIndicadoresExcelExporter exporter,
+    CancellationToken ct) =>
+{
+    var reporte = await svc.GenerarAsync(LeerFiltroIndicadores(req), ct);
+    var archivo = exporter.Render(reporte);
+    return Results.File(
+        archivo.Content,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        archivo.FileName);
+}).RequireAuthorization();
+
+app.MapGet("/api/doktrino/indicadores/pdf", async (
+    HttpRequest req,
+    DokTrino.Application.Tenancy.IIndicadoresService svc,
+    DokTrino.Application.Common.IIndicadoresPdfRenderer renderer,
+    CancellationToken ct) =>
+{
+    var reporte = await svc.GenerarAsync(LeerFiltroIndicadores(req), ct);
+    var pdf = renderer.Render(reporte);
+    var stamp = reporte.GeneradoEn.ToLocalTime().ToString("yyyyMMdd-HHmm");
+    return Results.File(pdf, "application/pdf", $"indicadores-{stamp}.pdf");
+}).RequireAuthorization();
+
 app.MapGet("/api/public/bi/{token}", async (
     string token,
     HttpRequest request,
