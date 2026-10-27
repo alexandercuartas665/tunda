@@ -615,7 +615,9 @@ public sealed class TrdAdminService : ITrdAdminService
             ColaboradorId = col.Id,
             Token = token,
             EmailColaborador = col.Email,
-            ExpiraEn = DateTimeOffset.UtcNow.AddDays(7)
+            // Los enlaces para gestionar la TRD no vencen: el administrador los
+            // retira cerrando/revisando la dependencia o la encuesta, no por tiempo.
+            ExpiraEn = null
         });
         await _db.SaveChangesAsync(ct);
         return new TokenGeneradoDto(token, $"{baseUrl.TrimEnd('/')}/trd-cliente?token={token}");
@@ -1102,7 +1104,8 @@ public sealed class TrdAdminService : ITrdAdminService
         {
             TenantId = tenantId, TrdId = dep.TrdId, DependenciaId = dependenciaId,
             Token = token, EmailColaborador = string.IsNullOrWhiteSpace(email) ? null : email!.Trim(),
-            ExpiraEn = _clock.GetUtcNow().AddDays(7)
+            // Los enlaces para gestionar la TRD no vencen (ver GenerarTokenColaboradorAsync).
+            ExpiraEn = null
         });
         await _db.SaveChangesAsync(ct);
         var url = $"{baseUrl.TrimEnd('/')}/trd-cliente?token={token}";
