@@ -407,15 +407,15 @@
                                     </a>
                                 </div>
                                 <div class="dep-tabla-scroll">
-                                    <table class="dep-tb">
+                                    <table class="dep-tb deps">
                                         <thead>
                                             <tr>
-                                                <th style="width: 90px;">Codigo</th>
-                                                <th>Dependencia</th>
+                                                <th style="width: 100px;">Codigo</th>
+                                                <th style="min-width: 320px;">Dependencia</th>
                                                 <th style="width: 70px;">Nivel</th>
                                                 <th style="width: 90px;">Personas</th>
-                                                <th style="width: 90px;">Estado</th>
-                                                <th style="width: 120px;" title="Al marcar, los usuarios de la dependencia quedan en solo lectura mientras el administrador completa la caracterizacion">En revision</th>
+                                                <th style="width: 100px;">Estado</th>
+                                                <th style="width: 130px;" title="Al marcar, los usuarios de la dependencia quedan en solo lectura mientras el administrador completa la caracterizacion">En revision</th>
                                                 <th style="width: 170px;"></th>
                                             </tr>
                                         </thead>
@@ -1289,7 +1289,12 @@
 
     .dep-arbol, .dep-tabla { background:#fff; border:1px solid #e6e9f2; border-radius:12px; padding:12px; }
     .dep-arbol-scroll { max-height:46vh; overflow:auto; }
+    /* overflow:auto en ambos ejes: el min-width de la tabla fuerza el scroll horizontal. */
     .dep-tabla-scroll { max-height:56vh; overflow:auto; }
+    /* Ancho minimo para que cada columna (sobre todo el nombre) se vea completo; si el
+       contenedor es mas angosto, el scroll horizontal de .dep-tabla-scroll se encarga. */
+    .dep-tb.deps { min-width:1000px; }
+    .dep-tb.deps td { white-space:nowrap; }
 
     .dep-nodo { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px;
                 cursor:pointer; font-size:12.5px; }
