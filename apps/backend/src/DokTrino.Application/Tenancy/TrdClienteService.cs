@@ -366,7 +366,7 @@ public sealed class TrdClienteService : ITrdClienteService
 
     /// <summary>
     /// Compuerta de capacitacion del servidor: replica PuedeDiligenciar del
-    /// Cliente Encuesta (no hay curso obligatorio, o la dependencia ya aprobo).
+    /// Cliente Encuesta (no hay curso obligatorio, o la persona ya aprobo).
     /// El gate de la UI es solo visual; esta es la barrera real antes de escribir.
     /// </summary>
     private async Task EnsureCapacitacionAsync(TokenSesionDto s, CancellationToken ct)
@@ -382,8 +382,12 @@ public sealed class TrdClienteService : ITrdClienteService
             .AnyAsync(c => c.Id == cfg.CursoId && c.Activo, ct);
         if (!cursoActivo) { return; }
 
+        // Compuerta POR PERSONA: la aprobacion que cuenta es la del colaborador del
+        // enlace; un enlace legado sin persona cae al progreso de la dependencia.
+        var colId = s.ColaboradorId;
         var aprobado = await _db.CursoProgresos.IgnoreQueryFilters().AsNoTracking()
-            .AnyAsync(p => p.CursoId == cfg.CursoId && p.DependenciaId == s.DependenciaId && p.Aprobado, ct);
+            .AnyAsync(p => p.CursoId == cfg.CursoId && p.DependenciaId == s.DependenciaId
+                && (colId == null ? p.ColaboradorId == null : p.ColaboradorId == colId) && p.Aprobado, ct);
         if (!aprobado)
         {
             throw new InvalidOperationException("Debes aprobar la capacitacion obligatoria antes de diligenciar la tabla.");

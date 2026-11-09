@@ -861,8 +861,10 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
         modelBuilder.Entity<CursoProgreso>(b =>
         {
             b.HasOne(x => x.Curso).WithMany().HasForeignKey(x => x.CursoId).OnDelete(DeleteBehavior.Cascade);
-            // Un avance por (curso, dependencia): la compuerta del cliente es por dependencia.
-            b.HasIndex(x => new { x.CursoId, x.DependenciaId }).IsUnique();
+            // Un avance por (curso, dependencia, colaborador): la compuerta del cliente
+            // es POR PERSONA. ColaboradorId nulo = progreso legado a nivel de dependencia;
+            // NULLS NOT DISTINCT mantiene ese a lo sumo uno por dependencia.
+            b.HasIndex(x => new { x.CursoId, x.DependenciaId, x.ColaboradorId }).IsUnique().AreNullsDistinct(false);
             b.HasIndex(x => new { x.TenantId, x.CursoId });
         });
 

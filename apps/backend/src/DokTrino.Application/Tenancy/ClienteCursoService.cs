@@ -67,8 +67,12 @@ public sealed class ClienteCursoService : IClienteCursoService
             .FirstOrDefaultAsync(c => c.Id == cfg.CursoId && c.Activo, ct);
         if (curso is null) { return new CursoGateDto(false, false, null, null, null, false, false, 0, 0); }
 
+        // La compuerta es POR PERSONA: si el enlace identifica al colaborador, cuenta
+        // su propio progreso; un enlace legado sin persona usa el de la dependencia.
+        var colId = s.ColaboradorId;
         var prog = await _db.CursoProgresos.IgnoreQueryFilters().AsNoTracking()
-            .FirstOrDefaultAsync(p => p.CursoId == curso.Id && p.DependenciaId == s.DependenciaId, ct);
+            .FirstOrDefaultAsync(p => p.CursoId == curso.Id && p.DependenciaId == s.DependenciaId
+                && (colId == null ? p.ColaboradorId == null : p.ColaboradorId == colId), ct);
 
         var intentos = prog?.Intentos ?? 0;
         var perdonados = prog?.IntentosPerdonados ?? 0;
@@ -132,13 +136,16 @@ public sealed class ClienteCursoService : IClienteCursoService
             .FirstOrDefaultAsync(c => c.TenantId == s.TenantId && c.TrdId == s.TrdId, ct);
         if (cfg is null) { return; }
 
+        var colId = s.ColaboradorId;
         var prog = await _db.CursoProgresos.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(p => p.CursoId == cfg.CursoId && p.DependenciaId == s.DependenciaId, ct);
+            .FirstOrDefaultAsync(p => p.CursoId == cfg.CursoId && p.DependenciaId == s.DependenciaId
+                && (colId == null ? p.ColaboradorId == null : p.ColaboradorId == colId), ct);
         if (prog is null)
         {
             _db.CursoProgresos.Add(new CursoProgreso
             {
                 TenantId = s.TenantId, CursoId = cfg.CursoId, DependenciaId = s.DependenciaId,
+                ColaboradorId = colId,
                 FechaInicio = _clock.GetUtcNow()
             });
             await _db.SaveChangesAsync(ct);

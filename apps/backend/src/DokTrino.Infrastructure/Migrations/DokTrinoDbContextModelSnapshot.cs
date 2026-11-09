@@ -2112,12 +2112,14 @@ namespace DokTrino.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("pk_curso_progresos");
 
-                    b.HasIndex("CursoId", "DependenciaId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_curso_progresos_curso_id_dependencia_id");
-
                     b.HasIndex("TenantId", "CursoId")
                         .HasDatabaseName("ix_curso_progresos_tenant_id_curso_id");
+
+                    b.HasIndex("CursoId", "DependenciaId", "ColaboradorId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_curso_progresos_curso_id_dependencia_id_colaborador_id");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("CursoId", "DependenciaId", "ColaboradorId"), false);
 
                     b.ToTable("curso_progresos", (string)null);
                 });

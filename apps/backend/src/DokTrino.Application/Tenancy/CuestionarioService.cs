@@ -96,10 +96,14 @@ public sealed class CuestionarioService : ICuestionarioService
         var hay = cuest is not null;
 
         // Intentos del cuestionario que hoy es la evaluacion (curso o FORMACION_TRD).
+        // POR PERSONA: si el enlace identifica al colaborador, solo cuentan los suyos;
+        // un enlace legado sin persona ve los de toda la dependencia.
+        var colId = s.ColaboradorId;
         var intentos = cuest is null
             ? new List<(int Puntaje, bool Aprobado)>()
             : (await _db.CuestionarioIntentos.IgnoreQueryFilters().AsNoTracking()
-                .Where(i => i.CuestionarioId == cuest.Id && i.DependenciaId == s.DependenciaId)
+                .Where(i => i.CuestionarioId == cuest.Id && i.DependenciaId == s.DependenciaId
+                    && (colId == null || i.ColaboradorId == colId))
                 .Select(i => new { i.Puntaje, i.Aprobado }).ToListAsync(ct))
                 .Select(i => (i.Puntaje, i.Aprobado)).ToList();
 
@@ -123,8 +127,10 @@ public sealed class CuestionarioService : ICuestionarioService
         // aprobar, no se acepta un intento mas hasta que el admin desbloquee.
         if (cfgCurso is not null)
         {
+            var colId = s.ColaboradorId;
             var previo = await _db.CursoProgresos.IgnoreQueryFilters().AsNoTracking()
-                .FirstOrDefaultAsync(p => p.CursoId == cfgCurso.CursoId && p.DependenciaId == s.DependenciaId, ct);
+                .FirstOrDefaultAsync(p => p.CursoId == cfgCurso.CursoId && p.DependenciaId == s.DependenciaId
+                    && (colId == null ? p.ColaboradorId == null : p.ColaboradorId == colId), ct);
             if (previo is not null && !previo.Aprobado
                 && (previo.Intentos - previo.IntentosPerdonados) >= cfgCurso.IntentosMax)
             {
@@ -190,13 +196,16 @@ public sealed class CuestionarioService : ICuestionarioService
     /// <summary>Actualiza CursoProgreso tras un intento: cuenta, mejor nota, aprobacion y bloqueo.</summary>
     private async Task SincronizarProgresoAsync(TokenSesionDto s, Guid cursoId, int intentosMax, int puntaje, bool aprobado, CancellationToken ct)
     {
+        var colId = s.ColaboradorId;
         var prog = await _db.CursoProgresos.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(p => p.CursoId == cursoId && p.DependenciaId == s.DependenciaId, ct);
+            .FirstOrDefaultAsync(p => p.CursoId == cursoId && p.DependenciaId == s.DependenciaId
+                && (colId == null ? p.ColaboradorId == null : p.ColaboradorId == colId), ct);
         if (prog is null)
         {
             prog = new CursoProgreso
             {
                 TenantId = s.TenantId, CursoId = cursoId, DependenciaId = s.DependenciaId,
+                ColaboradorId = colId,
                 FechaInicio = _clock.GetUtcNow()
             };
             _db.CursoProgresos.Add(prog);
