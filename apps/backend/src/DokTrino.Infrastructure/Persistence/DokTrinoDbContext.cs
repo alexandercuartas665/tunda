@@ -113,6 +113,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<ColaboradorDependencia> ColaboradoresDependencia => Set<ColaboradorDependencia>();
     public DbSet<FormacionDependencia> FormacionesDependencia => Set<FormacionDependencia>();
     public DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia => Set<TrazaRevisionDependencia>();
+    public DbSet<ArchivoCargaDependencia> ArchivosCargaDependencia => Set<ArchivoCargaDependencia>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1026,6 +1027,16 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.ActorNombre).HasMaxLength(200);
             b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.Fecha });
+        });
+
+        modelBuilder.Entity<ArchivoCargaDependencia>(b =>
+        {
+            b.Property(x => x.DependenciaNombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Snapshot).HasColumnType("jsonb").IsRequired();
+            b.Property(x => x.ArchivadoPorNombre).HasMaxLength(200);
+            b.Property(x => x.RestauradoPorNombre).HasMaxLength(200);
+            b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.ArchivadoEn });
         });
 
         modelBuilder.Entity<Radicado>(b =>

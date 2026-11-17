@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using DokTrino.Application.Common;
 using DokTrino.Application.Common.Auth;
 using DokTrino.Domain.Entities;
@@ -424,6 +425,192 @@ public sealed class TrdAdminService : ITrdAdminService
         return new IndicadoresDependenciaDto(
             personas, docsCargados, seriesDistintas, porMes,
             evalIntentos, evalAprobados, ingresos, colabQueIngresaron);
+    }
+
+    // ---------- Archivo de la carga de la TRD de una dependencia ----------
+
+    public async Task<int> ArchivarCargaDependenciaAsync(Guid dependenciaId, string confirmacionNombre, Guid actor, string? actorNombre, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { throw new InvalidOperationException("Sin entidad activa."); }
+        var dep = await _db.Dependencias.AsNoTracking().FirstOrDefaultAsync(d => d.Id == dependenciaId, ct);
+        if (dep is null) { throw new InvalidOperationException("La dependencia no existe."); }
+        if (!NombreCoincide(dep.NombreCargo, confirmacionNombre))
+        {
+            throw new InvalidOperationException("El nombre escrito no coincide con el de la dependencia. No se archivo nada.");
+        }
+
+        var respuestas = await _db.RespuestasTablaDocumental
+            .Include(r => r.Formatos)
+            .Where(r => r.TrdId == dep.TrdId && r.DependenciaId == dependenciaId)
+            .ToListAsync(ct);
+        if (respuestas.Count == 0) { throw new InvalidOperationException("La dependencia no tiene carga en la tabla para archivar."); }
+
+        var copia = respuestas.Select(r => new RespuestaSnapshot
+        {
+            SerieId = r.SerieId, SubserieId = r.SubserieId, TipologiaId = r.TipologiaId, SinSubserie = r.SinSubserie,
+            TiempoAg = r.TiempoAg, TiempoAc = r.TiempoAc, TiempoObserv = r.TiempoObserv,
+            DispCt = r.DispCt, DispS = r.DispS, DispE = r.DispE, DispD = r.DispD, DispObserv = r.DispObserv,
+            Val1Admin = r.Val1Admin, Val1Tecnica = r.Val1Tecnica, Val1Legal = r.Val1Legal,
+            Val1Contable = r.Val1Contable, Val1Fiscal = r.Val1Fiscal,
+            Val2Historica = r.Val2Historica, Val2Cientifica = r.Val2Cientifica, Val2Cultural = r.Val2Cultural,
+            Representativo = r.Representativo, SerieDdhh = r.SerieDdhh, RelacionSig = r.RelacionSig,
+            Procedimiento = r.Procedimiento, ProcQueEs = r.ProcQueEs, ProcElimina = r.ProcElimina, ProcConserva = r.ProcConserva,
+            Extension = r.Extension, FechaReg = r.FechaReg, CreadoPor = r.CreadoPor,
+            Formatos = r.Formatos.Select(f => new FormatoSnapshot
+            {
+                Soporte = f.Soporte, Formato = f.Formato, Descripcion = f.Descripcion
+            }).ToList()
+        }).ToList();
+
+        _db.ArchivosCargaDependencia.Add(new ArchivoCargaDependencia
+        {
+            TenantId = tenantId,
+            TrdId = dep.TrdId,
+            DependenciaId = dependenciaId,
+            DependenciaNombre = dep.NombreCargo,
+            Registros = copia.Count,
+            Formatos = copia.Sum(c => c.Formatos.Count),
+            Snapshot = JsonSerializer.Serialize(copia),
+            ArchivadoEn = _clock.GetUtcNow(),
+            ArchivadoPor = actor,
+            ArchivadoPorNombre = string.IsNullOrWhiteSpace(actorNombre) ? null : actorNombre.Trim()
+        });
+
+        // Los formatos van en cascada con su respuesta. Copia y retiro van en el mismo
+        // SaveChanges: o queda archivado y en blanco, o no cambia nada.
+        _db.RespuestasTablaDocumental.RemoveRange(respuestas);
+        await _db.SaveChangesAsync(ct);
+        return copia.Count;
+    }
+
+    public async Task<IReadOnlyList<ArchivoCargaDto>> ArchivosCargaDependenciaAsync(Guid dependenciaId, CancellationToken ct = default) =>
+        await _db.ArchivosCargaDependencia.AsNoTracking()
+            .Where(a => a.DependenciaId == dependenciaId)
+            .OrderByDescending(a => a.ArchivadoEn)
+            .Select(a => new ArchivoCargaDto(a.Id, a.DependenciaNombre, a.Registros, a.Formatos,
+                a.ArchivadoEn, a.ArchivadoPorNombre, a.RestauradoEn, a.RestauradoPorNombre))
+            .ToListAsync(ct);
+
+    public async Task<RestauracionCargaDto> RestaurarCargaDependenciaAsync(Guid archivoId, string confirmacionNombre, Guid actor, string? actorNombre, CancellationToken ct = default)
+    {
+        if (_tenant.TenantId is not Guid tenantId) { throw new InvalidOperationException("Sin entidad activa."); }
+        var archivo = await _db.ArchivosCargaDependencia.FirstOrDefaultAsync(a => a.Id == archivoId, ct);
+        if (archivo is null) { throw new InvalidOperationException("El archivo no existe."); }
+        if (archivo.RestauradoEn is not null) { throw new InvalidOperationException("Este archivo ya se restauro."); }
+
+        var dep = await _db.Dependencias.AsNoTracking().FirstOrDefaultAsync(d => d.Id == archivo.DependenciaId, ct);
+        if (dep is null) { throw new InvalidOperationException("La dependencia del archivo ya no existe."); }
+        if (!NombreCoincide(dep.NombreCargo, confirmacionNombre))
+        {
+            throw new InvalidOperationException("El nombre escrito no coincide con el de la dependencia. No se restauro nada.");
+        }
+
+        // Para no mezclar cargas, solo se restaura sobre una tabla activa vacia.
+        if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.TrdId == dep.TrdId && r.DependenciaId == dep.Id, ct))
+        {
+            throw new InvalidOperationException("La tabla de la dependencia tiene carga activa. Archivala primero para poder restaurar este archivo.");
+        }
+
+        var copia = JsonSerializer.Deserialize<List<RespuestaSnapshot>>(archivo.Snapshot) ?? new();
+
+        // El catalogo pudo cambiar desde que se archivo: solo vuelven las filas cuya
+        // serie, subserie y tipologia siguen existiendo.
+        var serieIds = copia.Select(c => c.SerieId).Distinct().ToList();
+        var subIds = copia.Where(c => c.SubserieId != null).Select(c => c.SubserieId!.Value).Distinct().ToList();
+        var tipoIds = copia.Where(c => c.TipologiaId != null).Select(c => c.TipologiaId!.Value).Distinct().ToList();
+        var seriesOk = (await _db.Series.Where(s => serieIds.Contains(s.Id)).Select(s => s.Id).ToListAsync(ct)).ToHashSet();
+        var subsOk = (await _db.Subseries.Where(s => subIds.Contains(s.Id)).Select(s => s.Id).ToListAsync(ct)).ToHashSet();
+        var tiposOk = (await _db.TipologiasDocumentales.Where(t => tipoIds.Contains(t.Id)).Select(t => t.Id).ToListAsync(ct)).ToHashSet();
+
+        var restaurados = 0;
+        foreach (var c in copia)
+        {
+            var valida = seriesOk.Contains(c.SerieId)
+                         && (c.SubserieId is not Guid sb || subsOk.Contains(sb))
+                         && (c.TipologiaId is not Guid tp || tiposOk.Contains(tp));
+            if (!valida) { continue; }
+
+            var r = new RespuestaTablaDocumental
+            {
+                TenantId = tenantId, TrdId = dep.TrdId, DependenciaId = dep.Id,
+                SerieId = c.SerieId, SubserieId = c.SubserieId, TipologiaId = c.TipologiaId, SinSubserie = c.SinSubserie,
+                TiempoAg = c.TiempoAg, TiempoAc = c.TiempoAc, TiempoObserv = c.TiempoObserv,
+                DispCt = c.DispCt, DispS = c.DispS, DispE = c.DispE, DispD = c.DispD, DispObserv = c.DispObserv,
+                Val1Admin = c.Val1Admin, Val1Tecnica = c.Val1Tecnica, Val1Legal = c.Val1Legal,
+                Val1Contable = c.Val1Contable, Val1Fiscal = c.Val1Fiscal,
+                Val2Historica = c.Val2Historica, Val2Cientifica = c.Val2Cientifica, Val2Cultural = c.Val2Cultural,
+                Representativo = c.Representativo, SerieDdhh = c.SerieDdhh, RelacionSig = c.RelacionSig,
+                Procedimiento = c.Procedimiento, ProcQueEs = c.ProcQueEs, ProcElimina = c.ProcElimina, ProcConserva = c.ProcConserva,
+                Extension = string.IsNullOrWhiteSpace(c.Extension) ? "{}" : c.Extension,
+                FechaReg = c.FechaReg, CreadoPor = c.CreadoPor
+            };
+            foreach (var f in c.Formatos)
+            {
+                r.Formatos.Add(new FormatoSerie { TenantId = tenantId, Soporte = f.Soporte, Formato = f.Formato, Descripcion = f.Descripcion });
+            }
+            _db.RespuestasTablaDocumental.Add(r);
+            restaurados++;
+        }
+
+        archivo.RestauradoEn = _clock.GetUtcNow();
+        archivo.RestauradoPor = actor;
+        archivo.RestauradoPorNombre = string.IsNullOrWhiteSpace(actorNombre) ? null : actorNombre.Trim();
+        await _db.SaveChangesAsync(ct);
+        return new RestauracionCargaDto(restaurados, copia.Count - restaurados);
+    }
+
+    /// <summary>
+    /// Confirmacion por nombre: debe escribirse el nombre completo de la dependencia. Se
+    /// ignoran mayusculas y espacios sobrantes, pero no las tildes ni las palabras.
+    /// </summary>
+    private static bool NombreCoincide(string esperado, string? escrito) =>
+        string.Equals(NormalizarNombre(esperado), NormalizarNombre(escrito), StringComparison.OrdinalIgnoreCase)
+        && NormalizarNombre(escrito).Length > 0;
+
+    private static string NormalizarNombre(string? s) =>
+        string.Join(' ', (s ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>Copia de una respuesta de la TRD dentro del snapshot de un archivo.</summary>
+    private sealed class RespuestaSnapshot
+    {
+        public Guid SerieId { get; set; }
+        public Guid? SubserieId { get; set; }
+        public Guid? TipologiaId { get; set; }
+        public bool SinSubserie { get; set; }
+        public decimal? TiempoAg { get; set; }
+        public decimal? TiempoAc { get; set; }
+        public string? TiempoObserv { get; set; }
+        public bool DispCt { get; set; }
+        public bool DispS { get; set; }
+        public bool DispE { get; set; }
+        public bool DispD { get; set; }
+        public string? DispObserv { get; set; }
+        public bool Val1Admin { get; set; }
+        public bool Val1Tecnica { get; set; }
+        public bool Val1Legal { get; set; }
+        public bool Val1Contable { get; set; }
+        public bool Val1Fiscal { get; set; }
+        public bool Val2Historica { get; set; }
+        public bool Val2Cientifica { get; set; }
+        public bool Val2Cultural { get; set; }
+        public string? Representativo { get; set; }
+        public bool SerieDdhh { get; set; }
+        public string? RelacionSig { get; set; }
+        public string? Procedimiento { get; set; }
+        public string? ProcQueEs { get; set; }
+        public string? ProcElimina { get; set; }
+        public string? ProcConserva { get; set; }
+        public string? Extension { get; set; }
+        public DateTimeOffset FechaReg { get; set; }
+        public Guid CreadoPor { get; set; }
+        public List<FormatoSnapshot> Formatos { get; set; } = new();
+    }
+
+    private sealed class FormatoSnapshot
+    {
+        public string Soporte { get; set; } = "PAPEL";
+        public string Formato { get; set; } = "";
+        public string? Descripcion { get; set; }
     }
 
     public async Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default)

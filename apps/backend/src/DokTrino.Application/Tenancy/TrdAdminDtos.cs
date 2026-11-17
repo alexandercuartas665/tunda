@@ -27,6 +27,18 @@ public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Ord
 /// <summary>Un evento de la bitacora de revision de una dependencia (cerro/reabrio, quien, cuando).</summary>
 public sealed record TrazaRevisionDto(string Evento, string? ActorNombre, DateTimeOffset Fecha);
 
+/// <summary>Un archivo de la carga de la TRD de una dependencia (historial del modal).</summary>
+public sealed record ArchivoCargaDto(
+    Guid Id, string DependenciaNombre, int Registros, int Formatos,
+    DateTimeOffset ArchivadoEn, string? ArchivadoPorNombre,
+    DateTimeOffset? RestauradoEn, string? RestauradoPorNombre);
+
+/// <summary>
+/// Resultado de restaurar un archivo: registros que volvieron a la tabla activa y los que
+/// se omitieron porque su serie, subserie o tipologia ya no existe en el catalogo.
+/// </summary>
+public sealed record RestauracionCargaDto(int Restaurados, int Omitidos);
+
 /// <summary>Propiedades editables de una dependencia (distintas del organigrama: codigo raiz, gerente, observaciones, fechas de agenda).</summary>
 public sealed record GuardarPropiedadesDependenciaRequest(Guid Id, string? CodigoRaizDocumental, string? GerenteNombre, string? GerenteEmail, string? Observaciones,
     DateOnly? FechaInicioEstimada = null, DateOnly? FechaFinEstimada = null);

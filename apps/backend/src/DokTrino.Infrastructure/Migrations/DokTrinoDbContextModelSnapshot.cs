@@ -433,6 +433,98 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("aprobaciones_documento", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoCargaDependencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ArchivadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivado_en");
+
+                    b.Property<Guid>("ArchivadoPor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("archivado_por");
+
+                    b.Property<string>("ArchivadoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("archivado_por_nombre");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("DependenciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dependencia_id");
+
+                    b.Property<string>("DependenciaNombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("dependencia_nombre");
+
+                    b.Property<int>("Formatos")
+                        .HasColumnType("integer")
+                        .HasColumnName("formatos");
+
+                    b.Property<int>("Registros")
+                        .HasColumnType("integer")
+                        .HasColumnName("registros");
+
+                    b.Property<DateTimeOffset?>("RestauradoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("restaurado_en");
+
+                    b.Property<Guid?>("RestauradoPor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("restaurado_por");
+
+                    b.Property<string>("RestauradoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("restaurado_por_nombre");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("TrdId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trd_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_archivos_carga_dependencia");
+
+                    b.HasIndex("DependenciaId")
+                        .HasDatabaseName("ix_archivos_carga_dependencia_dependencia_id");
+
+                    b.HasIndex("TenantId", "DependenciaId", "ArchivadoEn")
+                        .HasDatabaseName("ix_archivos_carga_dependencia_tenant_id_dependencia_id_archiva");
+
+                    b.ToTable("archivos_carga_dependencia", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoDigital", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7510,6 +7602,18 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_aprobaciones_documento_archivos_digitales_archivo_id");
 
                     b.Navigation("Archivo");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoCargaDependencia", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Dependencia", "Dependencia")
+                        .WithMany()
+                        .HasForeignKey("DependenciaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_archivos_carga_dependencia_dependencias_dependencia_id");
+
+                    b.Navigation("Dependencia");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.ArchivoDigital", b =>

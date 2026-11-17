@@ -1262,6 +1262,79 @@
                     </select>
                     <button class="trx-btn" @onclick="AddPersona">&#43; Asignar</button>
                 </div>
+
+                @* --- Archivar la carga de la tabla (zona de peligro) --- *@
+                <div class="dep-sec-t">Archivar carga de la tabla</div>
+                <div class="arc-zona">
+                    <div class="arc-txt">
+                        Archiva <b>todo</b> lo que los usuarios de esta dependencia cargaron en la tabla
+                        (@(_ind?.DocumentosCargados ?? 0) registro(s) con sus formatos). Se guarda una copia
+                        completa en el historial y la tabla queda en blanco para volver a cargar desde cero.
+                    </div>
+
+                    @if (_arcModo is null)
+                    {
+                        <button class="trx-btn danger" @onclick="IniciarArchivar"
+                                disabled="@((_ind?.DocumentosCargados ?? 0) == 0)">Archivar carga...</button>
+                    }
+                    else
+                    {
+                        <div class="arc-confirm">
+                            <div class="arc-warn">
+                                &#9888;
+                                @if (_arcModo == "ARCHIVAR")
+                                {
+                                    <span>Vas a archivar <b>toda</b> la carga de la tabla de esta dependencia. La tabla quedara en blanco.</span>
+                                }
+                                else
+                                {
+                                    <span>Vas a restaurar el archivo del <b>@_arcSel?.ArchivadoEn.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</b> (@_arcSel?.Registros registro(s)) en la tabla activa.</span>
+                                }
+                            </div>
+                            <div class="arc-inst">
+                                Para confirmar, escribe el nombre completo de la dependencia:
+                                <b class="arc-nom">@_personasDe.NombreCargo</b>
+                            </div>
+                            @* Pegar esta deshabilitado: la confirmacion es escribir el nombre. *@
+                            <input class="dep-in" @bind="_arcConfirm" @bind:event="oninput"
+                                   @onpaste:preventDefault="true" @ondrop:preventDefault="true"
+                                   placeholder="Escribe el nombre completo de la dependencia" autocomplete="off" />
+                            <div class="arc-btns">
+                                <button class="trx-btn ghost" @onclick="CancelarArchivo">Cancelar</button>
+                                <button class="trx-btn danger" disabled="@(!ConfirmacionArchivoValida || _arcOcupado)" @onclick="EjecutarArchivo">
+                                    @(_arcModo == "ARCHIVAR" ? "Archivar definitivamente" : "Restaurar")
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (_arcOk is not null) { <div class="dep-ok" style="margin-top:8px;">@_arcOk</div> }
+                    @if (_arcError is not null) { <div class="trx-error" style="margin-top:8px;">@_arcError</div> }
+
+                    @if (_archivos.Count > 0)
+                    {
+                        <div class="arc-hist-t">Historial de archivos</div>
+                        <div class="biti">
+                            @foreach (var a in _archivos)
+                            {
+                                <div class="biti-row">
+                                    <span class="biti-ev cerro">Archivo</span>
+                                    <span>@a.Registros registro(s) &middot; @a.Formatos formato(s)</span>
+                                    <span class="biti-quien">@(string.IsNullOrWhiteSpace(a.ArchivadoPorNombre) ? "Administrador" : a.ArchivadoPorNombre)</span>
+                                    <span class="biti-cuando">@a.ArchivadoEn.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                                    @if (a.RestauradoEn is DateTimeOffset rest)
+                                    {
+                                        <span class="biti-ev abrio" title="@(string.IsNullOrWhiteSpace(a.RestauradoPorNombre) ? "Administrador" : a.RestauradoPorNombre)">Restaurado @rest.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="trx-btn ghost mini" @onclick="() => IniciarRestaurar(a)">Restaurar</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
             </div>
         </div>
     </div>
@@ -1353,6 +1426,17 @@
     .rev-chk { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; font-weight:700; color:#8a93ad; }
     .rev-chk input { accent-color:#c0392b; width:15px; height:15px; cursor:pointer; }
     .rev-chk input:checked + span { color:#c0392b; }
+    /* Archivar carga de la tabla: zona de peligro con confirmacion por nombre. */
+    .arc-zona { border:1px solid #f3c6c2; background:#fffafa; border-radius:12px; padding:12px 14px; }
+    .arc-txt { font-size:12.5px; color:#59617a; margin-bottom:10px; line-height:1.45; }
+    .arc-confirm { display:flex; flex-direction:column; gap:8px; background:#fff; border:1px dashed #e6a39c;
+                   border-radius:10px; padding:11px 12px; }
+    .arc-warn { font-size:12.5px; font-weight:700; color:#c0392b; }
+    .arc-inst { font-size:12px; color:#59617a; }
+    .arc-nom { color:#1e2436; }
+    .arc-btns { display:flex; gap:8px; justify-content:flex-end; }
+    .arc-hist-t { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+                  color:#8a93ad; margin:12px 0 6px; }
     .biti { border:1px solid #eef1f7; border-radius:10px; overflow:hidden; }
     .biti-row { display:flex; align-items:center; gap:8px; padding:7px 11px; font-size:12px; border-top:1px solid #f2f4f9; }
     .biti-row:first-child { border-top:0; }
@@ -2458,12 +2542,79 @@
                                GerenteNombre = d.GerenteNombre, GerenteEmail = d.GerenteEmail, Observaciones = d.Observaciones,
                                FechaInicio = d.FechaInicioEstimada, FechaFin = d.FechaFinEstimada };
         _ind = null;
+        CancelarArchivo();
+        _arcOk = _arcError = null;
         _bitacora = (await Trd.BitacoraRevisionAsync(d.Id)).ToList();
         _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
         _ind = await Trd.IndicadoresDependenciaAsync(d.Id);
+        _archivos = (await Trd.ArchivosCargaDependenciaAsync(d.Id)).ToList();
     }
 
     private List<TrazaRevisionDto> _bitacora = new();
+
+    // ---------- Archivo de la carga de la tabla (doble confirmacion por nombre) ----------
+    private List<ArchivoCargaDto> _archivos = new();
+    private string? _arcModo;            // ARCHIVAR | RESTAURAR
+    private ArchivoCargaDto? _arcSel;    // archivo a restaurar
+    private string _arcConfirm = "";
+    private string? _arcOk, _arcError;
+    private bool _arcOcupado;
+
+    /// <summary>
+    /// Habilita el boton final solo cuando se escribio el nombre completo (misma regla que
+    /// valida el servidor: sin importar mayusculas ni espacios sobrantes).
+    /// </summary>
+    private bool ConfirmacionArchivoValida =>
+        _personasDe is not null && NombreArchivo(_arcConfirm).Length > 0
+        && string.Equals(NombreArchivo(_arcConfirm), NombreArchivo(_personasDe.NombreCargo), StringComparison.OrdinalIgnoreCase);
+
+    private static string NombreArchivo(string? s) =>
+        string.Join(' ', (s ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private void IniciarArchivar()
+    {
+        _arcModo = "ARCHIVAR"; _arcSel = null; _arcConfirm = ""; _arcOk = _arcError = null;
+    }
+
+    private void IniciarRestaurar(ArchivoCargaDto a)
+    {
+        _arcModo = "RESTAURAR"; _arcSel = a; _arcConfirm = ""; _arcOk = _arcError = null;
+    }
+
+    private void CancelarArchivo()
+    {
+        _arcModo = null; _arcSel = null; _arcConfirm = "";
+    }
+
+    private async Task EjecutarArchivo()
+    {
+        if (_personasDe is null || !ConfirmacionArchivoValida || _arcOcupado) { return; }
+        _arcOk = _arcError = null;
+        _arcOcupado = true;
+        var depId = _personasDe.Id;
+        try
+        {
+            if (_arcModo == "ARCHIVAR")
+            {
+                var n = await Trd.ArchivarCargaDependenciaAsync(depId, _arcConfirm, await Actor(), await ActorNombre());
+                _arcOk = $"Carga archivada: {n} registro(s). La tabla de la dependencia quedo en blanco.";
+            }
+            else if (_arcModo == "RESTAURAR" && _arcSel is not null)
+            {
+                var r = await Trd.RestaurarCargaDependenciaAsync(_arcSel.Id, _arcConfirm, await Actor(), await ActorNombre());
+                _arcOk = r.Omitidos > 0
+                    ? $"Restaurados {r.Restaurados} registro(s). {r.Omitidos} se omitieron porque su serie, subserie o tipologia ya no existe en el catalogo."
+                    : $"Restaurados {r.Restaurados} registro(s).";
+            }
+            CancelarArchivo();
+            _archivos = (await Trd.ArchivosCargaDependenciaAsync(depId)).ToList();
+            _ind = await Trd.IndicadoresDependenciaAsync(depId);
+            await LoadAll();
+            await RecargarDocs();
+        }
+        catch (InvalidOperationException ex) { _arcError = ex.Message; }
+        finally { _arcOcupado = false; }
+    }
 
     // Enlace administrativo de la dependencia (lo genera/abre solo el administrador).
     private string? _urlAdmin;

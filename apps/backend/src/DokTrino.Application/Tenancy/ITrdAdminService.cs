@@ -44,6 +44,23 @@ public interface ITrdAdminService
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Archiva toda la carga de la TRD de la dependencia (respuestas + formatos de todos sus
+    /// usuarios): guarda una copia completa en el historial y deja la tabla activa en blanco.
+    /// Exige escribir el nombre de la dependencia como confirmacion (se valida aqui, no solo
+    /// en pantalla). Devuelve cuantos registros se archivaron.
+    /// </summary>
+    Task<int> ArchivarCargaDependenciaAsync(Guid dependenciaId, string confirmacionNombre, Guid actor, string? actorNombre, CancellationToken ct = default);
+
+    /// <summary>Historial de archivos de la carga de una dependencia, mas reciente primero.</summary>
+    Task<IReadOnlyList<ArchivoCargaDto>> ArchivosCargaDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Restaura un archivo en la tabla activa de su dependencia. Solo si la tabla activa esta
+    /// vacia (para no mezclar cargas) y una sola vez por archivo. Misma confirmacion por nombre.
+    /// </summary>
+    Task<RestauracionCargaDto> RestaurarCargaDependenciaAsync(Guid archivoId, string confirmacionNombre, Guid actor, string? actorNombre, CancellationToken ct = default);
+
     Task<bool> EliminarDependenciaAsync(Guid id, Guid actor, CancellationToken ct = default);
 
     // Personas asignadas a una dependencia. Varias por dependencia: es lo normal

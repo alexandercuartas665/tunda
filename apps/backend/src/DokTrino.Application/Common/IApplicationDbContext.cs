@@ -80,6 +80,7 @@ public interface IApplicationDbContext
     DbSet<ColaboradorDependencia> ColaboradoresDependencia { get; }
     DbSet<FormacionDependencia> FormacionesDependencia { get; }
     DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia { get; }
+    DbSet<ArchivoCargaDependencia> ArchivosCargaDependencia { get; }
     DbSet<Radicado> Radicados { get; }
     DbSet<Bodega> Bodegas { get; }
     DbSet<Caja> Cajas { get; }
