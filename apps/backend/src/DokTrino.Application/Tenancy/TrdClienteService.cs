@@ -48,7 +48,8 @@ public sealed class TrdClienteService : ITrdClienteService
         }
 
         return new TokenSesionDto(tok.TenantId, trd.Id, trd.Consecutivo, trd.Titulo, trd.Estado,
-            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado, motivo, tok.ColaboradorId, exento);
+            dep.Id, dep.NombreCargo, dep.Estado, soloLectura, expirado, motivo, tok.ColaboradorId, exento,
+            tok.EsAdministrativo);
     }
 
     public async Task<IReadOnlyList<RespuestaTrdDto>> ListarRespuestasAsync(string token, CancellationToken ct = default)
@@ -158,10 +159,12 @@ public sealed class TrdClienteService : ITrdClienteService
 
         // El colaborador ve el catalogo maestro mas lo que su propia dependencia
         // haya sugerido: las sugerencias de otras dependencias quedan ocultas
-        // hasta que el admin las apruebe.
+        // hasta que el admin las apruebe. El enlace administrativo ve todo el
+        // catalogo del tenant para poder gestionarlo.
+        var verTodo = s.EsAdministrativo;
         return await _db.Series.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.TenantId == s.TenantId && x.Activo
-                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+                        && (verTodo || x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
             .OrderBy(x => x.Codigo)
             .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado,
                 _db.Subseries.IgnoreQueryFilters().Count(sb => sb.SerieId == x.Id)))
@@ -172,9 +175,10 @@ public sealed class TrdClienteService : ITrdClienteService
     {
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { return Array.Empty<CatalogoItemDto>(); }
+        var verTodo = s.EsAdministrativo;
         return await _db.Subseries.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.SerieId == serieId && x.TenantId == s.TenantId
-                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+                        && (verTodo || x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
             .OrderBy(x => x.Codigo)
             .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado,
                 _db.TipologiasDocumentales.IgnoreQueryFilters().Count(t => t.SubserieId == x.Id)))
@@ -185,9 +189,10 @@ public sealed class TrdClienteService : ITrdClienteService
     {
         var s = await ResolverTokenAsync(token, ct);
         if (s is null) { return Array.Empty<CatalogoItemDto>(); }
+        var verTodo = s.EsAdministrativo;
         return await _db.TipologiasDocumentales.IgnoreQueryFilters().AsNoTracking()
             .Where(x => x.SubserieId == subserieId && x.TenantId == s.TenantId && x.Activo
-                        && (x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
+                        && (verTodo || x.Estado == "MAESTRA" || x.SugeridaPorDependenciaId == s.DependenciaId))
             .OrderBy(x => x.Codigo)
             .Select(x => new CatalogoItemDto(x.Id, x.Codigo, x.Nombre, x.Estado, 0))
             .ToListAsync(ct);
@@ -250,6 +255,118 @@ public sealed class TrdClienteService : ITrdClienteService
             default:
                 throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
         }
+    }
+
+    /// <summary>
+    /// Renombra una entrada del catalogo. Solo el enlace ADMINISTRATIVO puede hacerlo;
+    /// afecta al catalogo de todo el tenant, por eso queda vedado al enlace normal.
+    /// </summary>
+    public async Task RenombrarCatalogoAsync(string token, string nivel, Guid id, string nuevoNombre, CancellationToken ct = default)
+    {
+        var s = await SesionAdministrativaAsync(token, ct);
+
+        var nombre = (nuevoNombre ?? "").Trim();
+        if (nombre.Length == 0) { throw new InvalidOperationException("El nombre no puede quedar vacio."); }
+
+        switch (nivel?.ToUpperInvariant())
+        {
+            case "SERIE":
+            {
+                var e = await _db.Series.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La serie no existe."); }
+                e.Nombre = nombre;
+                break;
+            }
+            case "SUBSERIE":
+            {
+                var e = await _db.Subseries.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La subserie no existe."); }
+                e.Nombre = nombre;
+                break;
+            }
+            case "TIPOLOGIA":
+            {
+                var e = await _db.TipologiasDocumentales.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La tipologia no existe."); }
+                e.Nombre = nombre;
+                break;
+            }
+            default:
+                throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Elimina una entrada del catalogo. Solo el enlace ADMINISTRATIVO. Se bloquea si
+    /// la entrada tiene hijos (subseries/tipologias) o si ya aparece en respuestas de
+    /// alguna TRD, para no romper datos existentes.
+    /// </summary>
+    public async Task EliminarCatalogoAsync(string token, string nivel, Guid id, CancellationToken ct = default)
+    {
+        var s = await SesionAdministrativaAsync(token, ct);
+
+        switch (nivel?.ToUpperInvariant())
+        {
+            case "SERIE":
+            {
+                var e = await _db.Series.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La serie no existe."); }
+                if (await _db.Subseries.IgnoreQueryFilters().AnyAsync(x => x.SerieId == id, ct))
+                { throw new InvalidOperationException("No se puede eliminar: la serie tiene subseries. Elimina primero las subseries."); }
+                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.SerieId == id, ct))
+                { throw new InvalidOperationException("No se puede eliminar: la serie ya tiene registros en una TRD."); }
+                _db.Series.Remove(e);
+                break;
+            }
+            case "SUBSERIE":
+            {
+                var e = await _db.Subseries.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La subserie no existe."); }
+                if (await _db.TipologiasDocumentales.IgnoreQueryFilters().AnyAsync(x => x.SubserieId == id, ct))
+                { throw new InvalidOperationException("No se puede eliminar: la subserie tiene tipologias. Elimina primero las tipologias."); }
+                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.SubserieId == id, ct))
+                { throw new InvalidOperationException("No se puede eliminar: la subserie ya tiene registros en una TRD."); }
+                _db.Subseries.Remove(e);
+                break;
+            }
+            case "TIPOLOGIA":
+            {
+                var e = await _db.TipologiasDocumentales.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
+                if (e is null) { throw new InvalidOperationException("La tipologia no existe."); }
+                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.TipologiaId == id, ct))
+                { throw new InvalidOperationException("No se puede eliminar: la tipologia ya tiene registros en una TRD."); }
+                _db.TipologiasDocumentales.Remove(e);
+                break;
+            }
+            default:
+                throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
+        }
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Resuelve el token y exige que sea un enlace administrativo vigente. La gestion
+    /// del catalogo no la bloquea el "solo lectura" de la dependencia (una TRD en
+    /// desarrollo es justo cuando el admin arma el catalogo), pero si un token invalido
+    /// o expirado.
+    /// </summary>
+    private async Task<TokenSesionDto> SesionAdministrativaAsync(string token, CancellationToken ct)
+    {
+        var s = await ResolverTokenAsync(token, ct);
+        if (s is null) { throw new InvalidOperationException("Token invalido."); }
+        if (s.Expirado) { throw new InvalidOperationException("El enlace expiro."); }
+        if (!s.EsAdministrativo)
+        { throw new InvalidOperationException("Solo el enlace administrativo puede editar el catalogo."); }
+        return s;
     }
 
     public async Task<IReadOnlyList<FormatoDto>> FormatosAsync(string token, Guid respuestaId, CancellationToken ct = default)

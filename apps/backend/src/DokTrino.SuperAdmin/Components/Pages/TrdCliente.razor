@@ -7,6 +7,7 @@
 @inject ICuestionarioService Cuestionarios
 @inject IClienteCursoService Curso
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Encuesta documental - Archimente</PageTitle>
 
@@ -18,6 +19,14 @@ else
 {
     <div class="tcl">
         <div class="tcl-breadcrumb">Inicio &middot; Documental &middot; Encuesta del colaborador</div>
+
+        @* --- Modo administrativo: solo el enlace administrativo puede editar el catalogo --- *@
+        @if (_sesion.EsAdministrativo)
+        {
+            <div class="tcl-adm-banner">
+                &#128273; Enlace administrativo: puedes renombrar y eliminar series, subseries y tipologias del catalogo. Estos cambios afectan a todo el catalogo de la entidad.
+            </div>
+        }
 
         @* --- Banner de onboarding --- *@
         @if (_mostrarHint)
@@ -111,10 +120,26 @@ else
                         {
                             <div class="tcl-item @(_serieSel?.Id == s.Id ? "on" : "")" @onclick="() => SeleccionarSerie(s)">
                                 <span>&#128193;</span>
-                                <span>@s.Nombre</span>
-                                @if (s.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
-                                @if (s.Hijos > 0) { <span class="tcl-count">@s.Hijos</span> }
-                                <span class="code">@s.Codigo</span>
+                                @if (_editNivel == "SERIE" && _editId == s.Id)
+                                {
+                                    <input class="tcl-input tcl-edit-in" @bind="_editNombre" @onclick:stopPropagation="true" />
+                                    <button class="tcl-mini-btn ok" title="Guardar" @onclick:stopPropagation="true" @onclick="GuardarEdicion">&#10003;</button>
+                                    <button class="tcl-mini-btn" title="Cancelar" @onclick:stopPropagation="true" @onclick="CancelarEdicion">&times;</button>
+                                }
+                                else
+                                {
+                                    <span>@s.Nombre</span>
+                                    @if (s.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                    @if (s.Hijos > 0) { <span class="tcl-count">@s.Hijos</span> }
+                                    <span class="code">@s.Codigo</span>
+                                    @if (_sesion.EsAdministrativo)
+                                    {
+                                        <span class="tcl-adm-acc" @onclick:stopPropagation="true">
+                                            <button class="tcl-mini-btn" title="Renombrar" @onclick='() => IniciarEdicion("SERIE", s)'>&#9998;</button>
+                                            <button class="tcl-mini-btn del" title="Eliminar" @onclick='() => EliminarCat("SERIE", s)'>&times;</button>
+                                        </span>
+                                    }
+                                }
                             </div>
                         }
                         @if (SeriesVisibles.Count == 0)
@@ -159,21 +184,55 @@ else
                                 <div class="tcl-sub">
                                     <div class="tcl-sub-h" @onclick="() => AlternarSubserie(sub)">
                                         <span class="caret">@(_subAbierta == sub.Id ? "▾" : "▸")</span>
-                                        <span>&#128194; @sub.Nombre</span>
-                                        @if (sub.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
-                                        <span class="code">@sub.Codigo</span>
+                                        @if (_editNivel == "SUBSERIE" && _editId == sub.Id)
+                                        {
+                                            <input class="tcl-input tcl-edit-in" @bind="_editNombre" @onclick:stopPropagation="true" />
+                                            <button class="tcl-mini-btn ok" title="Guardar" @onclick:stopPropagation="true" @onclick="GuardarEdicion">&#10003;</button>
+                                            <button class="tcl-mini-btn" title="Cancelar" @onclick:stopPropagation="true" @onclick="CancelarEdicion">&times;</button>
+                                        }
+                                        else
+                                        {
+                                            <span>&#128194; @sub.Nombre</span>
+                                            @if (sub.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                            <span class="code">@sub.Codigo</span>
+                                            @if (_sesion.EsAdministrativo)
+                                            {
+                                                <span class="tcl-adm-acc" @onclick:stopPropagation="true">
+                                                    <button class="tcl-mini-btn" title="Renombrar" @onclick='() => IniciarEdicion("SUBSERIE", sub)'>&#9998;</button>
+                                                    <button class="tcl-mini-btn del" title="Eliminar" @onclick='() => EliminarCat("SUBSERIE", sub)'>&times;</button>
+                                                </span>
+                                            }
+                                        }
                                     </div>
                                     @if (_subAbierta == sub.Id)
                                     {
                                         <div class="tcl-tipos">
                                             @foreach (var t in _tipologias)
                                             {
-                                                <label class="tcl-tipo">
-                                                    <input type="checkbox" checked="@_tiposMarcadas.Contains(t.Id)"
-                                                           @onchange="e => MarcarTipologia(t.Id, e)" />
-                                                    <span>@t.Nombre</span>
-                                                    @if (t.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
-                                                </label>
+                                                @if (_editNivel == "TIPOLOGIA" && _editId == t.Id)
+                                                {
+                                                    <div class="tcl-tipo">
+                                                        <input class="tcl-input tcl-edit-in" @bind="_editNombre" />
+                                                        <button class="tcl-mini-btn ok" title="Guardar" @onclick="GuardarEdicion">&#10003;</button>
+                                                        <button class="tcl-mini-btn" title="Cancelar" @onclick="CancelarEdicion">&times;</button>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <label class="tcl-tipo">
+                                                        <input type="checkbox" checked="@_tiposMarcadas.Contains(t.Id)"
+                                                               @onchange="e => MarcarTipologia(t.Id, e)" />
+                                                        <span>@t.Nombre</span>
+                                                        @if (t.Estado == "SUGERIDA") { <span class="tcl-propia">PROPIA</span> }
+                                                        @if (_sesion.EsAdministrativo)
+                                                        {
+                                                            <span class="tcl-adm-acc" @onclick:stopPropagation="true" @onclick:preventDefault="true">
+                                                                <button class="tcl-mini-btn" title="Renombrar" @onclick:preventDefault="true" @onclick='() => IniciarEdicion("TIPOLOGIA", t)'>&#9998;</button>
+                                                                <button class="tcl-mini-btn del" title="Eliminar" @onclick:preventDefault="true" @onclick='() => EliminarCat("TIPOLOGIA", t)'>&times;</button>
+                                                            </span>
+                                                        }
+                                                    </label>
+                                                }
                                             }
                                             @if (_tipologias.Count == 0)
                                             {
@@ -359,6 +418,19 @@ else
 }
 
 <style>
+    /* --- Edicion de catalogo (solo enlace administrativo) --- */
+    .tcl-adm-banner { background:#eef4ff; border:1px solid #cfe0ff; color:#1f5bb5;
+                      border-radius:10px; padding:9px 13px; font-size:12.5px; font-weight:600;
+                      margin-bottom:12px; }
+    .tcl-adm-acc { display:inline-flex; gap:4px; margin-left:auto; }
+    .tcl-mini-btn { border:1px solid #e3e7f2; background:#fff; border-radius:6px; cursor:pointer;
+                    font-size:12px; line-height:1; padding:3px 7px; color:#6b7490; }
+    .tcl-mini-btn:hover { background:#f2f4f9; }
+    .tcl-mini-btn.del:hover { background:#fdeceb; color:#c0392b; border-color:#f3c6c2; }
+    .tcl-mini-btn.ok { color:#2f7d54; border-color:#bfe3cd; }
+    .tcl-mini-btn.ok:hover { background:#eaf6ef; }
+    .tcl-edit-in { flex:1; margin:0; min-width:0; }
+
     .cl-form { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-top:14px; }
     .cl-f { display:flex; flex-direction:column; gap:3px; }
     .cl-f label { font-size:10px; font-weight:700; text-transform:uppercase; color:var(--muted-foreground); }
@@ -487,6 +559,57 @@ else
     {
         _mostrarHint = false;
         await Cliente.OcultarHintAsync(Token ?? "");
+    }
+
+    // --- Edicion del catalogo: solo disponible con el enlace administrativo ---
+    private string? _editNivel;
+    private Guid? _editId;
+    private string _editNombre = "";
+
+    private void IniciarEdicion(string nivel, CatalogoItemDto item)
+    {
+        _error = _ok = null;
+        _editNivel = nivel;
+        _editId = item.Id;
+        _editNombre = item.Nombre;
+    }
+
+    private void CancelarEdicion()
+    {
+        _editNivel = null;
+        _editId = null;
+        _editNombre = "";
+    }
+
+    private async Task GuardarEdicion()
+    {
+        if (_editId is not Guid id || _editNivel is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Cliente.RenombrarCatalogoAsync(Token ?? "", _editNivel, id, _editNombre);
+            _ok = "Nombre actualizado.";
+            CancelarEdicion();
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task EliminarCat(string nivel, CatalogoItemDto item)
+    {
+        _error = _ok = null;
+        var confirmado = await JS.InvokeAsync<bool>("confirm",
+            $"Eliminar \"{item.Nombre}\" del catalogo? Esta accion no se puede deshacer.");
+        if (!confirmado) { return; }
+        try
+        {
+            await Cliente.EliminarCatalogoAsync(Token ?? "", nivel, item.Id);
+            _ok = "Elemento eliminado.";
+            if (nivel == "SERIE" && _serieSel?.Id == item.Id) { _serieSel = null; _subseries = new(); _subAbierta = null; _tipologias = new(); }
+            if (nivel == "SUBSERIE" && _subAbierta == item.Id) { _subAbierta = null; _tipologias = new(); }
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     private async Task SugerirSerie() => await Sugerir("SERIE", null, _nuevaSerie, () => _nuevaSerie = "");

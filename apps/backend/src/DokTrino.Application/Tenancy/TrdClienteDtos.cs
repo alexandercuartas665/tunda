@@ -4,7 +4,8 @@ namespace DokTrino.Application.Tenancy;
 public sealed record TokenSesionDto(
     Guid TenantId, Guid TrdId, string TrdConsecutivo, string TrdTitulo, string TrdEstado,
     Guid DependenciaId, string DependenciaCargo, string DependenciaEstado, bool SoloLectura, bool Expirado,
-    string? MotivoSoloLectura = null, Guid? ColaboradorId = null, bool ExentoCapacitacion = false);
+    string? MotivoSoloLectura = null, Guid? ColaboradorId = null, bool ExentoCapacitacion = false,
+    bool EsAdministrativo = false);
 
 public sealed record RespuestaTrdDto(
     Guid Id, string SerieNombre, string? SubserieNombre, string? TipologiaNombre,

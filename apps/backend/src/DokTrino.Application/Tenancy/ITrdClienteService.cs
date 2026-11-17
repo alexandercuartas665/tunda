@@ -23,6 +23,12 @@ public interface ITrdClienteService
     /// <summary>Crea una serie/subserie/tipologia con estado SUGERIDA, visible solo para su dependencia.</summary>
     Task<Guid?> SugerirCatalogoAsync(string token, SugerirCatalogoCommand cmd, CancellationToken ct = default);
 
+    /// <summary>Solo enlace administrativo: renombra una entrada del catalogo (SERIE/SUBSERIE/TIPOLOGIA) del tenant.</summary>
+    Task RenombrarCatalogoAsync(string token, string nivel, Guid id, string nuevoNombre, CancellationToken ct = default);
+
+    /// <summary>Solo enlace administrativo: elimina una entrada del catalogo si no tiene hijos ni respuestas.</summary>
+    Task EliminarCatalogoAsync(string token, string nivel, Guid id, CancellationToken ct = default);
+
     /// <summary>Progreso de los 3 pasos del asistente + subseries sin formato declarado.</summary>
     Task<EstadoEncuestaDto> EstadoEncuestaAsync(string token, CancellationToken ct = default);
 
