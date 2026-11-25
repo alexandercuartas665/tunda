@@ -7209,6 +7209,94 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("tokens_dependencia", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.TrazaEliminacionRespuesta", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("Actor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor");
+
+                    b.Property<string>("ActorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("actor_nombre");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("DependenciaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dependencia_id");
+
+                    b.Property<string>("DependenciaNombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("dependencia_nombre");
+
+                    b.Property<DateTimeOffset>("Fecha")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<int>("Formatos")
+                        .HasColumnType("integer")
+                        .HasColumnName("formatos");
+
+                    b.Property<string>("SerieNombre")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("serie_nombre");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot");
+
+                    b.Property<string>("SubserieNombre")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("subserie_nombre");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("TipologiaNombre")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("tipologia_nombre");
+
+                    b.Property<Guid>("TrdId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trd_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trazas_eliminacion_respuesta");
+
+                    b.HasIndex("TenantId", "DependenciaId", "Fecha")
+                        .HasDatabaseName("ix_trazas_eliminacion_respuesta_tenant_id_dependencia_id_fecha");
+
+                    b.ToTable("trazas_eliminacion_respuesta", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.TrazaRevisionDependencia", b =>
                 {
                     b.Property<Guid>("Id")

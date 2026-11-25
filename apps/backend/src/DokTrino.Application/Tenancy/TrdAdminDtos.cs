@@ -27,6 +27,11 @@ public sealed record DependenciaDto(Guid Id, Guid? PadreId, short Nivel, int Ord
 /// <summary>Un evento de la bitacora de revision de una dependencia (cerro/reabrio, quien, cuando).</summary>
 public sealed record TrazaRevisionDto(string Evento, string? ActorNombre, DateTimeOffset Fecha);
 
+/// <summary>Una fila de la TRD eliminada (auditoria): que serie/subserie/tipologia, quien y cuando.</summary>
+public sealed record TrazaEliminacionFilaDto(
+    string SerieNombre, string? SubserieNombre, string? TipologiaNombre, int Formatos,
+    string? ActorNombre, DateTimeOffset Fecha);
+
 /// <summary>Un archivo de la carga de la TRD de una dependencia (historial del modal).</summary>
 public sealed record ArchivoCargaDto(
     Guid Id, string DependenciaNombre, int Registros, int Formatos,

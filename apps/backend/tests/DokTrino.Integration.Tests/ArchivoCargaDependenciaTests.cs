@@ -177,6 +177,48 @@ public sealed class ArchivoCargaDependenciaTests : IAsyncLifetime
             () => cliente.EliminarCatalogoAsync(tokAdmin, "SERIE", serie.Id));
     }
 
+    [Fact]
+    public async Task No_se_elimina_TRD_ni_dependencia_con_datos_y_la_fila_borrada_queda_auditada()
+    {
+        await using var ctx = CreateContext(_tenant);
+        var admin = Admin(ctx, _tenant);
+        var cliente = new TrdClienteService(ctx, TimeProvider.System);
+        var (trd, dep) = await CrearDependenciaAsync(ctx, admin, "Tesoreria");
+        await CargarAsync(ctx, trd, dep, filas: 2, formatosPorFila: 1);
+
+        // TRD con datos: no se elimina.
+        var exTrd = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => admin.EliminarTrdAsync(trd, Guid.Empty));
+        Assert.Contains("no se puede eliminar", exTrd.Message);
+
+        // Dependencia con carga: no se elimina.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => admin.EliminarDependenciaAsync(dep, Guid.Empty));
+
+        // Borrar una fila deja auditoria con nombres, actor y copia.
+        var col = await admin.AgregarColaboradorAsync(new CrearColaboradorRequest
+        {
+            DependenciaId = dep, Nombre = "Ana Tesorera", Email = $"a{Guid.NewGuid():N}@qa.local"
+        }, Guid.Empty);
+        await admin.CambiarEstadoAsync(trd, "ACTIVO", Guid.Empty);
+        var tok = (await admin.GenerarTokenColaboradorAsync(col!.Id, "http://localhost", Guid.Empty))!.Token;
+        var fila = await ctx.RespuestasTablaDocumental.IgnoreQueryFilters().FirstAsync(r => r.DependenciaId == dep);
+
+        Assert.True(await cliente.EliminarRespuestaAsync(tok, fila.Id));
+
+        var trazas = await admin.EliminacionesFilaDependenciaAsync(dep);
+        var t = Assert.Single(trazas);
+        Assert.Equal("Ana Tesorera", t.ActorNombre);
+        Assert.False(string.IsNullOrWhiteSpace(t.SerieNombre));
+        Assert.Equal(1, await ctx.RespuestasTablaDocumental.IgnoreQueryFilters().CountAsync(r => r.DependenciaId == dep));
+
+        // Vaciada y archivada la carga, ya se puede eliminar la dependencia.
+        await admin.ArchivarCargaDependenciaAsync(dep, "Tesoreria", Guid.Empty, "qa");
+        Assert.True(await admin.EliminarDependenciaAsync(dep, Guid.Empty));
+        // La auditoria sobrevive al borrado de la dependencia (sin FK en cascada).
+        Assert.Single(await admin.EliminacionesFilaDependenciaAsync(dep));
+    }
+
     // ---------- helpers ----------
 
     private TrdAdminService Admin(DokTrinoDbContext ctx, Guid tenant) =>

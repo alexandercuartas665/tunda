@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DokTrino.Application.Common;
 using DokTrino.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -125,8 +126,46 @@ public sealed class TrdClienteService : ITrdClienteService
     {
         var s = await ResolverTokenAsync(token, ct);
         if (s is null || s.SoloLectura) { return false; }
-        var r = await _db.RespuestasTablaDocumental.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == respuestaId && x.TenantId == s.TenantId, ct);
+        var r = await _db.RespuestasTablaDocumental.IgnoreQueryFilters()
+            .Include(x => x.Formatos)
+            .FirstOrDefaultAsync(x => x.Id == respuestaId && x.TenantId == s.TenantId, ct);
         if (r is null) { return false; }
+
+        // Auditoria: antes de borrar, se deja constancia de quien y que (nombres legibles)
+        // y una copia de la fila con sus formatos, por si hay que recuperarla.
+        var serie = await _db.Series.IgnoreQueryFilters().Where(x => x.Id == r.SerieId)
+            .Select(x => x.Codigo + " - " + x.Nombre).FirstOrDefaultAsync(ct);
+        var sub = r.SubserieId == null ? null : await _db.Subseries.IgnoreQueryFilters().Where(x => x.Id == r.SubserieId)
+            .Select(x => x.Codigo + " - " + x.Nombre).FirstOrDefaultAsync(ct);
+        var tip = r.TipologiaId == null ? null : await _db.TipologiasDocumentales.IgnoreQueryFilters().Where(x => x.Id == r.TipologiaId)
+            .Select(x => x.Codigo + " - " + x.Nombre).FirstOrDefaultAsync(ct);
+        var actorNombre = s.ColaboradorId is Guid cid
+            ? await _db.ColaboradoresDependencia.IgnoreQueryFilters().Where(c => c.Id == cid).Select(c => c.Nombre).FirstOrDefaultAsync(ct)
+            : (s.EsAdministrativo ? "Enlace administrativo" : null);
+
+        _db.TrazasEliminacionRespuesta.Add(new TrazaEliminacionRespuesta
+        {
+            TenantId = s.TenantId, TrdId = r.TrdId, DependenciaId = r.DependenciaId,
+            DependenciaNombre = s.DependenciaCargo,
+            SerieNombre = serie ?? "", SubserieNombre = sub, TipologiaNombre = tip,
+            Formatos = r.Formatos.Count,
+            Snapshot = JsonSerializer.Serialize(new
+            {
+                r.SerieId, r.SubserieId, r.TipologiaId, r.SinSubserie,
+                r.TiempoAg, r.TiempoAc, r.TiempoObserv,
+                r.DispCt, r.DispS, r.DispE, r.DispD, r.DispObserv,
+                r.Val1Admin, r.Val1Tecnica, r.Val1Legal, r.Val1Contable, r.Val1Fiscal,
+                r.Val2Historica, r.Val2Cientifica, r.Val2Cultural,
+                r.Representativo, r.SerieDdhh, r.RelacionSig,
+                r.Procedimiento, r.ProcQueEs, r.ProcElimina, r.ProcConserva,
+                r.Extension, r.FechaReg, r.CreadoPor,
+                Formatos = r.Formatos.Select(f => new { f.Soporte, f.Formato, f.Descripcion })
+            }),
+            Actor = s.ColaboradorId ?? Guid.Empty,
+            ActorNombre = actorNombre,
+            Fecha = _clock.GetUtcNow()
+        });
+
         _db.RespuestasTablaDocumental.Remove(r);
         await _db.SaveChangesAsync(ct);
         return true;

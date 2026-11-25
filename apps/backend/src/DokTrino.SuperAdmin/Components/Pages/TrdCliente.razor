@@ -755,7 +755,15 @@ else
     private async Task Del(Guid id)
     {
         _error = _ok = null;
-        await Cliente.EliminarRespuestaAsync(Token ?? "", id);
-        await Recargar();
+        var ok = await JS.InvokeAsync<bool>("confirm",
+            "Eliminar este registro de tu TRD? Queda constancia de la eliminacion.");
+        if (!ok) { return; }
+        try
+        {
+            await Cliente.EliminarRespuestaAsync(Token ?? "", id);
+            _ok = "Registro eliminado.";
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 }

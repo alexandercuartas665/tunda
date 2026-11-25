@@ -84,17 +84,39 @@
                     <span class="per-x" @onclick="() => _trdAEliminar = null">&#10005;</span>
                 </div>
                 <div class="per-b">
-                    <div class="ase-alert" style="margin-bottom: 14px;">
-                        Se eliminara la transaccion con <b>todas sus dependencias, personas y la matriz TRD</b>. Esta accion no se puede deshacer.
-                    </div>
-                    <label class="rev-chk" style="font-size: 12.5px; color: #37415c;">
-                        <input type="checkbox" checked="@_confirmoEliminar" @onchange="e => _confirmoEliminar = (bool)(e.Value ?? false)" />
-                        <span>Entiendo que esta accion es permanente.</span>
-                    </label>
-                    <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
-                        <button class="trx-btn ghost" @onclick="() => _trdAEliminar = null">Cancelar</button>
-                        <button class="trx-btn danger" @onclick="EliminarTrdConfirmado" disabled="@(!_confirmoEliminar)">Eliminar definitivamente</button>
-                    </div>
+                    @if (_trdAEliminar.Documentos > 0)
+                    {
+                        @* TRD con datos: no se elimina, se desactiva para conservar el levantamiento. *@
+                        <div class="ase-alert" style="margin-bottom: 14px;">
+                            Esta TRD tiene <b>@_trdAEliminar.Documentos registro(s) cargados</b>, asi que <b>no se puede eliminar</b>.
+                            Puedes <b>desactivarla</b>: pasa a estado CERRADO y queda en solo lectura, conservando todos los datos. Podras reabrirla cuando quieras.
+                        </div>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
+                            <button class="trx-btn ghost" @onclick="() => _trdAEliminar = null">Cancelar</button>
+                            @if (_trdAEliminar.Estado != "CERRADO")
+                            {
+                                <button class="trx-btn" @onclick="DesactivarTrd">Desactivar (CERRADO)</button>
+                            }
+                            else
+                            {
+                                <span class="dep-ok">Ya esta desactivada (CERRADO).</span>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="ase-alert" style="margin-bottom: 14px;">
+                            Se eliminara la transaccion con <b>todas sus dependencias y personas</b>. No tiene datos cargados en la matriz. Esta accion no se puede deshacer.
+                        </div>
+                        <label class="rev-chk" style="font-size: 12.5px; color: #37415c;">
+                            <input type="checkbox" checked="@_confirmoEliminar" @onchange="e => _confirmoEliminar = (bool)(e.Value ?? false)" />
+                            <span>Entiendo que esta accion es permanente.</span>
+                        </label>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
+                            <button class="trx-btn ghost" @onclick="() => _trdAEliminar = null">Cancelar</button>
+                            <button class="trx-btn danger" @onclick="EliminarTrdConfirmado" disabled="@(!_confirmoEliminar)">Eliminar definitivamente</button>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -1263,6 +1285,23 @@
                     <button class="trx-btn" @onclick="AddPersona">&#43; Asignar</button>
                 </div>
 
+                @* --- Auditoria de filas eliminadas --- *@
+                @if (_eliminaciones.Count > 0)
+                {
+                    <div class="dep-sec-t">Filas eliminadas (@_eliminaciones.Count)</div>
+                    <div class="biti">
+                        @foreach (var e in _eliminaciones)
+                        {
+                            <div class="biti-row">
+                                <span class="biti-ev cerro">Eliminada</span>
+                                <span>@e.SerieNombre@(e.SubserieNombre is null ? "" : " / " + e.SubserieNombre)@(e.TipologiaNombre is null ? "" : " / " + e.TipologiaNombre)</span>
+                                <span class="biti-quien">@(string.IsNullOrWhiteSpace(e.ActorNombre) ? "Sin identificar" : e.ActorNombre)</span>
+                                <span class="biti-cuando">@e.Fecha.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                }
+
                 @* --- Archivar la carga de la tabla (zona de peligro) --- *@
                 <div class="dep-sec-t">Archivar carga de la tabla</div>
                 <div class="arc-zona">
@@ -1904,6 +1943,21 @@
         catch (Exception ex) { _error = ex.Message; _trdAEliminar = null; }
     }
 
+    // TRD con datos: en vez de borrarla se desactiva (CERRADO), conservando todo.
+    private async Task DesactivarTrd()
+    {
+        if (_trdAEliminar is null) { return; }
+        var cons = _trdAEliminar.Consecutivo;
+        try
+        {
+            await Trd.CambiarEstadoAsync(_trdAEliminar.Id, "CERRADO", await Actor());
+            _trdAEliminar = null;
+            _ok = $"Transaccion {cons} desactivada (CERRADO). Sus datos se conservan.";
+            await LoadAll();
+        }
+        catch (Exception ex) { _error = ex.Message; _trdAEliminar = null; }
+    }
+
     // Reabrir transaccion CERRADA con doble confirmacion (modal + casilla + boton).
     private TrdDto? _trdAReabrir;
     private bool _confirmoReabrir;
@@ -2492,10 +2546,14 @@
     private async Task DelDep(Guid id)
     {
         _error = _ok = _depError = null;
-        await Trd.EliminarDependenciaAsync(id, await Actor());
-        if (_depSel?.Id == id) { _depSel = null; }
-        if (_personasDe?.Id == id) { CerrarPersonas(); }
-        await LoadAll();
+        try
+        {
+            await Trd.EliminarDependenciaAsync(id, await Actor());
+            if (_depSel?.Id == id) { _depSel = null; }
+            if (_personasDe?.Id == id) { CerrarPersonas(); }
+            await LoadAll();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     // Marca/desmarca "cerrado en revision": bloquea al cliente y deja traza. El admin no se bloquea.
@@ -2548,9 +2606,11 @@
         _personas = (await Trd.ColaboradoresAsync(d.Id, Nav.BaseUri)).ToList();
         _ind = await Trd.IndicadoresDependenciaAsync(d.Id);
         _archivos = (await Trd.ArchivosCargaDependenciaAsync(d.Id)).ToList();
+        _eliminaciones = (await Trd.EliminacionesFilaDependenciaAsync(d.Id)).ToList();
     }
 
     private List<TrazaRevisionDto> _bitacora = new();
+    private List<TrazaEliminacionFilaDto> _eliminaciones = new();
 
     // ---------- Archivo de la carga de la tabla (doble confirmacion por nombre) ----------
     private List<ArchivoCargaDto> _archivos = new();

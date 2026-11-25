@@ -41,6 +41,9 @@ public interface ITrdAdminService
     /// <summary>Bitacora de cierres/aperturas de revision de una dependencia, mas reciente primero.</summary>
     Task<IReadOnlyList<TrazaRevisionDto>> BitacoraRevisionAsync(Guid dependenciaId, CancellationToken ct = default);
 
+    /// <summary>Auditoria de filas de la TRD eliminadas en la dependencia, mas reciente primero.</summary>
+    Task<IReadOnlyList<TrazaEliminacionFilaDto>> EliminacionesFilaDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
+
     /// <summary>Indicadores de la dependencia (documentos cargados, evaluacion, ingresos) para el modal.</summary>
     Task<IndicadoresDependenciaDto> IndicadoresDependenciaAsync(Guid dependenciaId, CancellationToken ct = default);
 

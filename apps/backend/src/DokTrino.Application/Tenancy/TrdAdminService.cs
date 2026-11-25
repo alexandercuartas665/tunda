@@ -235,6 +235,13 @@ public sealed class TrdAdminService : ITrdAdminService
     {
         var trd = await _db.TablasRetencionDocumental.FirstOrDefaultAsync(x => x.Id == trdId, ct);
         if (trd is null) { return false; }
+        // Una TRD con datos cargados no se borra: se conserva y se desactiva (CERRADO).
+        // Asi no se pierde el levantamiento documental por un clic.
+        if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.TrdId == trdId, ct))
+        {
+            throw new InvalidOperationException(
+                "La TRD tiene datos cargados; no se puede eliminar. Desactivala (pasarla a CERRADO) para conservarla sin uso.");
+        }
         _db.TablasRetencionDocumental.Remove(trd);
         await _db.SaveChangesAsync(ct);
         return true;
@@ -617,10 +624,25 @@ public sealed class TrdAdminService : ITrdAdminService
     {
         var dep = await _db.Dependencias.FirstOrDefaultAsync(d => d.Id == id, ct);
         if (dep is null) { return false; }
+        // Borrar la dependencia arrastraria en cascada toda su carga de la TRD. Si tiene
+        // filas, se exige archivarla primero (queda copia) en vez de perderla.
+        if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.DependenciaId == id, ct))
+        {
+            throw new InvalidOperationException(
+                "La dependencia tiene carga en la tabla; archiva su carga antes de eliminarla para no perder datos.");
+        }
         _db.Dependencias.Remove(dep);
         await _db.SaveChangesAsync(ct);
         return true;
     }
+
+    public async Task<IReadOnlyList<TrazaEliminacionFilaDto>> EliminacionesFilaDependenciaAsync(Guid dependenciaId, CancellationToken ct = default) =>
+        await _db.TrazasEliminacionRespuesta.AsNoTracking()
+            .Where(t => t.DependenciaId == dependenciaId)
+            .OrderByDescending(t => t.Fecha)
+            .Select(t => new TrazaEliminacionFilaDto(
+                t.SerieNombre, t.SubserieNombre, t.TipologiaNombre, t.Formatos, t.ActorNombre, t.Fecha))
+            .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ColaboradorDto>> ColaboradoresAsync(Guid dependenciaId, string baseUrl, CancellationToken ct = default)
     {

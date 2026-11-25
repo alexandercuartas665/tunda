@@ -114,6 +114,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<FormacionDependencia> FormacionesDependencia => Set<FormacionDependencia>();
     public DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia => Set<TrazaRevisionDependencia>();
     public DbSet<ArchivoCargaDependencia> ArchivosCargaDependencia => Set<ArchivoCargaDependencia>();
+    public DbSet<TrazaEliminacionRespuesta> TrazasEliminacionRespuesta => Set<TrazaEliminacionRespuesta>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1037,6 +1038,18 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.RestauradoPorNombre).HasMaxLength(200);
             b.HasOne(x => x.Dependencia).WithMany().HasForeignKey(x => x.DependenciaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.ArchivadoEn });
+        });
+
+        modelBuilder.Entity<TrazaEliminacionRespuesta>(b =>
+        {
+            b.Property(x => x.DependenciaNombre).HasMaxLength(200).IsRequired();
+            b.Property(x => x.SerieNombre).HasMaxLength(300).IsRequired();
+            b.Property(x => x.SubserieNombre).HasMaxLength(300);
+            b.Property(x => x.TipologiaNombre).HasMaxLength(300);
+            b.Property(x => x.Snapshot).HasColumnType("jsonb").IsRequired();
+            b.Property(x => x.ActorNombre).HasMaxLength(200);
+            // Sin FK a la dependencia a proposito: la traza debe sobrevivir a su borrado.
+            b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.Fecha });
         });
 
         modelBuilder.Entity<Radicado>(b =>
