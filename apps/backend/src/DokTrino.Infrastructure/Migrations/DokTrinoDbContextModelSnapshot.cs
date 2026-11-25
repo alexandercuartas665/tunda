@@ -1474,6 +1474,143 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("catalogo_caracteristicas", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.CategoriaCerebro", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Archivada")
+                        .HasColumnType("boolean")
+                        .HasColumnName("archivada");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("nombre");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("integer")
+                        .HasColumnName("orden");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_categorias_cerebro");
+
+                    b.HasIndex("TenantId", "Nombre")
+                        .IsUnique()
+                        .HasDatabaseName("ix_categorias_cerebro_tenant_id_nombre")
+                        .HasFilter("archivada = false");
+
+                    b.ToTable("categorias_cerebro", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Cerebro", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Archivado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("archivado");
+
+                    b.Property<DateTimeOffset?>("ArchivadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivado_en");
+
+                    b.Property<string>("ArchivadoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("archivado_por_nombre");
+
+                    b.Property<Guid?>("CategoriaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("categoria_id");
+
+                    b.Property<string>("CreadoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("creado_por_nombre");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("slug");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cerebros");
+
+                    b.HasIndex("CategoriaId")
+                        .HasDatabaseName("ix_cerebros_categoria_id");
+
+                    b.HasIndex("TenantId", "Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cerebros_tenant_id_slug")
+                        .HasFilter("archivado = false");
+
+                    b.ToTable("cerebros", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.ColaboradorDependencia", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3822,6 +3959,83 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasDatabaseName("ix_niveles_topograficos_tenant_id_orden");
 
                     b.ToTable("niveles_topograficos", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.NotaCerebro", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActualizadoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("actualizado_por_nombre");
+
+                    b.Property<bool>("Archivada")
+                        .HasColumnType("boolean")
+                        .HasColumnName("archivada");
+
+                    b.Property<DateTimeOffset?>("ArchivadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archivada_en");
+
+                    b.Property<string>("ArchivadaPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("archivada_por_nombre");
+
+                    b.Property<Guid>("CerebroId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cerebro_id");
+
+                    b.Property<string>("Contenido")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contenido");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titulo");
+
+                    b.Property<string>("TituloClave")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titulo_clave");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notas_cerebro");
+
+                    b.HasIndex("CerebroId", "TituloClave")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notas_cerebro_cerebro_id_titulo_clave")
+                        .HasFilter("archivada = false");
+
+                    b.ToTable("notas_cerebro", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Pais", b =>
@@ -7856,6 +8070,17 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("Padre");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.Cerebro", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.CategoriaCerebro", "Categoria")
+                        .WithMany()
+                        .HasForeignKey("CategoriaId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_cerebros_categorias_cerebro_categoria_id");
+
+                    b.Navigation("Categoria");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.ColaboradorDependencia", b =>
                 {
                     b.HasOne("DokTrino.Domain.Entities.Dependencia", "Dependencia")
@@ -8190,6 +8415,18 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasConstraintName("fk_municipios_departamentos_departamento_id");
 
                     b.Navigation("Departamento");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.NotaCerebro", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.Cerebro", "Cerebro")
+                        .WithMany("Notas")
+                        .HasForeignKey("CerebroId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notas_cerebro_cerebros_cerebro_id");
+
+                    b.Navigation("Cerebro");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.PipelineFieldDefinition", b =>
@@ -8660,6 +8897,11 @@ namespace DokTrino.Infrastructure.Migrations
             modelBuilder.Entity("DokTrino.Domain.Entities.CarpetaArchivo", b =>
                 {
                     b.Navigation("Hijos");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.Cerebro", b =>
+                {
+                    b.Navigation("Notas");
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.CuestionarioCapacitacion", b =>

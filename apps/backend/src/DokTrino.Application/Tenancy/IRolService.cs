@@ -34,6 +34,7 @@ public static class ModuloCatalogo
         new("capacitaciones.desbloquear", "Capacitaciones - Desbloquear intentos", "Herramientas"),
         new("metricas", "Metricas", "Herramientas"),
         new("bi-servicios", "Power BI Servicios", "Herramientas"),
+        new("cerebros", "Cerebros (base de conocimiento)", "Herramientas"),
 
         // --- Administracion de la entidad ---
         new("cfg-empresa", "Configuracion de Empresa", "Configuracion de la Entidad"),

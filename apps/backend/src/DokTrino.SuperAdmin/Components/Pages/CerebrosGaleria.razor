@@ -1,0 +1,262 @@
+@page "/cerebros"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@inject ICerebroService Svc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Cerebros - Archimente</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Conocimiento</div>
+        <h1 class="ase-title">Cerebros</h1>
+        <p class="page-sub" style="margin:2px 0 0;">Bases de conocimiento de la entidad: notas enlazadas sobre normativa, procesos, manuales o clientes.</p>
+    </div>
+    @if (_esAdmin)
+    {
+        <div class="cb-head-acc">
+            <button class="trx-btn ghost" @onclick="AbrirCategorias">Categorias</button>
+            <button class="trx-btn" @onclick="() => AbrirCerebro(null)">&#43; Nuevo cerebro</button>
+        </div>
+    }
+</div>
+
+@if (_error is not null) { <div class="trx-error" style="margin-bottom:12px;">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok" style="margin-bottom:12px;">@_ok</div> }
+
+<div class="cb-filtros">
+    <input class="dep-in cb-buscar" placeholder="Buscar cerebro..." value="@_busqueda"
+           @oninput="e => Buscar(e.Value?.ToString())" />
+    <div class="cb-chips">
+        <button class="cb-chip @(_categoriaSel is null ? "on" : "")" @onclick="() => Filtrar(null)">Todas</button>
+        @foreach (var k in _categorias)
+        {
+            <button class="cb-chip @(_categoriaSel == k.Id ? "on" : "")" @onclick="() => Filtrar(k.Id)">
+                <span class="cb-dot" style="background:@(k.Color ?? "#94a3b8")"></span>@k.Nombre <span class="cb-chip-n">@k.Cerebros</span>
+            </button>
+        }
+    </div>
+</div>
+
+@if (_cerebros is null)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (_cerebros.Count == 0)
+{
+    <div class="ase-empty">
+        @if (string.IsNullOrWhiteSpace(_busqueda) && _categoriaSel is null)
+        {
+            <span>Aun no hay cerebros. @(_esAdmin ? "Crea el primero con \"Nuevo cerebro\"." : "El administrador de la entidad puede crearlos.")</span>
+        }
+        else
+        {
+            <span>No hay cerebros con ese filtro.</span>
+        }
+    </div>
+}
+else
+{
+    <div class="cb-gallery">
+        @foreach (var c in _cerebros)
+        {
+            <button type="button" class="cb-tile" style="--cb-acento:@(c.CategoriaColor ?? "var(--primary)")"
+                    @onclick='() => Nav.NavigateTo($"/cerebros/{c.Slug}")'>
+                <div class="cb-tile-top">
+                    <div class="cb-tile-ico">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 18v-5"/></svg>
+                    </div>
+                    @if (c.CategoriaNombre is not null) { <span class="cb-tag">@c.CategoriaNombre</span> }
+                </div>
+                <h3 class="cb-tile-h">@c.Nombre</h3>
+                <p class="cb-tile-p">@(c.Descripcion ?? "Sin descripcion.")</p>
+                <span class="cb-tile-meta">@c.Notas nota(s) &middot; actualizado @c.Actualizado.ToLocalTime().ToString("yyyy-MM-dd")</span>
+            </button>
+        }
+    </div>
+}
+
+@* ===================== Alta / edicion de un cerebro ===================== *@
+@if (_formCerebro)
+{
+    <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCerebro = false"></div>
+    <div class="cb-modal-wrap">
+        <div class="per-modal cb-modal">
+            <div class="per-h">
+                <div><div class="per-t">Nuevo cerebro</div></div>
+                <span class="per-x" @onclick="() => _formCerebro = false">&#10005;</span>
+            </div>
+            <div class="per-b">
+                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_fNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
+                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_fDesc" maxlength="600" placeholder="Para que sirve este cerebro..."></textarea></label>
+                <label class="dep-f" style="margin-top:10px;"><span>Categoria</span>
+                    <select class="dep-in" @bind="_fCategoria">
+                        <option value="">Sin categoria</option>
+                        @foreach (var k in _categorias) { <option value="@k.Id">@k.Nombre</option> }
+                    </select>
+                </label>
+                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
+                <div class="cb-btns">
+                    <button class="trx-btn ghost" @onclick="() => _formCerebro = false">Cancelar</button>
+                    <button class="trx-btn" @onclick="GuardarCerebro">Crear cerebro</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===================== Categorias ===================== *@
+@if (_formCategorias)
+{
+    <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCategorias = false"></div>
+    <div class="cb-modal-wrap">
+        <div class="per-modal cb-modal">
+            <div class="per-h">
+                <div><div class="per-t">Categorias de cerebros</div></div>
+                <span class="per-x" @onclick="() => _formCategorias = false">&#10005;</span>
+            </div>
+            <div class="per-b">
+                @foreach (var k in _categorias)
+                {
+                    <div class="cb-cat-row">
+                        <input type="color" class="cb-color" value="@(k.Color ?? "#64748b")"
+                               @onchange="e => GuardarCategoria(k.Id, k.Nombre, e.Value?.ToString())" />
+                        <input class="dep-in celda" value="@k.Nombre"
+                               @onchange="e => GuardarCategoria(k.Id, e.Value?.ToString() ?? k.Nombre, k.Color)" />
+                        <span class="cb-cat-n">@k.Cerebros cerebro(s)</span>
+                        <button class="trx-btn danger mini" title="Archivar categoria" @onclick="() => ArchivarCategoria(k)">&times;</button>
+                    </div>
+                }
+                @if (_categorias.Count == 0) { <div class="trx-empty">Sin categorias todavia.</div> }
+                <div class="cb-cat-row" style="margin-top:12px;">
+                    <input type="color" class="cb-color" @bind="_nuevaCatColor" />
+                    <input class="dep-in" @bind="_nuevaCatNombre" placeholder="Nueva categoria" maxlength="80" />
+                    <button class="trx-btn" @onclick="CrearCategoria">&#43; Agregar</button>
+                </div>
+                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
+                <small class="trd-muted" style="display:block; margin-top:10px;">Archivar una categoria deja sus cerebros sin categoria; no borra ningun cerebro.</small>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cb-head-acc { display:flex; gap:8px; }
+    .cb-filtros { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:16px; }
+    .cb-buscar { max-width:280px; }
+    .cb-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .cb-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--border); background:var(--card);
+               color:var(--foreground); border-radius:999px; padding:5px 11px; font-size:12px; font-weight:600; cursor:pointer; }
+    .cb-chip.on { border-color:var(--primary); color:var(--primary); background:color-mix(in srgb, var(--primary) 8%, var(--card)); }
+    .cb-chip-n { font-size:10.5px; color:var(--muted-foreground); }
+    .cb-dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+    .cb-gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px; }
+    .cb-tile { text-align:left; background:var(--card); border:1px solid var(--border); border-top:3px solid var(--cb-acento);
+               border-radius:14px; padding:18px; cursor:pointer; display:flex; flex-direction:column; gap:8px; min-height:170px;
+               color:var(--foreground); font:inherit; transition:border-color .15s, box-shadow .15s, transform .15s; }
+    .cb-tile:hover { box-shadow:var(--shadow-soft, 0 6px 20px rgba(0,0,0,.06)); transform:translateY(-2px); }
+    .cb-tile-top { display:flex; align-items:center; justify-content:space-between; }
+    .cb-tile-ico { width:38px; height:38px; border-radius:10px; display:grid; place-items:center;
+                   background:color-mix(in srgb, var(--cb-acento) 14%, transparent); color:var(--cb-acento); }
+    .cb-tile-ico svg { width:21px; height:21px; }
+    .cb-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cb-acento);
+              background:color-mix(in srgb, var(--cb-acento) 12%, transparent); padding:3px 9px; border-radius:999px; }
+    .cb-tile-h { font-size:15px; font-weight:700; margin:2px 0 0; }
+    .cb-tile-p { font-size:12.5px; color:var(--muted-foreground); margin:0; flex:1; line-height:1.45; }
+    .cb-tile-meta { font-size:11.5px; color:var(--muted-foreground); }
+    .cb-modal-wrap { position:fixed; inset:0; z-index:2005; display:flex; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
+    .cb-modal { width:520px; max-width:100%; pointer-events:auto; }
+    .cb-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+    .cb-cat-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .cb-cat-n { font-size:11px; color:var(--muted-foreground); white-space:nowrap; }
+    .cb-color { width:34px; height:30px; border:1px solid var(--border); border-radius:6px; padding:2px; background:var(--card); cursor:pointer; flex-shrink:0; }
+</style>
+
+@code {
+    private List<CerebroTarjetaDto>? _cerebros;
+    private List<CategoriaCerebroDto> _categorias = new();
+    private bool _esAdmin;
+    private string? _busqueda;
+    private Guid? _categoriaSel;
+    private string? _error, _ok;
+
+    // Formulario de cerebro.
+    private bool _formCerebro;
+    private string _fNombre = "", _fDesc = "", _fCategoria = "";
+    private string? _formError;
+
+    // Categorias.
+    private bool _formCategorias;
+    private string _nuevaCatNombre = "", _nuevaCatColor = "#0ea5e9";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _esAdmin = await Svc.EsAdminAsync();
+        await Recargar();
+    }
+
+    private async Task Recargar()
+    {
+        _categorias = (await Svc.CategoriasAsync()).ToList();
+        _cerebros = (await Svc.ListarAsync(_busqueda, _categoriaSel)).ToList();
+    }
+
+    private async Task Buscar(string? texto) { _busqueda = texto; await Recargar(); }
+    private async Task Filtrar(Guid? categoria) { _categoriaSel = categoria; await Recargar(); }
+
+    private void AbrirCerebro(CerebroTarjetaDto? c)
+    {
+        _formError = null;
+        _fNombre = ""; _fDesc = ""; _fCategoria = _categoriaSel?.ToString() ?? "";
+        _formCerebro = true;
+    }
+
+    private async Task GuardarCerebro()
+    {
+        _formError = null;
+        try
+        {
+            var cat = Guid.TryParse(_fCategoria, out var g) ? g : (Guid?)null;
+            var c = await Svc.CrearAsync(_fNombre, _fDesc, cat);
+            _formCerebro = false;
+            Nav.NavigateTo($"/cerebros/{c.Slug}");
+        }
+        catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+
+    private void AbrirCategorias() { _formError = null; _formCategorias = true; }
+
+    private async Task CrearCategoria()
+    {
+        _formError = null;
+        try
+        {
+            await Svc.GuardarCategoriaAsync(null, _nuevaCatNombre, _nuevaCatColor);
+            _nuevaCatNombre = "";
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+
+    private async Task GuardarCategoria(Guid id, string nombre, string? color)
+    {
+        _formError = null;
+        try { await Svc.GuardarCategoriaAsync(id, nombre, color); await Recargar(); }
+        catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+
+    private async Task ArchivarCategoria(CategoriaCerebroDto k)
+    {
+        _formError = null;
+        if (!await JS.InvokeAsync<bool>("confirm", $"Archivar la categoria \"{k.Nombre}\"? Sus {k.Cerebros} cerebro(s) quedan sin categoria.")) { return; }
+        try
+        {
+            await Svc.ArchivarCategoriaAsync(k.Id);
+            if (_categoriaSel == k.Id) { _categoriaSel = null; }
+            await Recargar();
+        }
+        catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+}

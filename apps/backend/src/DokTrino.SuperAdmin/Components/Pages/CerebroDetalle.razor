@@ -1,0 +1,459 @@
+@page "/cerebros/{Slug}"
+@attribute [Authorize]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Tenancy
+@using Microsoft.AspNetCore.Components.Forms
+@inject ICerebroService Svc
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(_cerebro?.Nombre ?? "Cerebro") - Archimente</PageTitle>
+
+@if (_cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (_cerebro is null)
+{
+    <div class="ase-alert">Este cerebro no existe o fue archivado. <a href="/cerebros">Volver a Cerebros</a></div>
+}
+else
+{
+    <div class="trx-breadcrumb"><a href="/cerebros">Cerebros</a> &middot; @_cerebro.Nombre</div>
+
+    <div class="cd-head">
+        <div style="min-width:0;">
+            <div class="cd-titulo-row">
+                <h1 class="ase-title" style="margin:0;">@_cerebro.Nombre</h1>
+                @if (_cerebro.CategoriaNombre is not null)
+                {
+                    <span class="cd-tag" style="--cb-acento:@(_cerebro.CategoriaColor ?? "var(--primary)")">@_cerebro.CategoriaNombre</span>
+                }
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_cerebro.Descripcion)) { <p class="page-sub" style="margin:4px 0 0;">@_cerebro.Descripcion</p> }
+        </div>
+        @if (_esAdmin)
+        {
+            <div class="cd-head-acc">
+                <button class="trx-btn ghost" @onclick="AbrirEditarCerebro">Editar cerebro</button>
+                <button class="trx-btn danger" @onclick="ArchivarCerebro">Archivar</button>
+            </div>
+        }
+    </div>
+
+    @if (_error is not null) { <div class="trx-error" style="margin:10px 0;">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok" style="margin:10px 0;">@_ok</div> }
+
+    <div class="cd-split">
+        @* ---------------- Indice de notas ---------------- *@
+        <aside class="cd-lista">
+            <div class="cd-lista-h">
+                <span>Notas &middot; @_cerebro.Notas.Count</span>
+            </div>
+            @if (_esAdmin)
+            {
+                <div class="cd-lista-acc">
+                    <button class="trx-btn mini" @onclick="() => NuevaNota(null)">&#43; Nueva nota</button>
+                    <label class="trx-btn ghost mini cd-importar" title="Importa archivos .md o un .zip de tu vault de Obsidian. Las notas con el mismo titulo se actualizan.">
+                        Importar .md / .zip
+                        <InputFile OnChange="Importar" multiple accept=".md,.zip" style="display:none;" />
+                    </label>
+                </div>
+            }
+            <input class="dep-in" style="margin-bottom:8px;" placeholder="Buscar nota..." @bind="_filtro" @bind:event="oninput" />
+            <div class="cd-lista-scroll">
+                @foreach (var n in NotasFiltradas)
+                {
+                    <a class="cd-item @(_nota?.Id == n.Id ? "on" : "")" href="@MarkdownCerebro.UrlNota(_cerebro.Slug, n.Titulo)">@n.Titulo</a>
+                }
+                @if (_cerebro.Notas.Count == 0)
+                {
+                    <div class="trx-empty">Sin notas todavia.</div>
+                }
+            </div>
+        </aside>
+
+        @* ---------------- Nota ---------------- *@
+        <section class="cd-nota">
+            @if (_editando)
+            {
+                <div class="cd-editor">
+                    <input class="dep-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" />
+                    <div class="cd-ed-tabs">
+                        <button class="cd-ed-tab @(!_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = false">Escribir</button>
+                        <button class="cd-ed-tab @(_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = true">Vista previa</button>
+                        <span class="cd-ed-ayuda">Markdown. Enlaza otra nota con <code>[[Titulo de la nota]]</code>.</span>
+                    </div>
+                    @if (_vistaPrevia)
+                    {
+                        <div class="cd-md cd-preview">@((MarkupString)MarkdownCerebro.Render(_edContenido, _cerebro.Slug, _claves))</div>
+                    }
+                    else
+                    {
+                        <textarea class="dep-in cd-ed-texto" @bind="_edContenido" @bind:event="oninput" spellcheck="true"></textarea>
+                    }
+                    <div class="cb-btns">
+                        <button class="trx-btn ghost" @onclick="CancelarEdicion">Cancelar</button>
+                        <button class="trx-btn" @onclick="GuardarNota" disabled="@_guardando">Guardar nota</button>
+                    </div>
+                </div>
+            }
+            else if (_nota is not null)
+            {
+                <div class="cd-nota-h">
+                    <h2 class="cd-nota-titulo">@_nota.Titulo</h2>
+                    @if (_esAdmin)
+                    {
+                        <div class="cd-nota-acc">
+                            <button class="trx-btn ghost mini" @onclick="EditarNota">Editar</button>
+                            <button class="trx-btn danger mini" @onclick="ArchivarNota">Archivar</button>
+                        </div>
+                    }
+                </div>
+                <div class="cd-meta">Actualizada @_nota.Actualizado.ToLocalTime().ToString("yyyy-MM-dd HH:mm")@(string.IsNullOrWhiteSpace(_nota.ActualizadoPorNombre) ? "" : " por " + _nota.ActualizadoPorNombre)</div>
+                <div class="cd-md">@((MarkupString)_html)</div>
+
+                @if (_nota.EnlazadaDesde.Count > 0)
+                {
+                    <div class="cd-backlinks">
+                        <div class="cd-backlinks-t">Enlazada desde (@_nota.EnlazadaDesde.Count)</div>
+                        @foreach (var b in _nota.EnlazadaDesde)
+                        {
+                            <a class="cd-item" href="@MarkdownCerebro.UrlNota(_cerebro.Slug, b.Titulo)">@b.Titulo</a>
+                        }
+                    </div>
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(Nota))
+            {
+                <div class="cd-vacio">
+                    <div class="cd-vacio-t">La nota "@Nota" aun no existe.</div>
+                    @if (_esAdmin)
+                    {
+                        <button class="trx-btn" style="margin-top:10px;" @onclick="() => NuevaNota(Nota)">Crear esta nota</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="cd-vacio">
+                    @if (_cerebro.Notas.Count == 0)
+                    {
+                        <div class="cd-vacio-t">Este cerebro aun no tiene notas.</div>
+                        <div class="cd-vacio-s">@(_esAdmin ? "Crea la primera nota o importa tu vault de Obsidian (.md o .zip)." : "El administrador de la entidad puede agregarlas.")</div>
+                    }
+                    else
+                    {
+                        <div class="cd-vacio-t">Elige una nota del indice.</div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@* ===================== Editar cerebro ===================== *@
+@if (_formCerebro && _cerebro is not null)
+{
+    <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCerebro = false"></div>
+    <div class="cb-modal-wrap">
+        <div class="per-modal cb-modal">
+            <div class="per-h">
+                <div><div class="per-t">Editar cerebro</div></div>
+                <span class="per-x" @onclick="() => _formCerebro = false">&#10005;</span>
+            </div>
+            <div class="per-b">
+                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_fNombre" maxlength="150" /></label>
+                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_fDesc" maxlength="600"></textarea></label>
+                <label class="dep-f" style="margin-top:10px;"><span>Categoria</span>
+                    <select class="dep-in" @bind="_fCategoria">
+                        <option value="">Sin categoria</option>
+                        @foreach (var k in _categorias) { <option value="@k.Id">@k.Nombre</option> }
+                    </select>
+                </label>
+                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
+                <div class="cb-btns">
+                    <button class="trx-btn ghost" @onclick="() => _formCerebro = false">Cancelar</button>
+                    <button class="trx-btn" @onclick="GuardarCerebro">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cd-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:6px 0 14px; }
+    .cd-titulo-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .cd-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cb-acento);
+              background:color-mix(in srgb, var(--cb-acento) 12%, transparent); padding:3px 9px; border-radius:999px; }
+    .cd-head-acc { display:flex; gap:8px; flex-shrink:0; }
+    .cd-split { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
+    @@media (max-width: 900px) { .cd-split { grid-template-columns:1fr; } }
+    .cd-lista, .cd-nota { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
+    .cd-nota { padding:18px 22px; min-height:360px; }
+    .cd-lista-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--muted-foreground); margin-bottom:8px; }
+    .cd-lista-acc { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .cd-importar { cursor:pointer; }
+    .cd-lista-scroll { max-height:62vh; overflow:auto; display:flex; flex-direction:column; gap:1px; }
+    .cd-item { display:block; padding:6px 9px; border-radius:7px; font-size:12.5px; color:var(--foreground); text-decoration:none;
+               white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cd-item:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); }
+    .cd-item.on { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); font-weight:700; }
+    .cd-nota-h { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .cd-nota-titulo { font-size:20px; font-weight:800; margin:0; }
+    .cd-nota-acc { display:flex; gap:6px; }
+    .cd-meta { font-size:11.5px; color:var(--muted-foreground); margin:4px 0 14px; }
+    .cd-backlinks { margin-top:22px; padding-top:12px; border-top:1px dashed var(--border); }
+    .cd-backlinks-t { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--muted-foreground); margin-bottom:6px; }
+    .cd-vacio { text-align:center; padding:60px 20px; color:var(--muted-foreground); }
+    .cd-vacio-t { font-size:15px; font-weight:700; color:var(--foreground); }
+    .cd-vacio-s { font-size:12.5px; margin-top:4px; }
+    .cd-editor { display:flex; flex-direction:column; gap:10px; }
+    .cd-ed-titulo { font-size:16px; font-weight:700; }
+    .cd-ed-tabs { display:flex; align-items:center; gap:6px; }
+    .cd-ed-tab { border:1px solid var(--border); background:var(--card); border-radius:7px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--foreground); }
+    .cd-ed-tab.on { border-color:var(--primary); color:var(--primary); }
+    .cd-ed-ayuda { font-size:11.5px; color:var(--muted-foreground); margin-left:auto; }
+    .cd-ed-texto { min-height:420px; font-family:'JetBrains Mono','Consolas',monospace; font-size:13px; line-height:1.55; resize:vertical; }
+    .cd-preview { min-height:420px; border:1px dashed var(--border); border-radius:8px; padding:14px 18px; }
+    .cb-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
+    .cb-modal-wrap { position:fixed; inset:0; z-index:2005; display:flex; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
+    .cb-modal { width:520px; max-width:100%; pointer-events:auto; }
+
+    /* Contenido markdown renderizado. */
+    .cd-md { font-size:14px; line-height:1.65; color:var(--foreground); overflow-wrap:anywhere; }
+    .cd-md h1, .cd-md h2, .cd-md h3, .cd-md h4 { font-weight:800; margin:1.1em 0 .45em; line-height:1.3; }
+    .cd-md h1 { font-size:21px; } .cd-md h2 { font-size:18px; } .cd-md h3 { font-size:16px; } .cd-md h4 { font-size:14.5px; }
+    .cd-md p { margin:.55em 0; }
+    .cd-md ul, .cd-md ol { padding-left:1.4em; margin:.5em 0; }
+    .cd-md li { margin:.2em 0; }
+    .cd-md blockquote { margin:.8em 0; padding:.4em 1em; border-left:3px solid var(--primary); background:color-mix(in srgb, var(--primary) 5%, transparent); border-radius:0 8px 8px 0; }
+    .cd-md code { font-family:'JetBrains Mono','Consolas',monospace; font-size:12.5px; background:color-mix(in srgb, var(--foreground) 7%, transparent); padding:1px 5px; border-radius:4px; }
+    .cd-md pre { background:color-mix(in srgb, var(--foreground) 6%, transparent); padding:12px 14px; border-radius:8px; overflow:auto; }
+    .cd-md pre code { background:none; padding:0; }
+    .cd-md table { border-collapse:collapse; margin:.8em 0; font-size:13px; }
+    .cd-md th, .cd-md td { border:1px solid var(--border); padding:6px 10px; text-align:left; }
+    .cd-md th { background:color-mix(in srgb, var(--foreground) 5%, transparent); }
+    .cd-md img { max-width:100%; border-radius:8px; }
+    .cd-md a { color:var(--primary); }
+    .cd-md a.wl { font-weight:600; text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--primary) 40%, transparent); }
+    .cd-md a.wl-rota { color:#c0392b; border-bottom:1px dashed #c0392b; }
+    .cd-md hr { border:none; border-top:1px solid var(--border); margin:1.2em 0; }
+    .cd-md input[type=checkbox] { margin-right:6px; }
+</style>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "nota")] public string? Nota { get; set; }
+
+    private CerebroDetalleDto? _cerebro;
+    private NotaCerebroDto? _nota;
+    private HashSet<string> _claves = new();
+    private string _html = "";
+    private bool _cargando = true;
+    private bool _esAdmin;
+    private string? _slugCargado;
+    private string? _error, _ok;
+    private string _filtro = "";
+
+    // Editor.
+    private bool _editando, _vistaPrevia, _guardando;
+    private Guid? _edId;
+    private string _edTitulo = "", _edContenido = "";
+
+    // Editar cerebro.
+    private bool _formCerebro;
+    private List<CategoriaCerebroDto> _categorias = new();
+    private string _fNombre = "", _fDesc = "", _fCategoria = "";
+    private string? _formError;
+
+    private IEnumerable<NotaResumenDto> NotasFiltradas =>
+        _cerebro is null ? Enumerable.Empty<NotaResumenDto>()
+        : string.IsNullOrWhiteSpace(_filtro) ? _cerebro.Notas
+        : _cerebro.Notas.Where(n => n.Titulo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _esAdmin = await Svc.EsAdminAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_slugCargado != Slug)
+        {
+            _cargando = true;
+            await CargarCerebro();
+            _slugCargado = Slug;
+            _cargando = false;
+        }
+        // Cambiar de nota por un enlace cancela una edicion en curso (no hay cambios que perder
+        // si se guardo; si no, el usuario eligio navegar).
+        _editando = false;
+        await CargarNota();
+    }
+
+    private async Task CargarCerebro()
+    {
+        _cerebro = await Svc.ObtenerAsync(Slug);
+        _claves = _cerebro?.Notas.Select(n => n.TituloClave).ToHashSet() ?? new();
+    }
+
+    private async Task CargarNota()
+    {
+        _nota = null;
+        _html = "";
+        if (_cerebro is null) { return; }
+        var titulo = Nota;
+        // Sin ?nota= se abre la primera nota del indice (si hay).
+        if (string.IsNullOrWhiteSpace(titulo)) { titulo = _cerebro.Notas.FirstOrDefault()?.Titulo; }
+        if (string.IsNullOrWhiteSpace(titulo)) { return; }
+        _nota = await Svc.NotaAsync(_cerebro.Id, titulo);
+        if (_nota is not null) { _html = MarkdownCerebro.Render(_nota.Contenido, _cerebro.Slug, _claves); }
+    }
+
+    private async Task Refrescar(string? tituloNota)
+    {
+        await CargarCerebro();
+        if (_cerebro is null) { return; }
+        if (tituloNota is not null && !string.Equals(Nota, tituloNota, StringComparison.Ordinal))
+        {
+            // Navega para que la URL refleje la nota (OnParametersSetAsync la carga).
+            Nav.NavigateTo(MarkdownCerebro.UrlNota(_cerebro.Slug, tituloNota));
+            return;
+        }
+        await CargarNota();
+    }
+
+    // ------------------------------------------------ notas
+
+    private void NuevaNota(string? titulo)
+    {
+        _error = _ok = null;
+        _edId = null;
+        _edTitulo = titulo ?? "";
+        _edContenido = "";
+        _vistaPrevia = false;
+        _editando = true;
+    }
+
+    private void EditarNota()
+    {
+        if (_nota is null) { return; }
+        _error = _ok = null;
+        _edId = _nota.Id;
+        _edTitulo = _nota.Titulo;
+        _edContenido = _nota.Contenido;
+        _vistaPrevia = false;
+        _editando = true;
+    }
+
+    private void CancelarEdicion() { _editando = false; _error = null; }
+
+    private async Task GuardarNota()
+    {
+        if (_cerebro is null) { return; }
+        _error = _ok = null;
+        _guardando = true;
+        try
+        {
+            var n = await Svc.GuardarNotaAsync(_cerebro.Id, _edId, _edTitulo, _edContenido);
+            _editando = false;
+            _ok = "Nota guardada.";
+            await Refrescar(n.Titulo);
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _guardando = false; }
+    }
+
+    private async Task ArchivarNota()
+    {
+        if (_nota is null || _cerebro is null) { return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Archivar la nota \"{_nota.Titulo}\"? Los enlaces que apuntan a ella quedaran rotos.")) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Svc.ArchivarNotaAsync(_nota.Id);
+            _ok = "Nota archivada.";
+            await CargarCerebro();
+            Nav.NavigateTo($"/cerebros/{_cerebro!.Slug}");
+            await CargarNota();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Importar(InputFileChangeEventArgs e)
+    {
+        if (_cerebro is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            var archivos = new List<ArchivoNotaDto>();
+            foreach (var f in e.GetMultipleFiles(500))
+            {
+                if (f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    await using var s = f.OpenReadStream(maxAllowedSize: 60_000_000);
+                    using var ms = new MemoryStream();
+                    await s.CopyToAsync(ms);
+                    ms.Position = 0;
+                    archivos.AddRange(CerebroService.LeerZip(ms));
+                }
+                else if (f.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                {
+                    await using var s = f.OpenReadStream(maxAllowedSize: 1_000_000);
+                    using var r = new StreamReader(s);
+                    archivos.Add(new ArchivoNotaDto(f.Name, await r.ReadToEndAsync()));
+                }
+            }
+            if (archivos.Count == 0) { _error = "No se encontraron notas .md para importar."; return; }
+
+            var res = await Svc.ImportarNotasAsync(_cerebro.Id, archivos);
+            _ok = $"Importacion: {res.Creadas} nueva(s), {res.Actualizadas} actualizada(s), {res.SinCambios} sin cambios."
+                  + (res.Omitidas.Count > 0 ? $" Omitidas {res.Omitidas.Count}: " + string.Join("; ", res.Omitidas.Take(5)) + (res.Omitidas.Count > 5 ? "..." : "") : "");
+            await CargarCerebro();
+            await CargarNota();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        catch (IOException ex) { _error = "No se pudo leer el archivo: " + ex.Message; }
+        catch (InvalidDataException) { _error = "El archivo .zip no es valido."; }
+    }
+
+    // ------------------------------------------------ cerebro
+
+    private async Task AbrirEditarCerebro()
+    {
+        if (_cerebro is null) { return; }
+        _formError = null;
+        _categorias = (await Svc.CategoriasAsync()).ToList();
+        _fNombre = _cerebro.Nombre;
+        _fDesc = _cerebro.Descripcion ?? "";
+        _fCategoria = _cerebro.CategoriaId?.ToString() ?? "";
+        _formCerebro = true;
+    }
+
+    private async Task GuardarCerebro()
+    {
+        if (_cerebro is null) { return; }
+        _formError = null;
+        try
+        {
+            var cat = Guid.TryParse(_fCategoria, out var g) ? g : (Guid?)null;
+            _cerebro = await Svc.EditarAsync(_cerebro.Id, _fNombre, _fDesc, cat);
+            _formCerebro = false;
+            _ok = "Cerebro actualizado.";
+        }
+        catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+
+    private async Task ArchivarCerebro()
+    {
+        if (_cerebro is null) { return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Archivar el cerebro \"{_cerebro.Nombre}\"? Deja de verse en la galeria; sus notas se conservan.")) { return; }
+        try
+        {
+            await Svc.ArchivarAsync(_cerebro.Id);
+            Nav.NavigateTo("/cerebros");
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+}

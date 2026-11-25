@@ -115,6 +115,9 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<TrazaRevisionDependencia> TrazasRevisionDependencia => Set<TrazaRevisionDependencia>();
     public DbSet<ArchivoCargaDependencia> ArchivosCargaDependencia => Set<ArchivoCargaDependencia>();
     public DbSet<TrazaEliminacionRespuesta> TrazasEliminacionRespuesta => Set<TrazaEliminacionRespuesta>();
+    public DbSet<Cerebro> Cerebros => Set<Cerebro>();
+    public DbSet<CategoriaCerebro> CategoriasCerebro => Set<CategoriaCerebro>();
+    public DbSet<NotaCerebro> NotasCerebro => Set<NotaCerebro>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1050,6 +1053,39 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.ActorNombre).HasMaxLength(200);
             // Sin FK a la dependencia a proposito: la traza debe sobrevivir a su borrado.
             b.HasIndex(x => new { x.TenantId, x.DependenciaId, x.Fecha });
+        });
+
+        // --- Cerebros (base de conocimiento por tenant, ola 1) ---
+        modelBuilder.Entity<CategoriaCerebro>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(80).IsRequired();
+            b.Property(x => x.Color).HasMaxLength(7);
+            // Nombre unico por tenant entre las activas.
+            b.HasIndex(x => new { x.TenantId, x.Nombre }).IsUnique().HasFilter("archivada = false");
+        });
+
+        modelBuilder.Entity<Cerebro>(b =>
+        {
+            b.Property(x => x.Slug).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(150).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(600);
+            b.Property(x => x.CreadoPorNombre).HasMaxLength(200);
+            b.Property(x => x.ArchivadoPorNombre).HasMaxLength(200);
+            b.HasOne(x => x.Categoria).WithMany().HasForeignKey(x => x.CategoriaId).OnDelete(DeleteBehavior.SetNull);
+            // Slug unico por tenant entre los activos (un archivado libera el slug).
+            b.HasIndex(x => new { x.TenantId, x.Slug }).IsUnique().HasFilter("archivado = false");
+        });
+
+        modelBuilder.Entity<NotaCerebro>(b =>
+        {
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.TituloClave).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
+            b.Property(x => x.ActualizadoPorNombre).HasMaxLength(200);
+            b.Property(x => x.ArchivadaPorNombre).HasMaxLength(200);
+            b.HasOne(x => x.Cerebro).WithMany(c => c.Notas).HasForeignKey(x => x.CerebroId).OnDelete(DeleteBehavior.Cascade);
+            // Titulo unico por cerebro entre las notas activas: es la llave de los [[enlaces]].
+            b.HasIndex(x => new { x.CerebroId, x.TituloClave }).IsUnique().HasFilter("archivada = false");
         });
 
         modelBuilder.Entity<Radicado>(b =>
