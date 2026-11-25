@@ -29,17 +29,46 @@ else
                 {
                     <span class="cd-tag" style="--cb-acento:@(_cerebro.CategoriaColor ?? "var(--primary)")">@_cerebro.CategoriaNombre</span>
                 }
+                @if (_cerebro.DePlataforma)
+                {
+                    <span class="cd-plat">@(_cerebro.Bloqueado ? "Plataforma - solo lectura" : "De la plataforma")</span>
+                }
             </div>
             @if (!string.IsNullOrWhiteSpace(_cerebro.Descripcion)) { <p class="page-sub" style="margin:4px 0 0;">@_cerebro.Descripcion</p> }
         </div>
         @if (_esAdmin)
         {
             <div class="cd-head-acc">
-                <button class="trx-btn ghost" @onclick="AbrirEditarCerebro">Editar cerebro</button>
-                <button class="trx-btn danger" @onclick="ArchivarCerebro">Archivar</button>
+                <button class="trx-btn ghost" @onclick="Duplicar" title="Crea una copia editable de este cerebro en tu entidad">Duplicar como propio</button>
+                @if (PuedeEditar)
+                {
+                    <button class="trx-btn ghost" @onclick="AbrirEditarCerebro">Editar cerebro</button>
+                    <button class="trx-btn danger" @onclick="ArchivarCerebro">Archivar</button>
+                }
             </div>
         }
     </div>
+
+    @if (_cerebro.Bloqueado)
+    {
+        <div class="cd-bloqueado">
+            &#128274; Este cerebro lo administra la plataforma: se actualiza solo cuando publica una version nueva y aqui es de solo lectura.
+            @if (_esAdmin) { <span>Si necesitas adaptarlo, usa <b>Duplicar como propio</b>.</span> }
+        </div>
+    }
+
+    @* Referencia de la IA documental: la generacion del Procedimiento TRD consulta este cerebro. *@
+    @if (PuedeEditar)
+    {
+        <label class="cd-ia @(_cerebro.UsoIa ? "on" : "")">
+            <input type="checkbox" checked="@_cerebro.UsoIa" @onchange="e => MarcarUsoIa((bool)(e.Value ?? false))" />
+            <span><b>Referencia de la IA documental</b>: al generar el Procedimiento de la TRD, la IA consulta este cerebro antes de redactar.</span>
+        </label>
+    }
+    else if (_cerebro.UsoIa)
+    {
+        <div class="cd-ia on">&#10024; <span><b>Referencia de la IA documental</b>: la generacion del Procedimiento de la TRD consulta este cerebro.</span></div>
+    }
 
     @if (_error is not null) { <div class="trx-error" style="margin:10px 0;">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok" style="margin:10px 0;">@_ok</div> }
@@ -50,7 +79,7 @@ else
             <div class="cd-lista-h">
                 <span>Notas &middot; @_cerebro.Notas.Count</span>
             </div>
-            @if (_esAdmin)
+            @if (PuedeEditar)
             {
                 <div class="cd-lista-acc">
                     <button class="trx-btn mini" @onclick="() => NuevaNota(null)">&#43; Nueva nota</button>
@@ -102,7 +131,7 @@ else
             {
                 <div class="cd-nota-h">
                     <h2 class="cd-nota-titulo">@_nota.Titulo</h2>
-                    @if (_esAdmin)
+                    @if (PuedeEditar)
                     {
                         <div class="cd-nota-acc">
                             <button class="trx-btn ghost mini" @onclick="EditarNota">Editar</button>
@@ -128,7 +157,7 @@ else
             {
                 <div class="cd-vacio">
                     <div class="cd-vacio-t">La nota "@Nota" aun no existe.</div>
-                    @if (_esAdmin)
+                    @if (PuedeEditar)
                     {
                         <button class="trx-btn" style="margin-top:10px;" @onclick="() => NuevaNota(Nota)">Crear esta nota</button>
                     }
@@ -140,7 +169,7 @@ else
                     @if (_cerebro.Notas.Count == 0)
                     {
                         <div class="cd-vacio-t">Este cerebro aun no tiene notas.</div>
-                        <div class="cd-vacio-s">@(_esAdmin ? "Crea la primera nota o importa tu vault de Obsidian (.md o .zip)." : "El administrador de la entidad puede agregarlas.")</div>
+                        <div class="cd-vacio-s">@(PuedeEditar ? "Crea la primera nota o importa tu vault de Obsidian (.md o .zip)." : "El administrador de la entidad puede agregarlas.")</div>
                     }
                     else
                     {
@@ -189,6 +218,14 @@ else
     .cd-head-acc { display:flex; gap:8px; flex-shrink:0; }
     .cd-split { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
     @@media (max-width: 900px) { .cd-split { grid-template-columns:1fr; } }
+    .cd-plat { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#1f5bb5;
+               background:#e7f0ff; padding:3px 9px; border-radius:999px; }
+    .cd-bloqueado { margin:0 0 12px; padding:10px 14px; border-radius:10px; font-size:12.5px; color:#1f5bb5;
+                    background:#eef4ff; border:1px solid #cfe0ff; }
+    .cd-ia { display:flex; align-items:flex-start; gap:8px; margin:0 0 12px; padding:9px 13px; border-radius:10px; font-size:12.5px;
+             color:var(--muted-foreground); background:var(--card); border:1px dashed var(--border); cursor:pointer; }
+    .cd-ia input { margin-top:2px; }
+    .cd-ia.on { color:#6b3fa0; background:#f6f0ff; border:1px solid #e2d3fb; }
     .cd-lista, .cd-nota { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
     .cd-nota { padding:18px 22px; min-height:360px; }
     .cd-lista-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--muted-foreground); margin-bottom:8px; }
@@ -252,6 +289,9 @@ else
     private string _html = "";
     private bool _cargando = true;
     private bool _esAdmin;
+
+    /// <summary>Escribir exige Owner/Admin y que el cerebro no sea de la plataforma bloqueado (el servidor lo valida igual).</summary>
+    private bool PuedeEditar => _esAdmin && _cerebro is { Bloqueado: false };
     private string? _slugCargado;
     private string? _error, _ok;
     private string _filtro = "";
@@ -443,6 +483,34 @@ else
             _ok = "Cerebro actualizado.";
         }
         catch (InvalidOperationException ex) { _formError = ex.Message; }
+    }
+
+    private async Task MarcarUsoIa(bool uso)
+    {
+        if (_cerebro is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Svc.MarcarUsoIaAsync(_cerebro.Id, uso);
+            _cerebro = _cerebro with { UsoIa = uso };
+            _ok = uso
+                ? "La IA documental consultara este cerebro al generar el Procedimiento de la TRD."
+                : "La IA documental ya no consultara este cerebro.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Duplicar()
+    {
+        if (_cerebro is null) { return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Crear una copia editable de \"{_cerebro.Nombre}\"? La copia es de tu entidad y la plataforma ya no la actualiza.")) { return; }
+        _error = _ok = null;
+        try
+        {
+            var copia = await Svc.DuplicarAsync(_cerebro.Id);
+            Nav.NavigateTo($"/cerebros/{copia.Slug}");
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     private async Task ArchivarCerebro()

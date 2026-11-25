@@ -118,6 +118,8 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<Cerebro> Cerebros => Set<Cerebro>();
     public DbSet<CategoriaCerebro> CategoriasCerebro => Set<CategoriaCerebro>();
     public DbSet<NotaCerebro> NotasCerebro => Set<NotaCerebro>();
+    public DbSet<CerebroPlantilla> CerebrosPlantilla => Set<CerebroPlantilla>();
+    public DbSet<NotaCerebroPlantilla> NotasCerebroPlantilla => Set<NotaCerebroPlantilla>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1074,6 +1076,28 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasOne(x => x.Categoria).WithMany().HasForeignKey(x => x.CategoriaId).OnDelete(DeleteBehavior.SetNull);
             // Slug unico por tenant entre los activos (un archivado libera el slug).
             b.HasIndex(x => new { x.TenantId, x.Slug }).IsUnique().HasFilter("archivado = false");
+            // Sin FK a la plantilla (vive fuera del tenant); indice para ubicar el sembrado.
+            b.HasIndex(x => new { x.TenantId, x.PlantillaOrigenId });
+        });
+
+        // --- Plantillas de cerebros (plataforma, sin tenant, ola 2) ---
+        modelBuilder.Entity<CerebroPlantilla>(b =>
+        {
+            b.Property(x => x.Nombre).HasMaxLength(150).IsRequired();
+            b.Property(x => x.Descripcion).HasMaxLength(600);
+            b.Property(x => x.CategoriaNombre).HasMaxLength(80);
+            b.Property(x => x.CategoriaColor).HasMaxLength(7);
+            b.Property(x => x.DestinoModo).HasMaxLength(20).IsRequired();
+            b.Property(x => x.DestinoIdsJson).HasColumnType("text");
+        });
+
+        modelBuilder.Entity<NotaCerebroPlantilla>(b =>
+        {
+            b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            b.Property(x => x.TituloClave).HasMaxLength(200).IsRequired();
+            b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
+            b.HasOne(x => x.Plantilla).WithMany(p => p.Notas).HasForeignKey(x => x.PlantillaId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.PlantillaId, x.TituloClave }).IsUnique();
         });
 
         modelBuilder.Entity<NotaCerebro>(b =>

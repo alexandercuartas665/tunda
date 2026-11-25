@@ -52,45 +52,8 @@ public sealed class AiInferenceService : IAiInferenceService
             return new AiChatResult(false, null, $"Alcanzaste el limite de tokens de IA de tu plan este mes ({quota.MonthlyLimitTokens:N0}).");
         }
 
-        var specs = _toolsets.SelectMany(t => t.GetSpecs()).ToList();
-        var ownerByTool = _toolsets
-            .SelectMany(ts => ts.GetSpecs().Select(s => (s.Name, ts)))
-            .ToDictionary(x => x.Name, x => x.ts);
-
-        var messages = new List<AiToolMessage> { new("user", pregunta) };
-        int totalIn = 0, totalOut = 0;
-        string? lastText = null;
-
-        for (var round = 1; round <= MaxToolRounds; round++)
-        {
-            var completion = await _client.CompleteWithToolsAsync(
-                providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt, messages, specs, cancellationToken);
-            totalIn += completion.InputTokens;
-            totalOut += completion.OutputTokens;
-            if (!completion.Ok) { return new AiChatResult(false, null, completion.Error); }
-            lastText = completion.Text ?? lastText;
-
-            // Sin herramientas pedidas: respuesta final.
-            if (completion.ToolCalls.Count == 0)
-            {
-                await _usage.RecordAsync(null, providerCfg.Provider, model, totalIn, totalOut, source, true, cancellationToken);
-                return new AiChatResult(true, completion.Text, null, totalIn, totalOut);
-            }
-
-            messages.Add(new AiToolMessage("assistant", completion.Text, completion.ToolCalls));
-            foreach (var call in completion.ToolCalls)
-            {
-                var owner = ownerByTool.GetValueOrDefault(call.Name);
-                var exec = owner is null
-                    ? new AgentToolResult($"{{\"ok\":false,\"error\":\"Herramienta {call.Name} no disponible\"}}", false)
-                    : await owner.ExecuteAsync(call.Name, call.ArgumentsJson, cancellationToken);
-                messages.Add(new AiToolMessage("tool", exec.Json, null, call.Id, call.Name));
-            }
-        }
-
-        // Agoto las rondas de herramientas sin cerrar.
-        await _usage.RecordAsync(null, providerCfg.Provider, model, totalIn, totalOut, source, true, cancellationToken);
-        return new AiChatResult(true, lastText ?? "El analisis no pudo completarse; intenta reformular la pregunta.", null, totalIn, totalOut);
+        return await LoopHerramientasAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt,
+            [new AiToolMessage("user", pregunta)], _toolsets.ToList(), null, source, cancellationToken);
     }
 
     public async Task<AiChatResult> TestChatAsync(Guid agentId, IReadOnlyList<AiChatTurn> turns, string? systemPromptOverride = null, CancellationToken cancellationToken = default)
@@ -133,12 +96,29 @@ public sealed class AiInferenceService : IAiInferenceService
 
         var systemPrompt = await BuildSystemPrompt(agentId, systemPromptOverride ?? agent.SystemPrompt, resources, cancellationToken);
 
-        var result = await _client.CompleteAsync(agent.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt, turns, cancellationToken);
+        // Herramientas habilitadas para este agente (AiAgent.ToolKeys, p. ej. las de cerebros o la
+        // lectura de la TRD). Sin ninguna, el chat es una completacion simple como antes.
+        var habilitadas = ToolsHelper.Parse(agent.ToolKeys).ToHashSet(StringComparer.Ordinal);
+        var herramientas = habilitadas.Count == 0
+            ? new List<IAgentToolset>()
+            : _toolsets.Select(t => (IAgentToolset)new ToolsetFiltrado(t, habilitadas)).Where(t => t.GetSpecs().Count > 0).ToList();
 
-        // Todo consumo de IA del tenant pasa por el modulo de tokens (incluido el chat de prueba).
-        if (result.Ok)
+        AiChatResult result;
+        if (herramientas.Count > 0)
         {
-            await _usage.RecordAsync(agent.Id, agent.Provider, model, result.InputTokens, result.OutputTokens, "test", true, cancellationToken);
+            // El loop registra el consumo de todas sus rondas.
+            result = await LoopHerramientasAsync(agent.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt,
+                turns.Select(t => new AiToolMessage(t.Role, t.Text)).ToList(), herramientas, agent.Id, "test", cancellationToken);
+        }
+        else
+        {
+            result = await _client.CompleteAsync(agent.Provider, apiKey, providerCfg.BaseUrl, model, systemPrompt, turns, cancellationToken);
+
+            // Todo consumo de IA del tenant pasa por el modulo de tokens (incluido el chat de prueba).
+            if (result.Ok)
+            {
+                await _usage.RecordAsync(agent.Id, agent.Provider, model, result.InputTokens, result.OutputTokens, "test", true, cancellationToken);
+            }
         }
 
         // Entrega de recursos: el modelo marca [[enviar: Nombre]] y aqui adjuntamos el recurso (archivo o texto).
@@ -173,9 +153,11 @@ public sealed class AiInferenceService : IAiInferenceService
 
         var prompts = await AsegurarPromptsProcedimientoAsync(r.TenantId, providerCfg.Provider, ct);
         var plantilla = await LlenarPlantillaAsync(prompts[ProcedimientoPrompts.NPlantilla], r, ct);
+        // Cerebros marcados como referencia de la IA documental: los pasos los consultan.
+        var refs = await ReferenciasIaAsync(ct);
 
         // 1) QUE ES
-        var quees = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+        var quees = await PasoAsync(refs, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
             prompts[ProcedimientoPrompts.NQueEs].Replace("@@PLANTILLA@@", plantilla), ct);
         if (!quees.Ok) { return ProcedimientoGeneradoDto.Fail(quees.Error); }
 
@@ -187,7 +169,7 @@ public sealed class AiInferenceService : IAiInferenceService
         // se reintenta y, si aun asi no sale, se avisa; nunca se traga en silencio.
         if (r.DispE)
         {
-            var e = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            var e = await PasoConReintentoAsync(refs, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
                 prompts[ProcedimientoPrompts.NElimina].Replace("@@PLANTILLA@@", plantilla), ct);
             if (e.Ok) { elimina = e.Texto; textos.Add(e.Texto); }
             else { faltaron.Add("Por que se elimina"); }
@@ -196,7 +178,7 @@ public sealed class AiInferenceService : IAiInferenceService
         // 3) POR QUE CONSERVA (solo si es Conservacion Total). Mismo trato que Eliminacion.
         if (r.DispCt)
         {
-            var c = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+            var c = await PasoConReintentoAsync(refs, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
                 prompts[ProcedimientoPrompts.NConserva].Replace("@@PLANTILLA@@", plantilla), ct);
             if (c.Ok) { conserva = c.Texto; textos.Add(c.Texto); }
             else { faltaron.Add("Por que se conserva"); }
@@ -206,7 +188,7 @@ public sealed class AiInferenceService : IAiInferenceService
         var uniPrompt = prompts[ProcedimientoPrompts.NUnificador]
             .Replace("@@PLANTILLA@@", plantilla)
             .Replace("@@TEXTOS@@", string.Join("\n\n", textos));
-        var uni = await PasoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
+        var uni = await PasoAsync(ReferenciaIa.Ninguna, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
         var unificado = uni.Ok ? uni.Texto : string.Join("\n\n", textos);
 
         r.Procedimiento = unificado;
@@ -246,6 +228,8 @@ public sealed class AiInferenceService : IAiInferenceService
 
         var prompts = await AsegurarPromptsProcedimientoAsync(r.TenantId, providerCfg.Provider, ct);
         var plantilla = await LlenarPlantillaAsync(prompts[ProcedimientoPrompts.NPlantilla], r, ct);
+        // Cerebros marcados como referencia de la IA documental: los pasos los consultan.
+        var refs = await ReferenciasIaAsync(ct);
 
         if (paso == "unificar")
         {
@@ -256,7 +240,7 @@ public sealed class AiInferenceService : IAiInferenceService
             var uniPrompt = prompts[ProcedimientoPrompts.NUnificador]
                 .Replace("@@PLANTILLA@@", plantilla)
                 .Replace("@@TEXTOS@@", string.Join("\n\n", textos));
-            var uni = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
+            var uni = await PasoConReintentoAsync(ReferenciaIa.Ninguna, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, uniPrompt, ct);
             if (!uni.Ok) { return ProcedimientoGeneradoDto.Fail("No se pudo unificar; reintenta."); }
             r.Procedimiento = uni.Texto;
             await _db.SaveChangesAsync(ct);
@@ -272,7 +256,7 @@ public sealed class AiInferenceService : IAiInferenceService
         };
         if (nombrePrompt is null) { return ProcedimientoGeneradoDto.Fail("Paso desconocido."); }
 
-        var res = await PasoConReintentoAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
+        var res = await PasoConReintentoAsync(refs, providerCfg.Provider, apiKey, providerCfg.BaseUrl, model,
             prompts[nombrePrompt].Replace("@@PLANTILLA@@", plantilla), ct);
         if (!res.Ok) { return ProcedimientoGeneradoDto.Fail($"No se pudo generar el segmento; {res.Error}"); }
 
@@ -348,12 +332,24 @@ public sealed class AiInferenceService : IAiInferenceService
             .Replace("@@Cultural@@", SiNo(r.Val2Cultural));
     }
 
-    private async Task<(bool Ok, string Texto, string Error)> PasoAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
+    private async Task<(bool Ok, string Texto, string Error)> PasoAsync(ReferenciaIa refs, AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
     {
-        var res = await _client.CompleteAsync(provider, apiKey, baseUrl, model, systemPrompt,
-            new[] { new AiChatTurn("user", "Genera unicamente el XML solicitado.") }, ct);
-        if (!res.Ok) { return (false, "", res.Error ?? "Fallo la generacion con el modelo."); }
-        await _usage.RecordAsync(null, provider, model, res.InputTokens, res.OutputTokens, "procedimiento", true, ct);
+        const string Pedido = "Genera unicamente el XML solicitado.";
+        AiChatResult res;
+        if (refs.Herramientas.Count > 0)
+        {
+            // Con cerebros de referencia: el modelo puede consultarlos (buscar_notas / ver_nota)
+            // antes de redactar. El loop registra el consumo.
+            res = await LoopHerramientasAsync(provider, apiKey, baseUrl, model, systemPrompt + refs.Instruccion,
+                [new AiToolMessage("user", Pedido)], refs.Herramientas, null, "procedimiento", ct);
+            if (!res.Ok) { return (false, "", res.Error ?? "Fallo la generacion con el modelo."); }
+        }
+        else
+        {
+            res = await _client.CompleteAsync(provider, apiKey, baseUrl, model, systemPrompt, new[] { new AiChatTurn("user", Pedido) }, ct);
+            if (!res.Ok) { return (false, "", res.Error ?? "Fallo la generacion con el modelo."); }
+            await _usage.RecordAsync(null, provider, model, res.InputTokens, res.OutputTokens, "procedimiento", true, ct);
+        }
         var texto = ExtraerProcedimiento(res.Text ?? "");
         // Un XML vacio (el modelo respondio pero sin contenido util) cuenta como fallo del paso.
         if (string.IsNullOrWhiteSpace(texto)) { return (false, "", "El modelo no devolvio contenido para este segmento."); }
@@ -361,11 +357,105 @@ public sealed class AiInferenceService : IAiInferenceService
     }
 
     // Igual que PasoAsync pero reintenta una vez ante un fallo transitorio (rate limit / XML vacio).
-    private async Task<(bool Ok, string Texto, string Error)> PasoConReintentoAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
+    private async Task<(bool Ok, string Texto, string Error)> PasoConReintentoAsync(ReferenciaIa refs, AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt, CancellationToken ct)
     {
-        var primero = await PasoAsync(provider, apiKey, baseUrl, model, systemPrompt, ct);
+        var primero = await PasoAsync(refs, provider, apiKey, baseUrl, model, systemPrompt, ct);
         if (primero.Ok) { return primero; }
-        return await PasoAsync(provider, apiKey, baseUrl, model, systemPrompt, ct);
+        return await PasoAsync(refs, provider, apiKey, baseUrl, model, systemPrompt, ct);
+    }
+
+    /// <summary>Cerebros de referencia para un paso de IA: herramientas acotadas + instruccion para el prompt.</summary>
+    private sealed record ReferenciaIa(IReadOnlyList<IAgentToolset> Herramientas, string Instruccion)
+    {
+        public static readonly ReferenciaIa Ninguna = new(Array.Empty<IAgentToolset>(), "");
+    }
+
+    /// <summary>
+    /// Cerebros activos de la entidad marcados como referencia de la IA documental. Si hay,
+    /// el toolset queda acotado a ellos y el prompt le pide al modelo consultarlos antes de
+    /// redactar, sin inventar normas que no esten alli.
+    /// </summary>
+    private async Task<ReferenciaIa> ReferenciasIaAsync(CancellationToken ct)
+    {
+        var refs = await _db.Cerebros.AsNoTracking()
+            .Where(c => c.UsoIa && !c.Archivado)
+            .OrderBy(c => c.Nombre)
+            .Select(c => new { c.Id, c.Slug, c.Nombre })
+            .ToListAsync(ct);
+        if (refs.Count == 0) { return ReferenciaIa.Ninguna; }
+
+        var lista = string.Join("; ", refs.Select(r => $"{r.Nombre} (slug: {r.Slug})"));
+        var instruccion =
+            "\n\nCONOCIMIENTO DE REFERENCIA DE LA ENTIDAD: tienes acceso de solo lectura a estos cerebros (bases de conocimiento): "
+            + lista + ". Antes de redactar, usa la herramienta buscar_notas con las palabras clave de la serie, subserie y tipologia "
+            + "(y ver_nota si una nota es relevante) para fundamentar el texto en ese conocimiento. No cites normas ni criterios que no "
+            + "esten en esas notas o en la plantilla. Tu respuesta final debe ser UNICAMENTE el XML solicitado.";
+        return new ReferenciaIa([CerebroToolset.SoloCerebros(_db, refs.Select(r => r.Id))], instruccion);
+    }
+
+    /// <summary>
+    /// Loop de tool-use: ofrece las herramientas al modelo, ejecuta las que pida y le devuelve
+    /// el resultado hasta que responde sin pedir mas (o se agotan las rondas). Registra el
+    /// consumo de todas las rondas.
+    /// </summary>
+    private async Task<AiChatResult> LoopHerramientasAsync(AiProvider provider, string apiKey, string? baseUrl, string model,
+        string systemPrompt, List<AiToolMessage> messages, IReadOnlyList<IAgentToolset> toolsets, Guid? agentId, string source,
+        CancellationToken ct)
+    {
+        var specs = toolsets.SelectMany(t => t.GetSpecs()).ToList();
+        var ownerByTool = new Dictionary<string, IAgentToolset>(StringComparer.Ordinal);
+        foreach (var ts in toolsets)
+        {
+            foreach (var s in ts.GetSpecs()) { ownerByTool.TryAdd(s.Name, ts); }
+        }
+
+        int totalIn = 0, totalOut = 0;
+        string? lastText = null;
+        for (var round = 1; round <= MaxToolRounds; round++)
+        {
+            var completion = await _client.CompleteWithToolsAsync(provider, apiKey, baseUrl, model, systemPrompt, messages, specs, ct);
+            totalIn += completion.InputTokens;
+            totalOut += completion.OutputTokens;
+            if (!completion.Ok)
+            {
+                if (totalIn + totalOut > 0) { await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, false, ct); }
+                return new AiChatResult(false, null, completion.Error);
+            }
+            lastText = completion.Text ?? lastText;
+
+            // Sin herramientas pedidas: respuesta final.
+            if (completion.ToolCalls.Count == 0)
+            {
+                await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, true, ct);
+                return new AiChatResult(true, completion.Text, null, totalIn, totalOut);
+            }
+
+            messages.Add(new AiToolMessage("assistant", completion.Text, completion.ToolCalls));
+            foreach (var call in completion.ToolCalls)
+            {
+                var owner = ownerByTool.GetValueOrDefault(call.Name);
+                var exec = owner is null
+                    ? new AgentToolResult($"{{\"ok\":false,\"error\":\"Herramienta {call.Name} no disponible\"}}", false)
+                    : await owner.ExecuteAsync(call.Name, call.ArgumentsJson, ct);
+                messages.Add(new AiToolMessage("tool", exec.Json, null, call.Id, call.Name));
+            }
+        }
+
+        // Agoto las rondas de herramientas sin cerrar.
+        await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, true, ct);
+        return new AiChatResult(true, lastText ?? "El analisis no pudo completarse; intenta reformular la pregunta.", null, totalIn, totalOut);
+    }
+
+    /// <summary>Expone solo las herramientas habilitadas para un agente (AiAgent.ToolKeys).</summary>
+    private sealed class ToolsetFiltrado(IAgentToolset inner, IReadOnlySet<string> permitidas) : IAgentToolset
+    {
+        public string GroupKey => inner.GroupKey;
+        public string GroupLabel => inner.GroupLabel;
+        public IReadOnlyList<AiToolSpec> GetSpecs() => inner.GetSpecs().Where(s => permitidas.Contains(s.Name)).ToList();
+        public Task<AgentToolResult> ExecuteAsync(string toolName, string argumentsJson, CancellationToken ct = default) =>
+            permitidas.Contains(toolName)
+                ? inner.ExecuteAsync(toolName, argumentsJson, ct)
+                : Task.FromResult(new AgentToolResult("{\"ok\":false,\"error\":\"Herramienta no habilitada para este agente\"}", false));
     }
 
     // Saca el contenido de <PROCEDIMIENTO>...</PROCEDIMIENTO> (tolera espacios en el cierre); si no hay XML, usa el texto tal cual.

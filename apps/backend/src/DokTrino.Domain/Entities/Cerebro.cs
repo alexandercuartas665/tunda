@@ -26,6 +26,29 @@ public class Cerebro : TenantEntity
     public DateTimeOffset? ArchivadoEn { get; set; }
     public string? ArchivadoPorNombre { get; set; }
 
+    /// <summary>
+    /// Plantilla de plataforma de la que se sembro (ola 2). Null = cerebro propio del tenant.
+    /// Sin FK: la plantilla vive fuera del tenant.
+    /// </summary>
+    public Guid? PlantillaOrigenId { get; set; }
+
+    /// <summary>
+    /// Sembrado BLOQUEADO: solo lectura en el tenant (ni Owner/Admin lo edita) y se
+    /// re-sincroniza en cada publicacion del Super Admin. Libre = copia editable que ya no
+    /// se sincroniza.
+    /// </summary>
+    public bool Bloqueado { get; set; }
+
+    /// <summary>Version de la plantilla aplicada por ultima vez (sembrados).</summary>
+    public int? VersionPlantilla { get; set; }
+
+    /// <summary>
+    /// Referencia de la IA documental (ola 3): la generacion del Procedimiento TRD consulta
+    /// este cerebro (buscar_notas / ver_nota) antes de redactar. En un sembrado bloqueado
+    /// lo decide la plantilla.
+    /// </summary>
+    public bool UsoIa { get; set; }
+
     public ICollection<NotaCerebro> Notas { get; set; } = new List<NotaCerebro>();
 }
 

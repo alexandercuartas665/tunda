@@ -72,6 +72,13 @@ else
                 </div>
                 <h3 class="cb-tile-h">@c.Nombre</h3>
                 <p class="cb-tile-p">@(c.Descripcion ?? "Sin descripcion.")</p>
+                @if (c.DePlataforma || c.UsoIa)
+                {
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        @if (c.DePlataforma) { <span class="cb-plat">@(c.Bloqueado ? "Plataforma - solo lectura" : "De la plataforma")</span> }
+                        @if (c.UsoIa) { <span class="cb-plat ia">Referencia IA</span> }
+                    </div>
+                }
                 <span class="cb-tile-meta">@c.Notas nota(s) &middot; actualizado @c.Actualizado.ToLocalTime().ToString("yyyy-MM-dd")</span>
             </button>
         }
@@ -166,6 +173,9 @@ else
     .cb-tile-h { font-size:15px; font-weight:700; margin:2px 0 0; }
     .cb-tile-p { font-size:12.5px; color:var(--muted-foreground); margin:0; flex:1; line-height:1.45; }
     .cb-tile-meta { font-size:11.5px; color:var(--muted-foreground); }
+    .cb-plat { align-self:flex-start; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+               color:#1f5bb5; background:#e7f0ff; padding:2px 8px; border-radius:999px; }
+    .cb-plat.ia { color:#6b3fa0; background:#f3ebff; }
     .cb-modal-wrap { position:fixed; inset:0; z-index:2005; display:flex; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
     .cb-modal { width:520px; max-width:100%; pointer-events:auto; }
     .cb-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }

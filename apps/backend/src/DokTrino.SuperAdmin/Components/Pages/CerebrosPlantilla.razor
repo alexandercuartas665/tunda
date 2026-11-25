@@ -1,0 +1,595 @@
+@page "/cerebros-plantilla"
+@attribute [Authorize(Policy = "PlatformOperator")]
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using DokTrino.Application.Admin
+@using DokTrino.Application.Tenancy
+@using DokTrino.Domain.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@inject ICerebroPlantillaService Svc
+@inject ICerebroPlantillaPublicador Publicador
+@inject IJSRuntime JS
+
+<PageTitle>Cerebros plantilla - Archimente</PageTitle>
+
+<div class="ase-head">
+    <div>
+        <div class="ase-eyebrow">Plataforma</div>
+        <h1 class="ase-title">Cerebros plantilla</h1>
+        <p class="page-sub" style="margin:2px 0 0;">Bases de conocimiento que la plataforma siembra en las entidades. Las bloqueadas se actualizan en cada publicacion; las libres quedan como copia de la entidad.</p>
+    </div>
+    <div class="cb-head-acc">
+        <label class="cp-check"><input type="checkbox" checked="@_verArchivadas" @onchange="e => VerArchivadas((bool)(e.Value ?? false))" /> Ver archivadas</label>
+        <button class="trx-btn" @onclick="AbrirNueva">&#43; Nueva plantilla</button>
+    </div>
+</div>
+
+@if (_error is not null) { <div class="trx-error" style="margin-bottom:12px;">@_error</div> }
+@if (_ok is not null) { <div class="ase-ok" style="margin-bottom:12px;">@_ok</div> }
+
+<div class="cp-split">
+    @* ---------------- Lista de plantillas ---------------- *@
+    <aside class="cp-lista">
+        @if (_plantillas is null) { <p><em>Cargando...</em></p> }
+        else if (_plantillas.Count == 0) { <div class="trx-empty">Aun no hay plantillas.</div> }
+        else
+        {
+            @foreach (var p in _plantillas)
+            {
+                <button type="button" class="cp-item @(_sel?.Id == p.Id ? "on" : "")" style="--cb-acento:@(p.CategoriaColor ?? "var(--primary)")" @onclick="() => Seleccionar(p.Id)">
+                    <div class="cp-item-h">
+                        <span class="cp-item-n">@p.Nombre</span>
+                        @if (p.Archivada) { <span class="cp-badge gris">Archivada</span> }
+                        else if (p.VersionPublicada == 0) { <span class="cp-badge gris">Borrador</span> }
+                        else if (p.CambiosSinPublicar) { <span class="cp-badge ambar">Cambios sin publicar</span> }
+                        else { <span class="cp-badge verde">v@(p.VersionPublicada)</span> }
+                    </div>
+                    <div class="cp-item-s">
+                        @p.Notas nota(s) &middot; @(p.Bloqueado ? "bloqueada" : "libre") &middot; @Destino(p.DestinoModo) &middot; en @p.Entidades entidad(es)
+                    </div>
+                </button>
+            }
+        }
+    </aside>
+
+    @* ---------------- Detalle ---------------- *@
+    <section class="cp-detalle">
+        @if (_sel is null)
+        {
+            <div class="cd-vacio"><div class="cd-vacio-t">Elige o crea una plantilla.</div></div>
+        }
+        else
+        {
+            <div class="cp-det-h">
+                <div>
+                    <div class="cp-det-t">@_sel.Nombre</div>
+                    <div class="cd-meta">
+                        @if (_sel.VersionPublicada == 0) { <span>Nunca publicada.</span> }
+                        else { <span>Version publicada @_sel.VersionPublicada &middot; @_sel.PublicadaEn?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span> }
+                        @if (_sel.VersionPublicada > 0 && _sel.CambiosSinPublicar) { <span class="cp-badge ambar" style="margin-left:6px;">Cambios sin publicar</span> }
+                    </div>
+                </div>
+                @if (!_sel.Archivada)
+                {
+                    <div class="cd-head-acc">
+                        <button class="trx-btn danger ghost" @onclick="Archivar">Archivar</button>
+                        <button class="trx-btn" @onclick="Publicar" disabled="@_publicando">
+                            @(_publicando ? "Publicando..." : $"Publicar version {_sel.VersionPublicada + 1}")
+                        </button>
+                    </div>
+                }
+            </div>
+
+            @* ----- Resultado de la ultima publicacion ----- *@
+            @if (_resultado is not null)
+            {
+                <div class="cp-box">
+                    <div class="cp-box-t">Resultado de publicar la version @_resultado.Version</div>
+                    <div class="cp-resumen">
+                        <span class="cp-badge verde">@_resultado.Cuenta("sembrado") sembrado(s)</span>
+                        <span class="cp-badge azul">@_resultado.Cuenta("sincronizado") sincronizado(s)</span>
+                        <span class="cp-badge gris">@_resultado.Cuenta("omitido") omitido(s)</span>
+                        <span class="cp-badge rojo">@_resultado.Cuenta("error") error(es)</span>
+                    </div>
+                    @if (_resultado.Entidades.Count == 0)
+                    {
+                        <div class="trx-empty">Ninguna entidad coincide con los destinos.</div>
+                    }
+                    else
+                    {
+                        <table class="cp-tabla">
+                            <thead><tr><th>Entidad</th><th>Resultado</th><th>Notas</th><th>Detalle</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _resultado.Entidades)
+                                {
+                                    <tr>
+                                        <td>@r.Entidad</td>
+                                        <td><span class="cp-badge @ClaseResultado(r.Resultado)">@r.Resultado</span></td>
+                                        <td class="mono">+@r.Creadas &middot; ~@r.Actualizadas &middot; -@r.Archivadas</td>
+                                        <td>@r.Detalle</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+
+            @* ----- Datos y destinos ----- *@
+            <div class="cp-box">
+                <div class="cp-box-t">Datos y destinos</div>
+                <div class="cp-grid">
+                    <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_f.Nombre" maxlength="150" disabled="@_sel.Archivada" /></label>
+                    <label class="dep-f"><span>Categoria con la que llega</span>
+                        <div style="display:flex; gap:6px;">
+                            <input type="color" class="cb-color" @bind="_fColor" disabled="@_sel.Archivada" />
+                            <input class="dep-in" @bind="_f.CategoriaNombre" maxlength="80" placeholder="Ej: Normativa" disabled="@_sel.Archivada" />
+                        </div>
+                    </label>
+                </div>
+                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="2" @bind="_f.Descripcion" maxlength="600" disabled="@_sel.Archivada"></textarea></label>
+
+                <label class="cp-check" style="margin-top:12px;">
+                    <input type="checkbox" @bind="_f.Bloqueado" disabled="@_sel.Archivada" />
+                    <span><b>Bloqueada</b>: en la entidad es de solo lectura y se actualiza en cada publicacion. Sin marcar, cada entidad recibe una copia libre que la plataforma ya no toca.</span>
+                </label>
+                <label class="cp-check" style="margin-top:8px;">
+                    <input type="checkbox" @bind="_f.UsoIa" disabled="@_sel.Archivada" />
+                    <span><b>Referencia de la IA documental</b>: al generar el Procedimiento de la TRD, la IA de cada entidad consulta este cerebro antes de redactar.</span>
+                </label>
+
+                <div class="cp-destino">
+                    <span class="est-cap">Sembrar en:</span>
+                    @foreach (var (modo, etiqueta) in Modos)
+                    {
+                        <label class="cp-radio"><input type="radio" name="destino" checked="@(_f.DestinoModo == modo)" disabled="@_sel.Archivada"
+                                                       @onchange="() => _f.DestinoModo = modo" /> @etiqueta</label>
+                    }
+                </div>
+                @if (_f.DestinoModo == DestinosPlantilla.Planes && _opciones is not null)
+                {
+                    <div class="cp-opciones">
+                        @foreach (var o in _opciones.Planes)
+                        {
+                            <label class="cp-check"><input type="checkbox" checked="@_f.DestinoIds.Contains(o.Id)" @onchange="e => Marcar(o.Id, e)" /> @o.Nombre</label>
+                        }
+                        @if (_opciones.Planes.Count == 0) { <span class="trd-muted">No hay planes activos.</span> }
+                    </div>
+                }
+                else if (_f.DestinoModo == DestinosPlantilla.Entidades && _opciones is not null)
+                {
+                    <div class="cp-opciones">
+                        @foreach (var o in _opciones.Entidades)
+                        {
+                            <label class="cp-check"><input type="checkbox" checked="@_f.DestinoIds.Contains(o.Id)" @onchange="e => Marcar(o.Id, e)" /> @o.Nombre <span class="trd-muted">(@o.Detalle)</span></label>
+                        }
+                    </div>
+                }
+
+                @if (!_sel.Archivada)
+                {
+                    <div class="cb-btns">
+                        <button class="trx-btn ghost" @onclick="VerDestinos">Ver a quien llega</button>
+                        <button class="trx-btn" @onclick="GuardarDatos">Guardar datos</button>
+                    </div>
+                }
+                @if (_vistaDestinos is not null)
+                {
+                    <div class="cp-destinos-prev">
+                        <b>@_vistaDestinos.Count entidad(es)</b> la recibirian hoy@(_vistaDestinos.Count > 0 ? ": " + string.Join(", ", _vistaDestinos.Select(d => d.Nombre)) : ".")
+                    </div>
+                }
+            </div>
+
+            @* ----- Notas ----- *@
+            <div class="cp-box">
+                <div class="cp-box-t" style="display:flex; align-items:center; gap:8px;">
+                    <span>Notas &middot; @_sel.Notas.Count</span>
+                    @if (!_sel.Archivada)
+                    {
+                        <span style="margin-left:auto; display:flex; gap:6px;">
+                            <button class="trx-btn mini" @onclick="NuevaNota">&#43; Nueva nota</button>
+                            <label class="trx-btn ghost mini cd-importar" title="Archivos .md o un .zip de un vault de Obsidian. Las notas con el mismo titulo se actualizan.">
+                                Importar .md / .zip
+                                <InputFile OnChange="Importar" multiple accept=".md,.zip" style="display:none;" />
+                            </label>
+                        </span>
+                    }
+                </div>
+                <div class="cp-notas">
+                    <div class="cp-notas-lista">
+                        @foreach (var n in _sel.Notas)
+                        {
+                            <button type="button" class="cd-item @(_edId == n.Id ? "on" : "")" @onclick="() => AbrirNota(n.Id)">@n.Titulo</button>
+                        }
+                        @if (_sel.Notas.Count == 0) { <div class="trx-empty">Sin notas.</div> }
+                    </div>
+                    <div class="cp-notas-editor">
+                        @if (_editando)
+                        {
+                            <input class="dep-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" disabled="@_sel.Archivada" />
+                            <div class="cd-ed-tabs" style="margin-top:8px;">
+                                <button class="cd-ed-tab @(!_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = false">Escribir</button>
+                                <button class="cd-ed-tab @(_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = true">Vista previa</button>
+                                <span class="cd-ed-ayuda">Enlaza otra nota con <code>[[Titulo]]</code>.</span>
+                            </div>
+                            @if (_vistaPrevia)
+                            {
+                                <div class="cd-md cd-preview" style="margin-top:8px;">@((MarkupString)MarkdownCerebro.Render(_edContenido, "vista-previa", _claves))</div>
+                            }
+                            else
+                            {
+                                <textarea class="dep-in cd-ed-texto" style="margin-top:8px;" @bind="_edContenido" @bind:event="oninput" disabled="@_sel.Archivada"></textarea>
+                            }
+                            @if (!_sel.Archivada)
+                            {
+                                <div class="cb-btns">
+                                    @if (_edId is not null) { <button class="trx-btn danger ghost" @onclick="EliminarNota">Quitar nota</button> }
+                                    <button class="trx-btn ghost" @onclick="() => _editando = false">Cerrar</button>
+                                    <button class="trx-btn" @onclick="GuardarNota">Guardar nota</button>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="cd-vacio" style="padding:40px 10px;"><div class="cd-vacio-s">Elige una nota o crea una nueva.</div></div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@* ===================== Nueva plantilla ===================== *@
+@if (_nueva)
+{
+    <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _nueva = false"></div>
+    <div class="cb-modal-wrap">
+        <div class="per-modal cb-modal">
+            <div class="per-h">
+                <div><div class="per-t">Nueva plantilla de cerebro</div></div>
+                <span class="per-x" @onclick="() => _nueva = false">&#10005;</span>
+            </div>
+            <div class="per-b">
+                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_nNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
+                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_nDesc" maxlength="600"></textarea></label>
+                <small class="trd-muted" style="display:block; margin-top:8px;">Nace bloqueada y dirigida a todas las entidades; lo ajustas antes de publicar.</small>
+                <div class="cb-btns">
+                    <button class="trx-btn ghost" @onclick="() => _nueva = false">Cancelar</button>
+                    <button class="trx-btn" @onclick="CrearNueva">Crear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .cb-head-acc { display:flex; gap:10px; align-items:center; }
+    .cp-split { display:grid; grid-template-columns:300px minmax(0,1fr); gap:16px; align-items:start; }
+    @@media (max-width: 1000px) { .cp-split { grid-template-columns:1fr; } }
+    .cp-lista { display:flex; flex-direction:column; gap:8px; }
+    .cp-item { text-align:left; background:var(--card); border:1px solid var(--border); border-left:3px solid var(--cb-acento);
+               border-radius:10px; padding:10px 12px; cursor:pointer; color:var(--foreground); font:inherit; }
+    .cp-item.on { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+    .cp-item-h { display:flex; align-items:center; gap:6px; justify-content:space-between; }
+    .cp-item-n { font-weight:700; font-size:13.5px; }
+    .cp-item-s { font-size:11.5px; color:var(--muted-foreground); margin-top:3px; }
+    .cp-badge { font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+    .cp-badge.verde { background:#e8f5ee; color:#2f7d54; }
+    .cp-badge.azul { background:#e7f0ff; color:#1f5bb5; }
+    .cp-badge.ambar { background:#fdf3e1; color:#a8620f; }
+    .cp-badge.rojo { background:#fde3e0; color:#c0392b; }
+    .cp-badge.gris { background:#eef1f7; color:#59617a; }
+    .cp-detalle { display:flex; flex-direction:column; gap:14px; }
+    .cp-det-h { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .cp-det-t { font-size:20px; font-weight:800; }
+    .cd-meta { font-size:11.5px; color:var(--muted-foreground); margin-top:3px; }
+    .cd-head-acc { display:flex; gap:8px; }
+    .cp-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+    .cp-box-t { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--muted-foreground); margin-bottom:10px; }
+    .cp-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+    @@media (max-width: 700px) { .cp-grid { grid-template-columns:1fr; } }
+    .cp-check { display:flex; align-items:flex-start; gap:7px; font-size:12.5px; cursor:pointer; }
+    .cp-check input { margin-top:2px; }
+    .cp-destino { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:12px; }
+    .cp-radio { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; cursor:pointer; }
+    .cp-opciones { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; padding:10px; border:1px dashed var(--border); border-radius:8px; }
+    .cp-destinos-prev { margin-top:10px; font-size:12.5px; color:var(--muted-foreground); }
+    .cp-resumen { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+    .cp-tabla { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .cp-tabla th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted-foreground); padding:6px 8px; border-bottom:1px solid var(--border); }
+    .cp-tabla td { padding:7px 8px; border-bottom:1px solid var(--border); }
+    .cp-notas { display:grid; grid-template-columns:240px minmax(0,1fr); gap:12px; }
+    @@media (max-width: 800px) { .cp-notas { grid-template-columns:1fr; } }
+    .cp-notas-lista { max-height:520px; overflow:auto; display:flex; flex-direction:column; gap:1px; }
+    .cd-item { display:block; text-align:left; width:100%; border:0; background:transparent; padding:6px 9px; border-radius:7px; font:inherit;
+               font-size:12.5px; color:var(--foreground); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cd-item:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); }
+    .cd-item.on { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); font-weight:700; }
+    .cd-importar { cursor:pointer; }
+    .cd-ed-titulo { font-size:15px; font-weight:700; }
+    .cd-ed-tabs { display:flex; align-items:center; gap:6px; }
+    .cd-ed-tab { border:1px solid var(--border); background:var(--card); border-radius:7px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--foreground); }
+    .cd-ed-tab.on { border-color:var(--primary); color:var(--primary); }
+    .cd-ed-ayuda { font-size:11.5px; color:var(--muted-foreground); margin-left:auto; }
+    .cd-ed-texto { min-height:360px; font-family:'JetBrains Mono','Consolas',monospace; font-size:13px; line-height:1.55; resize:vertical; }
+    .cd-preview { min-height:360px; border:1px dashed var(--border); border-radius:8px; padding:14px 18px; }
+    .cd-vacio { text-align:center; padding:60px 20px; color:var(--muted-foreground); }
+    .cd-vacio-t { font-size:15px; font-weight:700; color:var(--foreground); }
+    .cd-vacio-s { font-size:12.5px; }
+    .cd-md { font-size:14px; line-height:1.65; overflow-wrap:anywhere; }
+    .cd-md h1, .cd-md h2, .cd-md h3 { font-weight:800; margin:1em 0 .4em; }
+    .cd-md code { font-family:'JetBrains Mono','Consolas',monospace; font-size:12.5px; background:color-mix(in srgb, var(--foreground) 7%, transparent); padding:1px 5px; border-radius:4px; }
+    .cd-md a.wl-rota { color:#c0392b; border-bottom:1px dashed #c0392b; }
+    .cd-md table { border-collapse:collapse; } .cd-md th, .cd-md td { border:1px solid var(--border); padding:5px 9px; }
+    .cb-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+    .cb-modal-wrap { position:fixed; inset:0; z-index:2005; display:flex; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
+    .cb-modal { width:520px; max-width:100%; pointer-events:auto; }
+    .cb-color { width:34px; height:34px; border:1px solid var(--border); border-radius:6px; padding:2px; background:var(--card); cursor:pointer; flex-shrink:0; }
+    .mono { font-family:'JetBrains Mono','Consolas',monospace; }
+</style>
+
+@code {
+    private static readonly (string Modo, string Etiqueta)[] Modos =
+    [
+        (DestinosPlantilla.Todas, "Todas las entidades"),
+        (DestinosPlantilla.Planes, "Por plan"),
+        (DestinosPlantilla.Entidades, "Entidades elegidas")
+    ];
+
+    private List<PlantillaCerebroItemDto>? _plantillas;
+    private PlantillaCerebroDto? _sel;
+    private OpcionesDestinoCerebroDto? _opciones;
+    private bool _verArchivadas;
+    private string? _error, _ok;
+
+    // Formulario de datos.
+    private GuardarPlantillaCerebroRequest _f = new();
+    private string _fColor = "#0ea5e9";
+    private IReadOnlyList<EntidadDestinoDto>? _vistaDestinos;
+
+    // Notas.
+    private bool _editando, _vistaPrevia;
+    private Guid? _edId;
+    private string _edTitulo = "", _edContenido = "";
+    private HashSet<string> _claves = new();
+
+    // Publicacion.
+    private bool _publicando;
+    private PublicacionCerebroDto? _resultado;
+
+    // Nueva.
+    private bool _nueva;
+    private string _nNombre = "", _nDesc = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _opciones = await Svc.OpcionesDestinoAsync();
+            await RecargarLista();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; _plantillas = new(); }
+    }
+
+    private async Task RecargarLista() => _plantillas = (await Svc.ListarAsync(_verArchivadas)).ToList();
+
+    private async Task VerArchivadas(bool ver) { _verArchivadas = ver; await RecargarLista(); }
+
+    private static string Destino(string modo) => modo switch
+    {
+        DestinosPlantilla.Planes => "por plan",
+        DestinosPlantilla.Entidades => "entidades elegidas",
+        _ => "todas"
+    };
+
+    private static string ClaseResultado(string r) => r switch
+    {
+        "sembrado" => "verde",
+        "sincronizado" => "azul",
+        "error" => "rojo",
+        _ => "gris"
+    };
+
+    private async Task Seleccionar(Guid id, bool limpiarMensajes = true)
+    {
+        if (limpiarMensajes) { _error = _ok = null; _resultado = null; }
+        _vistaDestinos = null;
+        _editando = false;
+        _edId = null;
+        _sel = await Svc.ObtenerAsync(id);
+        if (_sel is null) { return; }
+        _claves = _sel.Notas.Select(n => n.TituloClave).ToHashSet();
+        _f = new GuardarPlantillaCerebroRequest
+        {
+            Nombre = _sel.Nombre,
+            Descripcion = _sel.Descripcion,
+            CategoriaNombre = _sel.CategoriaNombre,
+            CategoriaColor = _sel.CategoriaColor,
+            Bloqueado = _sel.Bloqueado,
+            UsoIa = _sel.UsoIa,
+            DestinoModo = _sel.DestinoModo,
+            DestinoIds = _sel.DestinoIds.ToList()
+        };
+        _fColor = _sel.CategoriaColor ?? "#0ea5e9";
+    }
+
+    private void Marcar(Guid id, ChangeEventArgs e)
+    {
+        if (e.Value is bool b && b) { if (!_f.DestinoIds.Contains(id)) { _f.DestinoIds.Add(id); } }
+        else { _f.DestinoIds.Remove(id); }
+    }
+
+    private void AbrirNueva() { _error = null; _nNombre = ""; _nDesc = ""; _nueva = true; }
+
+    private async Task CrearNueva()
+    {
+        _error = _ok = null;
+        try
+        {
+            var id = await Svc.CrearAsync(_nNombre, _nDesc);
+            _nueva = false;
+            await RecargarLista();
+            await Seleccionar(id);
+            _ok = "Plantilla creada. Agrega notas, ajusta destinos y publica.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; _nueva = false; }
+    }
+
+    private async Task GuardarDatos()
+    {
+        if (_sel is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            _f.CategoriaColor = string.IsNullOrWhiteSpace(_f.CategoriaNombre) ? null : _fColor;
+            if (_f.DestinoModo == DestinosPlantilla.Todas) { _f.DestinoIds.Clear(); }
+            await Svc.GuardarAsync(_sel.Id, _f);
+            await RecargarLista();
+            await Seleccionar(_sel.Id, limpiarMensajes: false);
+            _ok = "Datos guardados. Publica para que lleguen a las entidades.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task VerDestinos()
+    {
+        if (_sel is null) { return; }
+        _error = null;
+        try
+        {
+            // La vista previa usa lo GUARDADO: guarda primero si cambiaste los destinos.
+            _vistaDestinos = await Svc.VistaPreviaDestinosAsync(_sel.Id);
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Publicar()
+    {
+        if (_sel is null) { return; }
+        var destinos = await Svc.VistaPreviaDestinosAsync(_sel.Id);
+        var msg = $"Publicar la version {_sel.VersionPublicada + 1} de \"{_sel.Nombre}\" en {destinos.Count} entidad(es)?"
+                  + (_sel.Bloqueado ? " Las copias bloqueadas se actualizaran." : " Llegara como copia libre.")
+                  + " (Se publica lo guardado.)";
+        if (!await JS.InvokeAsync<bool>("confirm", msg)) { return; }
+
+        _error = _ok = null;
+        _publicando = true;
+        try
+        {
+            _resultado = await Publicador.PublicarAsync(_sel.Id);
+            await RecargarLista();
+            await Seleccionar(_sel.Id, limpiarMensajes: false);
+            _ok = $"Version {_resultado.Version} publicada.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _publicando = false; }
+    }
+
+    private async Task Archivar()
+    {
+        if (_sel is null) { return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Archivar la plantilla \"{_sel.Nombre}\"? Los cerebros ya sembrados se quedan en las entidades pero dejan de actualizarse.")) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Svc.ArchivarAsync(_sel.Id);
+            _sel = null;
+            await RecargarLista();
+            _ok = "Plantilla archivada.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    // ------------------------------------------------ notas
+
+    private void NuevaNota()
+    {
+        _error = null;
+        _edId = null;
+        _edTitulo = "";
+        _edContenido = "";
+        _vistaPrevia = false;
+        _editando = true;
+    }
+
+    private async Task AbrirNota(Guid id)
+    {
+        if (_sel is null) { return; }
+        _error = null;
+        var n = await Svc.NotaAsync(_sel.Id, id);
+        if (n is null) { return; }
+        _edId = n.Id;
+        _edTitulo = n.Titulo;
+        _edContenido = n.Contenido;
+        _vistaPrevia = false;
+        _editando = true;
+    }
+
+    private async Task GuardarNota()
+    {
+        if (_sel is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            var n = await Svc.GuardarNotaAsync(_sel.Id, _edId, _edTitulo, _edContenido);
+            var id = _sel.Id;
+            await Seleccionar(id, limpiarMensajes: false);
+            await RecargarLista();
+            _edId = n.Id; _edTitulo = n.Titulo; _edContenido = n.Contenido; _editando = true;
+            _ok = "Nota guardada (sin publicar).";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task EliminarNota()
+    {
+        if (_sel is null || _edId is not Guid id) { return; }
+        if (!await JS.InvokeAsync<bool>("confirm", $"Quitar la nota \"{_edTitulo}\" de la plantilla? Al publicar, se archivara en las copias bloqueadas de las entidades.")) { return; }
+        _error = _ok = null;
+        try
+        {
+            await Svc.EliminarNotaAsync(id);
+            await Seleccionar(_sel.Id, limpiarMensajes: false);
+            await RecargarLista();
+            _ok = "Nota quitada (sin publicar).";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task Importar(InputFileChangeEventArgs e)
+    {
+        if (_sel is null) { return; }
+        _error = _ok = null;
+        try
+        {
+            var archivos = new List<ArchivoNotaDto>();
+            foreach (var f in e.GetMultipleFiles(500))
+            {
+                if (f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    await using var s = f.OpenReadStream(maxAllowedSize: 60_000_000);
+                    using var ms = new MemoryStream();
+                    await s.CopyToAsync(ms);
+                    ms.Position = 0;
+                    archivos.AddRange(CerebroService.LeerZip(ms));
+                }
+                else if (f.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                {
+                    await using var s = f.OpenReadStream(maxAllowedSize: 1_000_000);
+                    using var r = new StreamReader(s);
+                    archivos.Add(new ArchivoNotaDto(f.Name, await r.ReadToEndAsync()));
+                }
+            }
+            if (archivos.Count == 0) { _error = "No se encontraron notas .md para importar."; return; }
+            var res = await Svc.ImportarNotasAsync(_sel.Id, archivos);
+            await Seleccionar(_sel.Id, limpiarMensajes: false);
+            await RecargarLista();
+            _ok = $"Importacion: {res.Creadas} nueva(s), {res.Actualizadas} actualizada(s), {res.SinCambios} sin cambios."
+                  + (res.Omitidas.Count > 0 ? $" Omitidas {res.Omitidas.Count}." : "") + " Publica para que llegue a las entidades.";
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        catch (IOException ex) { _error = "No se pudo leer el archivo: " + ex.Message; }
+        catch (InvalidDataException) { _error = "El archivo .zip no es valido."; }
+    }
+}

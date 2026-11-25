@@ -85,6 +85,8 @@ public interface IApplicationDbContext
     DbSet<Cerebro> Cerebros { get; }
     DbSet<CategoriaCerebro> CategoriasCerebro { get; }
     DbSet<NotaCerebro> NotasCerebro { get; }
+    DbSet<CerebroPlantilla> CerebrosPlantilla { get; }
+    DbSet<NotaCerebroPlantilla> NotasCerebroPlantilla { get; }
     DbSet<Radicado> Radicados { get; }
     DbSet<Bodega> Bodegas { get; }
     DbSet<Caja> Cajas { get; }

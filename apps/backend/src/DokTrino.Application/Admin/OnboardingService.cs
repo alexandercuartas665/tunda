@@ -26,11 +26,15 @@ public sealed class OnboardingService : IOnboardingService
         "procesos", "radicacion", "relaciones-formularios", "topografia-fisica"
     };
 
-    public OnboardingService(IApplicationDbContext db, IPasswordHasher passwordHasher, IAuditWriter audit)
+    private readonly ICerebroPlantillaPublicador? _cerebros;
+
+    public OnboardingService(IApplicationDbContext db, IPasswordHasher passwordHasher, IAuditWriter audit,
+        ICerebroPlantillaPublicador? cerebros = null)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _audit = audit;
+        _cerebros = cerebros;
     }
 
     public async Task<OnboardingOutcome> OnboardAsync(OnboardTenantRequest request, Guid actorUserId, CancellationToken cancellationToken = default)
@@ -140,6 +144,13 @@ public sealed class OnboardingService : IOnboardingService
             tenantId: tenant.Id);
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // Cerebros plantilla publicados para "todas" o para el plan elegido: la entidad
+        // nueva nace con ellos. Nunca lanza: si falla, la entidad queda creada igual.
+        if (_cerebros is not null)
+        {
+            await _cerebros.SembrarEntidadNuevaAsync(tenant.Id, actorUserId, cancellationToken);
+        }
 
         return new OnboardingOutcome(true,
             new OnboardingResult(tenant.Id, tenant.Name, admin.Id, admin.Email, subscriptionId),

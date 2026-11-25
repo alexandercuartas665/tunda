@@ -59,6 +59,7 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IAiInferenceService, Tenancy.AiInferenceService>();
         // Herramientas de agente (function calling). La TRD se expone en SOLO LECTURA.
         services.AddScoped<Tenancy.IAgentToolset, Tenancy.TrdLecturaToolset>();
+        services.AddScoped<Tenancy.IAgentToolset, Tenancy.CerebroToolset>();
         services.AddScoped<Tenancy.IAutomationService, Tenancy.AutomationService>();
         services.AddScoped<Tenancy.IFormDefinitionService, Tenancy.FormDefinitionService>();
         services.AddScoped<Tenancy.IFormDefinitionVersionService, Tenancy.FormDefinitionVersionService>();
@@ -73,6 +74,8 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IRelacionFormularioService, Tenancy.RelacionFormularioService>();
         services.AddScoped<Tenancy.ITrdAdminService, Tenancy.TrdAdminService>();
         services.AddScoped<Tenancy.ICerebroService, Tenancy.CerebroService>();
+        services.AddScoped<Admin.ICerebroPlantillaService, Admin.CerebroPlantillaService>();
+        services.AddScoped<Admin.ICerebroPlantillaPublicador, Admin.CerebroPlantillaPublicador>();
         services.AddScoped<Tenancy.ITrdClienteService, Tenancy.TrdClienteService>();
         services.AddScoped<Tenancy.IRadicacionService, Tenancy.RadicacionService>();
         services.AddScoped<Tenancy.IArchivoFisicoService, Tenancy.ArchivoFisicoService>();

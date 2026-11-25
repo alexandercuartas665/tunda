@@ -1551,6 +1551,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("archivado_por_nombre");
 
+                    b.Property<bool>("Bloqueado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("bloqueado");
+
                     b.Property<Guid?>("CategoriaId")
                         .HasColumnType("uuid")
                         .HasColumnName("categoria_id");
@@ -1579,6 +1583,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("nombre");
 
+                    b.Property<Guid?>("PlantillaOrigenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plantilla_origen_id");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -1597,11 +1605,22 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("updated_by");
 
+                    b.Property<bool>("UsoIa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("uso_ia");
+
+                    b.Property<int?>("VersionPlantilla")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_plantilla");
+
                     b.HasKey("Id")
                         .HasName("pk_cerebros");
 
                     b.HasIndex("CategoriaId")
                         .HasDatabaseName("ix_cerebros_categoria_id");
+
+                    b.HasIndex("TenantId", "PlantillaOrigenId")
+                        .HasDatabaseName("ix_cerebros_tenant_id_plantilla_origen_id");
 
                     b.HasIndex("TenantId", "Slug")
                         .IsUnique()
@@ -1609,6 +1628,90 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasFilter("archivado = false");
 
                     b.ToTable("cerebros", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.CerebroPlantilla", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Archivada")
+                        .HasColumnType("boolean")
+                        .HasColumnName("archivada");
+
+                    b.Property<bool>("Bloqueado")
+                        .HasColumnType("boolean")
+                        .HasColumnName("bloqueado");
+
+                    b.Property<string>("CategoriaColor")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("categoria_color");
+
+                    b.Property<string>("CategoriaNombre")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("categoria_nombre");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<string>("DestinoIdsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("destino_ids_json");
+
+                    b.Property<string>("DestinoModo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("destino_modo");
+
+                    b.Property<DateTimeOffset?>("ModificadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("modificada_en");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("nombre");
+
+                    b.Property<DateTimeOffset?>("PublicadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("publicada_en");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<bool>("UsoIa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("uso_ia");
+
+                    b.Property<int>("VersionPublicada")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_publicada");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cerebros_plantilla");
+
+                    b.ToTable("cerebros_plantilla", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.ColaboradorDependencia", b =>
@@ -4036,6 +4139,60 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasFilter("archivada = false");
 
                     b.ToTable("notas_cerebro", (string)null);
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.NotaCerebroPlantilla", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Contenido")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contenido");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("PlantillaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("plantilla_id");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titulo");
+
+                    b.Property<string>("TituloClave")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titulo_clave");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notas_cerebro_plantilla");
+
+                    b.HasIndex("PlantillaId", "TituloClave")
+                        .IsUnique()
+                        .HasDatabaseName("ix_notas_cerebro_plantilla_plantilla_id_titulo_clave");
+
+                    b.ToTable("notas_cerebro_plantilla", (string)null);
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Pais", b =>
@@ -8429,6 +8586,18 @@ namespace DokTrino.Infrastructure.Migrations
                     b.Navigation("Cerebro");
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.NotaCerebroPlantilla", b =>
+                {
+                    b.HasOne("DokTrino.Domain.Entities.CerebroPlantilla", "Plantilla")
+                        .WithMany("Notas")
+                        .HasForeignKey("PlantillaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notas_cerebro_plantilla_cerebros_plantilla_plantilla_id");
+
+                    b.Navigation("Plantilla");
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.PipelineFieldDefinition", b =>
                 {
                     b.HasOne("DokTrino.Domain.Entities.PipelineStage", "Stage")
@@ -8900,6 +9069,11 @@ namespace DokTrino.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("DokTrino.Domain.Entities.Cerebro", b =>
+                {
+                    b.Navigation("Notas");
+                });
+
+            modelBuilder.Entity("DokTrino.Domain.Entities.CerebroPlantilla", b =>
                 {
                     b.Navigation("Notas");
                 });

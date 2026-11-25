@@ -15,7 +15,8 @@ namespace DokTrino.Application.Tenancy;
 public sealed record CerebroTarjetaDto(
     Guid Id, string Slug, string Nombre, string? Descripcion,
     Guid? CategoriaId, string? CategoriaNombre, string? CategoriaColor,
-    int Notas, DateTimeOffset Actualizado);
+    int Notas, DateTimeOffset Actualizado,
+    bool Bloqueado = false, bool DePlataforma = false, bool UsoIa = false);
 
 /// <summary>Nota en una lista (sin contenido).</summary>
 public sealed record NotaResumenDto(Guid Id, string Titulo, string TituloClave, DateTimeOffset Actualizado);
@@ -24,7 +25,11 @@ public sealed record NotaResumenDto(Guid Id, string Titulo, string TituloClave, 
 public sealed record CerebroDetalleDto(
     Guid Id, string Slug, string Nombre, string? Descripcion,
     Guid? CategoriaId, string? CategoriaNombre, string? CategoriaColor,
-    IReadOnlyList<NotaResumenDto> Notas);
+    IReadOnlyList<NotaResumenDto> Notas,
+    bool Bloqueado = false, bool DePlataforma = false, bool UsoIa = false);
+
+/// <summary>Resultado de aplicar una plantilla en una entidad: sembrado | sincronizado | omitido.</summary>
+public sealed record SiembraCerebroDto(string Resultado, string? Slug, int Creadas, int Actualizadas, int Archivadas, string? Motivo = null);
 
 /// <summary>Nota completa, con las notas que la enlazan (backlinks).</summary>
 public sealed record NotaCerebroDto(
@@ -68,6 +73,28 @@ public interface ICerebroService
 
     /// <summary>Importa notas (.md de un vault de Obsidian): crea o actualiza por titulo.</summary>
     Task<ImportacionNotasDto> ImportarNotasAsync(Guid cerebroId, IReadOnlyList<ArchivoNotaDto> archivos, CancellationToken ct = default);
+
+    /// <summary>
+    /// Copia editable de un cerebro (tipicamente uno de la plataforma, que es de solo
+    /// lectura): mismas notas activas y categoria, sin plantilla ni candado. Owner/Admin.
+    /// </summary>
+    Task<CerebroDetalleDto> DuplicarAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Marca o desmarca el cerebro como referencia de la IA documental (la generacion del
+    /// Procedimiento TRD lo consulta). Owner/Admin; en un sembrado bloqueado lo decide la plataforma.
+    /// </summary>
+    Task MarcarUsoIaAsync(Guid id, bool usoIa, CancellationToken ct = default);
+
+    /// <summary>
+    /// Aplica una plantilla de plataforma en la ENTIDAD ACTIVA (la invoca la siembra del
+    /// Super Admin dentro del contexto de cada entidad). Solo acepta plantillas publicadas,
+    /// no archivadas y cuyo destino incluya a esta entidad: asi ninguna entidad recibe una
+    /// plantilla que no le corresponde, la llame quien la llame. Crea el cerebro si no
+    /// existe; si existe y esta BLOQUEADO lo sincroniza (nombre, categoria y notas por
+    /// titulo: crea, actualiza y archiva); una copia libre o archivada no se toca.
+    /// </summary>
+    Task<SiembraCerebroDto> AplicarPlantillaAsync(Guid plantillaId, CancellationToken ct = default);
 }
 
 // ---------------------------------------------------------------- implementacion
@@ -213,11 +240,15 @@ public sealed partial class CerebroService : ICerebroService
                 CatNombre = c.Categoria != null && !c.Categoria.Archivada ? c.Categoria.Nombre : null,
                 CatColor = c.Categoria != null && !c.Categoria.Archivada ? c.Categoria.Color : null,
                 Notas = c.Notas.Count(n => !n.Archivada),
-                Actualizado = c.UpdatedAt ?? c.CreatedAt
+                Actualizado = c.UpdatedAt ?? c.CreatedAt,
+                c.Bloqueado,
+                DePlataforma = c.PlantillaOrigenId != null,
+                c.UsoIa
             })
             .ToListAsync(ct);
         return filas
-            .Select(f => new CerebroTarjetaDto(f.Id, f.Slug, f.Nombre, f.Descripcion, f.CategoriaId, f.CatNombre, f.CatColor, f.Notas, f.Actualizado))
+            .Select(f => new CerebroTarjetaDto(f.Id, f.Slug, f.Nombre, f.Descripcion, f.CategoriaId, f.CatNombre, f.CatColor, f.Notas, f.Actualizado,
+                f.Bloqueado, f.DePlataforma, f.UsoIa))
             .OrderBy(f => f.CategoriaNombre is null)
             .ThenBy(f => f.CategoriaNombre, StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Nombre, StringComparer.OrdinalIgnoreCase)
@@ -240,7 +271,21 @@ public sealed partial class CerebroService : ICerebroService
             .Select(n => new NotaResumenDto(n.Id, n.Titulo, n.TituloClave, n.UpdatedAt ?? n.CreatedAt))
             .ToListAsync(ct);
         var cat = c.Categoria is { Archivada: false } k ? k : null;
-        return new CerebroDetalleDto(c.Id, c.Slug, c.Nombre, c.Descripcion, cat?.Id, cat?.Nombre, cat?.Color, notas);
+        return new CerebroDetalleDto(c.Id, c.Slug, c.Nombre, c.Descripcion, cat?.Id, cat?.Nombre, cat?.Color, notas,
+            c.Bloqueado, c.PlantillaOrigenId != null, c.UsoIa);
+    }
+
+    /// <summary>Mensaje de los cerebros sembrados bloqueados.</summary>
+    public const string MensajeBloqueado =
+        "Este cerebro lo administra la plataforma (solo lectura). Duplicalo como propio para editarlo.";
+
+    /// <summary>Rechaza escribir en un cerebro sembrado bloqueado (lo administra el Super Admin).</summary>
+    private async Task ExigirNoBloqueadoAsync(Guid cerebroId, CancellationToken ct)
+    {
+        if (await _db.Cerebros.AnyAsync(c => c.Id == cerebroId && c.Bloqueado, ct))
+        {
+            throw new InvalidOperationException(MensajeBloqueado);
+        }
     }
 
     public async Task<CerebroDetalleDto> CrearAsync(string nombre, string? descripcion, Guid? categoriaId, CancellationToken ct = default)
@@ -268,6 +313,7 @@ public sealed partial class CerebroService : ICerebroService
         await ExigirAdminAsync(ct);
         var c = await _db.Cerebros.FirstOrDefaultAsync(x => x.Id == id && !x.Archivado, ct)
                 ?? throw new InvalidOperationException("El cerebro no existe.");
+        if (c.Bloqueado) { throw new InvalidOperationException(MensajeBloqueado); }
         var (n, d) = LimpiarNombreDescripcion(nombre, descripcion);
         await ValidarCategoriaAsync(categoriaId, ct);
         // El slug no cambia al renombrar: los enlaces y marcadores siguen funcionando.
@@ -283,6 +329,7 @@ public sealed partial class CerebroService : ICerebroService
         var autor = await ExigirAdminAsync(ct);
         var c = await _db.Cerebros.FirstOrDefaultAsync(x => x.Id == id && !x.Archivado, ct)
                 ?? throw new InvalidOperationException("El cerebro no existe.");
+        if (c.Bloqueado) { throw new InvalidOperationException(MensajeBloqueado); }
         c.Archivado = true;
         c.ArchivadoEn = _clock.GetUtcNow();
         c.ArchivadoPorNombre = autor;
@@ -422,6 +469,7 @@ public sealed partial class CerebroService : ICerebroService
         {
             throw new InvalidOperationException("El cerebro no existe.");
         }
+        await ExigirNoBloqueadoAsync(cerebroId, ct);
         if (ValidarTitulo(titulo) is string err) { throw new InvalidOperationException(err); }
         var t = string.Join(' ', titulo.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         var clave = ClaveTitulo(t);
@@ -458,6 +506,7 @@ public sealed partial class CerebroService : ICerebroService
         var autor = await ExigirAdminAsync(ct);
         var n = await _db.NotasCerebro.FirstOrDefaultAsync(x => x.Id == notaId && !x.Archivada, ct)
                 ?? throw new InvalidOperationException("La nota no existe.");
+        await ExigirNoBloqueadoAsync(n.CerebroId, ct);
         n.Archivada = true;
         n.ArchivadaEn = _clock.GetUtcNow();
         n.ArchivadaPorNombre = autor;
@@ -472,6 +521,7 @@ public sealed partial class CerebroService : ICerebroService
         {
             throw new InvalidOperationException("El cerebro no existe.");
         }
+        await ExigirNoBloqueadoAsync(cerebroId, ct);
 
         var existentes = await _db.NotasCerebro
             .Where(n => n.CerebroId == cerebroId && !n.Archivada)
@@ -514,6 +564,183 @@ public sealed partial class CerebroService : ICerebroService
             await _db.SaveChangesAsync(ct);
         }
         return new ImportacionNotasDto(creadas, actualizadas, sinCambios, omitidas);
+    }
+
+    // ------------------------------------------------------------ duplicar y plantillas
+
+    public async Task<CerebroDetalleDto> DuplicarAsync(Guid id, CancellationToken ct = default)
+    {
+        var autor = await ExigirAdminAsync(ct);
+        var origen = await _db.Cerebros.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && !x.Archivado, ct)
+                     ?? throw new InvalidOperationException("El cerebro no existe.");
+
+        var nombre = $"{origen.Nombre} (copia)";
+        if (nombre.Length > MaxNombre) { nombre = nombre[..MaxNombre]; }
+        var categoriaActiva = origen.CategoriaId is Guid cat
+            && await _db.CategoriasCerebro.AnyAsync(k => k.Id == cat && !k.Archivada, ct);
+
+        // Copia LIBRE: sin plantilla de origen ni candado; la plataforma ya no la toca.
+        var copia = new Cerebro
+        {
+            TenantId = TenantId,
+            Slug = await SlugUnicoAsync(nombre, ct),
+            Nombre = nombre,
+            Descripcion = origen.Descripcion,
+            CategoriaId = categoriaActiva ? origen.CategoriaId : null,
+            CreadoPorNombre = autor
+        };
+        _db.Cerebros.Add(copia);
+        foreach (var n in await _db.NotasCerebro.AsNoTracking().Where(n => n.CerebroId == id && !n.Archivada).ToListAsync(ct))
+        {
+            _db.NotasCerebro.Add(new NotaCerebro
+            {
+                TenantId = TenantId, CerebroId = copia.Id,
+                Titulo = n.Titulo, TituloClave = n.TituloClave, Contenido = n.Contenido, ActualizadoPorNombre = autor
+            });
+        }
+        await _db.SaveChangesAsync(ct);
+        return (await ObtenerAsync(copia.Slug, ct))!;
+    }
+
+    public async Task MarcarUsoIaAsync(Guid id, bool usoIa, CancellationToken ct = default)
+    {
+        await ExigirAdminAsync(ct);
+        var c = await _db.Cerebros.FirstOrDefaultAsync(x => x.Id == id && !x.Archivado, ct)
+                ?? throw new InvalidOperationException("El cerebro no existe.");
+        if (c.Bloqueado) { throw new InvalidOperationException(MensajeBloqueado); }
+        c.UsoIa = usoIa;
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private const string AutorPlataforma = "Plataforma";
+
+    public async Task<SiembraCerebroDto> AplicarPlantillaAsync(Guid plantillaId, CancellationToken ct = default)
+    {
+        var tenantId = TenantId;
+        var p = await _db.CerebrosPlantilla.AsNoTracking().Include(x => x.Notas)
+                    .FirstOrDefaultAsync(x => x.Id == plantillaId, ct)
+                ?? throw new InvalidOperationException("La plantilla no existe.");
+        if (p.Archivada || p.VersionPublicada == 0)
+        {
+            throw new InvalidOperationException("La plantilla no esta publicada.");
+        }
+        if (!await DestinosCerebroPlantilla.IncluyeAsync(_db, p, tenantId, ct))
+        {
+            throw new InvalidOperationException("Esta entidad no esta entre los destinos de la plantilla.");
+        }
+
+        var existente = await _db.Cerebros
+            .Where(c => c.PlantillaOrigenId == p.Id)
+            .OrderBy(c => c.Archivado).ThenByDescending(c => c.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (existente is { Archivado: true })
+        {
+            return new SiembraCerebroDto("omitido", existente.Slug, 0, 0, 0, "La entidad lo archivo.");
+        }
+        if (existente is { Bloqueado: false })
+        {
+            return new SiembraCerebroDto("omitido", existente.Slug, 0, 0, 0, "Es una copia libre de la entidad: no se pisa.");
+        }
+
+        var ahora = _clock.GetUtcNow();
+        var categoriaId = await CategoriaDePlantillaAsync(p, ct);
+        int creadas = 0, actualizadas = 0, archivadas = 0;
+
+        if (existente is null)
+        {
+            var c = new Cerebro
+            {
+                TenantId = tenantId,
+                Slug = await SlugUnicoAsync(p.Nombre, ct),
+                Nombre = p.Nombre,
+                Descripcion = p.Descripcion,
+                CategoriaId = categoriaId,
+                CreadoPorNombre = AutorPlataforma,
+                PlantillaOrigenId = p.Id,
+                Bloqueado = p.Bloqueado,
+                VersionPlantilla = p.VersionPublicada,
+                UsoIa = p.UsoIa
+            };
+            _db.Cerebros.Add(c);
+            foreach (var pn in p.Notas)
+            {
+                _db.NotasCerebro.Add(new NotaCerebro
+                {
+                    TenantId = tenantId, CerebroId = c.Id,
+                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido,
+                    ActualizadoPorNombre = AutorPlataforma
+                });
+                creadas++;
+            }
+            await _db.SaveChangesAsync(ct);
+            return new SiembraCerebroDto("sembrado", c.Slug, creadas, 0, 0);
+        }
+
+        // Sincronizacion del sembrado bloqueado: la plantilla manda.
+        existente.Nombre = p.Nombre;
+        existente.Descripcion = p.Descripcion;
+        existente.CategoriaId = categoriaId;
+        existente.VersionPlantilla = p.VersionPublicada;
+        // Si la plantilla se libero, esta copia queda libre desde ahora (no se vuelve a tocar).
+        existente.Bloqueado = p.Bloqueado;
+        existente.UsoIa = p.UsoIa;
+        existente.UpdatedAt = ahora;
+
+        var actuales = await _db.NotasCerebro.Where(n => n.CerebroId == existente.Id && !n.Archivada).ToListAsync(ct);
+        var porClave = actuales.ToDictionary(n => n.TituloClave, StringComparer.Ordinal);
+        var clavesPlantilla = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pn in p.Notas)
+        {
+            clavesPlantilla.Add(pn.TituloClave);
+            if (porClave.TryGetValue(pn.TituloClave, out var n))
+            {
+                if (n.Titulo != pn.Titulo || n.Contenido != pn.Contenido)
+                {
+                    n.Titulo = pn.Titulo;
+                    n.Contenido = pn.Contenido;
+                    n.ActualizadoPorNombre = AutorPlataforma;
+                    actualizadas++;
+                }
+            }
+            else
+            {
+                _db.NotasCerebro.Add(new NotaCerebro
+                {
+                    TenantId = tenantId, CerebroId = existente.Id,
+                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido,
+                    ActualizadoPorNombre = AutorPlataforma
+                });
+                creadas++;
+            }
+        }
+        foreach (var n in actuales.Where(n => !clavesPlantilla.Contains(n.TituloClave)))
+        {
+            n.Archivada = true;
+            n.ArchivadaEn = ahora;
+            n.ArchivadaPorNombre = AutorPlataforma;
+            archivadas++;
+        }
+        await _db.SaveChangesAsync(ct);
+        return new SiembraCerebroDto("sincronizado", existente.Slug, creadas, actualizadas, archivadas);
+    }
+
+    /// <summary>Categoria de la entidad para la plantilla: la busca por nombre o la crea.</summary>
+    private async Task<Guid?> CategoriaDePlantillaAsync(CerebroPlantilla p, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(p.CategoriaNombre)) { return null; }
+        var nombre = p.CategoriaNombre.Trim();
+        var lower = nombre.ToLower();
+        var k = await _db.CategoriasCerebro.FirstOrDefaultAsync(x => !x.Archivada && x.Nombre.ToLower() == lower, ct);
+        if (k is not null) { return k.Id; }
+        k = new CategoriaCerebro
+        {
+            TenantId = TenantId,
+            Nombre = nombre,
+            Color = p.CategoriaColor,
+            Orden = await _db.CategoriasCerebro.CountAsync(x => !x.Archivada, ct)
+        };
+        _db.CategoriasCerebro.Add(k);
+        return k.Id;
     }
 
     /// <summary>Marca el cerebro como modificado (la galeria ordena y muestra "actualizado").</summary>
