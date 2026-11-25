@@ -120,6 +120,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
     public DbSet<NotaCerebro> NotasCerebro => Set<NotaCerebro>();
     public DbSet<CerebroPlantilla> CerebrosPlantilla => Set<CerebroPlantilla>();
     public DbSet<NotaCerebroPlantilla> NotasCerebroPlantilla => Set<NotaCerebroPlantilla>();
+    public DbSet<TrazaCatalogo> TrazasCatalogo => Set<TrazaCatalogo>();
     public DbSet<Radicado> Radicados => Set<Radicado>();
     public DbSet<Bodega> Bodegas => Set<Bodega>();
     public DbSet<Caja> Cajas => Set<Caja>();
@@ -1078,6 +1079,23 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.HasIndex(x => new { x.TenantId, x.Slug }).IsUnique().HasFilter("archivado = false");
             // Sin FK a la plantilla (vive fuera del tenant); indice para ubicar el sembrado.
             b.HasIndex(x => new { x.TenantId, x.PlantillaOrigenId });
+        });
+
+        // --- Bitacora y papelera del catalogo documental (sin FK: sobrevive al elemento) ---
+        modelBuilder.Entity<TrazaCatalogo>(b =>
+        {
+            b.Property(x => x.Accion).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Nivel).HasMaxLength(20).IsRequired();
+            b.Property(x => x.Codigo).HasMaxLength(60).IsRequired();
+            b.Property(x => x.Nombre).HasMaxLength(500).IsRequired();
+            b.Property(x => x.NombreAnterior).HasMaxLength(500);
+            b.Property(x => x.Snapshot).HasColumnType("jsonb");
+            b.Property(x => x.CamposSnapshot).HasColumnType("jsonb");
+            b.Property(x => x.Origen).HasMaxLength(250).IsRequired();
+            b.Property(x => x.ActorNombre).HasMaxLength(200);
+            b.Property(x => x.RestauradoPorNombre).HasMaxLength(200);
+            b.HasIndex(x => new { x.TenantId, x.Fecha });
+            b.HasIndex(x => new { x.TenantId, x.ElementoId });
         });
 
         // --- Plantillas de cerebros (plataforma, sin tenant, ola 2) ---

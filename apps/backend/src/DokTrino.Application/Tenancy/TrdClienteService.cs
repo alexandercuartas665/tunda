@@ -9,11 +9,14 @@ public sealed class TrdClienteService : ITrdClienteService
 {
     private readonly IApplicationDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly ICatalogoPapeleraService _papelera;
 
-    public TrdClienteService(IApplicationDbContext db, TimeProvider clock)
+    public TrdClienteService(IApplicationDbContext db, TimeProvider clock, ICatalogoPapeleraService? papelera = null)
     {
         _db = db;
         _clock = clock;
+        // El enlace administrativo borra y renombra por la misma compuerta que el editor.
+        _papelera = papelera ?? new CatalogoPapeleraService(db, clock);
     }
 
     public async Task<TokenSesionDto?> ResolverTokenAsync(string token, CancellationToken ct = default)
@@ -307,6 +310,7 @@ public sealed class TrdClienteService : ITrdClienteService
         var nombre = (nuevoNombre ?? "").Trim();
         if (nombre.Length == 0) { throw new InvalidOperationException("El nombre no puede quedar vacio."); }
 
+        string codigo, anterior;
         switch (nivel?.ToUpperInvariant())
         {
             case "SERIE":
@@ -314,6 +318,7 @@ public sealed class TrdClienteService : ITrdClienteService
                 var e = await _db.Series.IgnoreQueryFilters()
                     .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
                 if (e is null) { throw new InvalidOperationException("La serie no existe."); }
+                (codigo, anterior) = (e.Codigo, e.Nombre);
                 e.Nombre = nombre;
                 break;
             }
@@ -322,6 +327,7 @@ public sealed class TrdClienteService : ITrdClienteService
                 var e = await _db.Subseries.IgnoreQueryFilters()
                     .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
                 if (e is null) { throw new InvalidOperationException("La subserie no existe."); }
+                (codigo, anterior) = (e.Codigo, e.Nombre);
                 e.Nombre = nombre;
                 break;
             }
@@ -330,6 +336,7 @@ public sealed class TrdClienteService : ITrdClienteService
                 var e = await _db.TipologiasDocumentales.IgnoreQueryFilters()
                     .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
                 if (e is null) { throw new InvalidOperationException("La tipologia no existe."); }
+                (codigo, anterior) = (e.Codigo, e.Nombre);
                 e.Nombre = nombre;
                 break;
             }
@@ -337,60 +344,26 @@ public sealed class TrdClienteService : ITrdClienteService
                 throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
         }
 
+        // Bitacora: el renombre queda con el nombre anterior (mismo SaveChanges).
+        _papelera.RegistrarRenombre(s.TenantId, nivel!, id, codigo, anterior, nombre,
+            OrigenAdministrativo(s), Guid.Empty, ActorAdministrativo(s));
         await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>
-    /// Elimina una entrada del catalogo. Solo el enlace ADMINISTRATIVO. Se bloquea si
-    /// la entrada tiene hijos (subseries/tipologias) o si ya aparece en respuestas de
-    /// alguna TRD, para no romper datos existentes.
+    /// Elimina una entrada del catalogo. Solo el enlace ADMINISTRATIVO. Pasa por la compuerta
+    /// unica del catalogo: se bloquea si tiene hijos o esta en uso, y lo eliminado queda en la
+    /// papelera para restaurarlo desde Configuracion documental.
     /// </summary>
     public async Task EliminarCatalogoAsync(string token, string nivel, Guid id, CancellationToken ct = default)
     {
         var s = await SesionAdministrativaAsync(token, ct);
-
-        switch (nivel?.ToUpperInvariant())
-        {
-            case "SERIE":
-            {
-                var e = await _db.Series.IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
-                if (e is null) { throw new InvalidOperationException("La serie no existe."); }
-                if (await _db.Subseries.IgnoreQueryFilters().AnyAsync(x => x.SerieId == id, ct))
-                { throw new InvalidOperationException("No se puede eliminar: la serie tiene subseries. Elimina primero las subseries."); }
-                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.SerieId == id, ct))
-                { throw new InvalidOperationException("No se puede eliminar: la serie ya tiene registros en una TRD."); }
-                _db.Series.Remove(e);
-                break;
-            }
-            case "SUBSERIE":
-            {
-                var e = await _db.Subseries.IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
-                if (e is null) { throw new InvalidOperationException("La subserie no existe."); }
-                if (await _db.TipologiasDocumentales.IgnoreQueryFilters().AnyAsync(x => x.SubserieId == id, ct))
-                { throw new InvalidOperationException("No se puede eliminar: la subserie tiene tipologias. Elimina primero las tipologias."); }
-                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.SubserieId == id, ct))
-                { throw new InvalidOperationException("No se puede eliminar: la subserie ya tiene registros en una TRD."); }
-                _db.Subseries.Remove(e);
-                break;
-            }
-            case "TIPOLOGIA":
-            {
-                var e = await _db.TipologiasDocumentales.IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == s.TenantId, ct);
-                if (e is null) { throw new InvalidOperationException("La tipologia no existe."); }
-                if (await _db.RespuestasTablaDocumental.IgnoreQueryFilters().AnyAsync(r => r.TipologiaId == id, ct))
-                { throw new InvalidOperationException("No se puede eliminar: la tipologia ya tiene registros en una TRD."); }
-                _db.TipologiasDocumentales.Remove(e);
-                break;
-            }
-            default:
-                throw new InvalidOperationException("Nivel invalido: usa SERIE, SUBSERIE o TIPOLOGIA.");
-        }
-
-        await _db.SaveChangesAsync(ct);
+        await _papelera.EliminarAsync(s.TenantId, nivel, id, OrigenAdministrativo(s), Guid.Empty, ActorAdministrativo(s), ct);
     }
+
+    private static string OrigenAdministrativo(TokenSesionDto s) => $"Enlace administrativo - {s.DependenciaCargo}";
+
+    private static string ActorAdministrativo(TokenSesionDto s) => $"Enlace administrativo ({s.DependenciaCargo})";
 
     /// <summary>
     /// Resuelve el token y exige que sea un enlace administrativo vigente. La gestion

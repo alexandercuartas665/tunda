@@ -5,6 +5,7 @@
 @using DokTrino.Application.Tenancy
 @inject IConfiguracionDocumentalService Cfg
 @inject IEditorSeriesService Editor
+@inject ICatalogoPapeleraService Papelera
 @inject IImportadorBancoAgnService Banco
 @inject ICursoService Cursos
 @inject IWebHostEnvironment Entorno
@@ -297,7 +298,8 @@
             <div class="ed-arbol">
                 <div class="ed-arbol-h">
                     <span>Jerarquia documental</span>
-                    <button class="ed-add-serie" @onclick="AgregarSerie">&#65291; Serie</button>
+                    <button class="ed-add-serie" style="margin-left:auto; margin-right:6px;" title="Elementos eliminados (restaurables) y renombres del catalogo" @onclick="AbrirPapelera">&#128465; Papelera</button>
+                    <button class="ed-add-serie" style="margin-left:0;" @onclick="AgregarSerie">&#65291; Serie</button>
                 </div>
 
                 @* Busca en los tres niveles; lo que encuentra viaja con su rama. *@
@@ -686,7 +688,99 @@
     </text>;
 }
 
+@* ===================== Papelera e historial del catalogo ===================== *@
+@if (_papeleraOpen)
+{
+    <div class="pp-scrim" @onclick="() => _papeleraOpen = false"></div>
+    <div class="pp-wrap">
+        <div class="pp-modal">
+            <div class="pp-h">
+                <div>
+                    <div class="pp-t">Papelera e historial del catalogo</div>
+                    <div class="pp-s">Series, subseries y tipologias eliminadas (restaurables) y renombres, desde el editor o el enlace administrativo.</div>
+                </div>
+                <span class="pp-x" @onclick="() => _papeleraOpen = false">&#10005;</span>
+            </div>
+            <div class="pp-b">
+                @if (_papError is not null) { <div class="trx-error" style="margin-bottom:10px;">@_papError</div> }
+                @if (_papOk is not null) { <div class="ase-ok" style="margin-bottom:10px;">@_papOk</div> }
+                @if (_trazas.Count == 0)
+                {
+                    <div class="pp-vacio">Sin movimientos en el catalogo todavia.</div>
+                }
+                else
+                {
+                    <table class="pp-tabla">
+                        <thead><tr><th>Fecha</th><th>Accion</th><th>Elemento</th><th>Quien / desde</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _trazas)
+                            {
+                                <tr>
+                                    <td class="pp-fecha">@t.Fecha.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td><span class="pp-badge @(t.Accion == "ELIMINAR" ? "del" : "ren")">@(t.Accion == "ELIMINAR" ? "Eliminado" : "Renombrado")</span></td>
+                                    <td>
+                                        <span class="pp-nivel">@t.Nivel.ToLowerInvariant()</span>
+                                        <span class="pp-cod">@t.Codigo</span>
+                                        @if (t.Accion == "RENOMBRAR")
+                                        {
+                                            <span><s>@t.NombreAnterior</s> &#8594; <b>@t.Nombre</b></span>
+                                        }
+                                        else
+                                        {
+                                            <b>@t.Nombre</b>
+                                        }
+                                    </td>
+                                    <td class="pp-quien">@(t.ActorNombre ?? "-")<div class="pp-origen">@t.Origen</div></td>
+                                    <td class="pp-acc">
+                                        @if (t.Restaurable)
+                                        {
+                                            <button class="pp-btn" @onclick="() => RestaurarTraza(t)">Restaurar</button>
+                                        }
+                                        else if (t.RestauradoEn is DateTimeOffset r)
+                                        {
+                                            <span class="pp-rest" title="@t.RestauradoPorNombre">Restaurado @r.ToLocalTime().ToString("yyyy-MM-dd")</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <small class="pp-nota">Para borrar un elemento, primero no debe tener hijos ni estar en uso (filas de la TRD, expedientes, documentos clasificados, cargos o directorios). Lo eliminado conserva su codigo y sus campos de caracterizacion al restaurarlo.</small>
+            </div>
+        </div>
+    </div>
+}
+
 <style>
+    /* Papelera del catalogo (estilos propios: el CSS de otras paginas no esta cargado aqui). */
+    .pp-scrim { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:2000; }
+    .pp-wrap { position:fixed; inset:0; z-index:2005; display:flex; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
+    .pp-modal { width:960px; max-width:100%; max-height:88vh; display:flex; flex-direction:column; background:var(--card, #fff);
+                border-radius:16px; box-shadow:0 30px 80px rgba(0,0,0,.3); pointer-events:auto; overflow:hidden; }
+    .pp-h { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 20px; border-bottom:1px solid var(--border, #e6e9f2); }
+    .pp-t { font-size:16px; font-weight:800; }
+    .pp-s { font-size:12px; color:var(--muted-foreground, #8a93ad); margin-top:2px; }
+    .pp-x { cursor:pointer; font-size:16px; color:var(--muted-foreground, #8a93ad); }
+    .pp-b { padding:14px 20px 18px; overflow:auto; }
+    .pp-vacio { text-align:center; color:var(--muted-foreground, #8a93ad); padding:30px; }
+    .pp-tabla { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .pp-tabla th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted-foreground, #8a93ad); padding:6px 8px; border-bottom:1px solid var(--border, #e6e9f2); }
+    .pp-tabla td { padding:8px; border-bottom:1px solid var(--border, #eef1f7); vertical-align:top; }
+    .pp-fecha { white-space:nowrap; color:var(--muted-foreground, #8a93ad); }
+    .pp-badge { font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+    .pp-badge.del { background:#fde3e0; color:#c0392b; }
+    .pp-badge.ren { background:#e7f0ff; color:#1f5bb5; }
+    .pp-nivel { font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted-foreground, #8a93ad); margin-right:4px; }
+    .pp-cod { font-family:'IBM Plex Mono','Consolas',monospace; font-size:11px; color:var(--primary); margin-right:6px; }
+    .pp-quien { font-size:12px; }
+    .pp-origen { font-size:11px; color:var(--muted-foreground, #8a93ad); }
+    .pp-acc { text-align:right; white-space:nowrap; }
+    .pp-btn { border:1px solid var(--primary); background:transparent; color:var(--primary); border-radius:7px; padding:4px 11px; font-size:11.5px; font-weight:700; cursor:pointer; }
+    .pp-btn:hover { background:color-mix(in srgb, var(--primary) 10%, transparent); }
+    .pp-rest { font-size:11px; color:#2f7d54; }
+    .pp-nota { display:block; margin-top:12px; font-size:11.5px; color:var(--muted-foreground, #8a93ad); }
+
     /* --- Complementos de la serie (3a columna) --- */
     .ed-comp { flex:1; min-width:330px; max-width:400px; border-left:1px solid var(--chrome-border); padding:16px 18px; overflow:auto; background:#fbfaf6; }
     .ed-comp-t { font-size:13px; font-weight:700; color:#1f2433; margin-bottom:4px; }
@@ -1203,13 +1297,46 @@
     });
 
     private async Task Renombrar(NodoArbolDto n, string nombre) => await Ejecutar(async () =>
-        await Editor.RenombrarAsync(n.Nivel, n.Id, nombre, await Actor()));
+        await Editor.RenombrarAsync(n.Nivel, n.Id, nombre, await Actor(), await ActorNombre()));
 
     private async Task Eliminar(NodoArbolDto n) => await Ejecutar(async () =>
     {
-        await Editor.EliminarAsync(n.Nivel, n.Id);
+        await Editor.EliminarAsync(n.Nivel, n.Id, await Actor(), await ActorNombre());
         if (_selId == n.Id) { _selId = null; }
     });
+
+    // ---------- Papelera e historial del catalogo ----------
+    private bool _papeleraOpen;
+    private List<TrazaCatalogoDto> _trazas = new();
+    private string? _papError, _papOk;
+
+    private async Task AbrirPapelera()
+    {
+        _papError = _papOk = null;
+        _trazas = (await Papelera.HistorialAsync()).ToList();
+        _papeleraOpen = true;
+    }
+
+    private async Task RestaurarTraza(TrazaCatalogoDto t)
+    {
+        _papError = _papOk = null;
+        try
+        {
+            _papOk = await Papelera.RestaurarAsync(t.Id, await Actor(), await ActorNombre());
+            _trazas = (await Papelera.HistorialAsync()).ToList();
+            await RecargarArbol();
+        }
+        catch (InvalidOperationException ex) { _papError = ex.Message; }
+    }
+
+    private async Task<string?> ActorNombre()
+    {
+        if (AuthState is null) { return null; }
+        var st = await AuthState;
+        return st.User.Identity?.Name
+            ?? st.User.FindFirst(ClaimTypes.Name)?.Value
+            ?? st.User.FindFirst(ClaimTypes.Email)?.Value;
+    }
 
     private async Task AlternarSinSubseries() => await Ejecutar(async () =>
     {

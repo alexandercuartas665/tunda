@@ -7580,6 +7580,114 @@ namespace DokTrino.Infrastructure.Migrations
                     b.ToTable("tokens_dependencia", (string)null);
                 });
 
+            modelBuilder.Entity("DokTrino.Domain.Entities.TrazaCatalogo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("accion");
+
+                    b.Property<Guid>("Actor")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor");
+
+                    b.Property<string>("ActorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("actor_nombre");
+
+                    b.Property<string>("CamposSnapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("campos_snapshot");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("ElementoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("elemento_id");
+
+                    b.Property<DateTimeOffset>("Fecha")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("nivel");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("NombreAnterior")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("nombre_anterior");
+
+                    b.Property<string>("Origen")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("origen");
+
+                    b.Property<DateTimeOffset?>("RestauradoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("restaurado_en");
+
+                    b.Property<string>("RestauradoPorNombre")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("restaurado_por_nombre");
+
+                    b.Property<string>("Snapshot")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("snapshot");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trazas_catalogo");
+
+                    b.HasIndex("TenantId", "ElementoId")
+                        .HasDatabaseName("ix_trazas_catalogo_tenant_id_elemento_id");
+
+                    b.HasIndex("TenantId", "Fecha")
+                        .HasDatabaseName("ix_trazas_catalogo_tenant_id_fecha");
+
+                    b.ToTable("trazas_catalogo", (string)null);
+                });
+
             modelBuilder.Entity("DokTrino.Domain.Entities.TrazaEliminacionRespuesta", b =>
                 {
                     b.Property<Guid>("Id")

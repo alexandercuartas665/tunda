@@ -62,8 +62,13 @@ public interface IEditorSeriesService
     Task<Guid> AgregarSubserieAsync(Guid serieId, Guid actor, CancellationToken ct = default);
     Task<Guid> AgregarTipologiaAsync(Guid padreId, string nivelPadre, Guid actor, CancellationToken ct = default);
 
-    Task RenombrarAsync(string nivel, Guid id, string nombre, Guid actor, CancellationToken ct = default);
-    Task EliminarAsync(string nivel, Guid id, CancellationToken ct = default);
+    Task RenombrarAsync(string nivel, Guid id, string nombre, Guid actor, string? actorNombre = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Elimina por la compuerta unica del catalogo: bloquea si tiene hijos o esta en uso y
+    /// deja copia restaurable en la papelera.
+    /// </summary>
+    Task EliminarAsync(string nivel, Guid id, Guid actor, string? actorNombre = null, CancellationToken ct = default);
     Task AlternarSinSubseriesAsync(Guid serieId, Guid actor, CancellationToken ct = default);
 
     Task<CaracterizacionDto?> CaracterizacionAsync(string nivel, Guid id, CancellationToken ct = default);
@@ -104,9 +109,18 @@ public sealed class EditorSeriesService : IEditorSeriesService
 
     private static readonly string[] TiposCampo = ["Texto", "Numero", "Fecha", "SiNo", "Lista"];
 
-    private readonly IApplicationDbContext _db;
+    private const string Origen = "Editor de series";
 
-    public EditorSeriesService(IApplicationDbContext db) => _db = db;
+    private readonly IApplicationDbContext _db;
+    private readonly ICatalogoPapeleraService? _papelera;
+    private readonly ITenantContext? _tenant;
+
+    public EditorSeriesService(IApplicationDbContext db, ICatalogoPapeleraService? papelera = null, ITenantContext? tenant = null)
+    {
+        _db = db;
+        _papelera = papelera;
+        _tenant = tenant;
+    }
 
     public async Task<IReadOnlyList<NodoArbolDto>> ArbolAsync(CancellationToken ct = default)
     {
@@ -245,76 +259,52 @@ public sealed class EditorSeriesService : IEditorSeriesService
 
     // ---------------- Edicion del arbol ----------------
 
-    public async Task RenombrarAsync(string nivel, Guid id, string nombre, Guid actor, CancellationToken ct = default)
+    public async Task RenombrarAsync(string nivel, Guid id, string nombre, Guid actor, string? actorNombre = null, CancellationToken ct = default)
     {
         var limpio = (nombre ?? "").Trim();
         if (limpio.Length == 0) { throw new InvalidOperationException("El nombre no puede quedar vacio."); }
 
+        string codigo, anterior;
+        Guid tenantId;
         switch (nivel.ToUpperInvariant())
         {
             case "SERIE":
                 var s = await _db.Series.FirstOrDefaultAsync(x => x.Id == id, ct);
                 if (s is null) { return; }
+                (codigo, anterior, tenantId) = (s.Codigo, s.Nombre, s.TenantId);
                 s.Nombre = limpio; s.UpdatedBy = actor;
                 break;
             case "SUBSERIE":
                 var sb = await _db.Subseries.FirstOrDefaultAsync(x => x.Id == id, ct);
                 if (sb is null) { return; }
+                (codigo, anterior, tenantId) = (sb.Codigo, sb.Nombre, sb.TenantId);
                 sb.Nombre = limpio; sb.UpdatedBy = actor;
                 break;
             case "TIPOLOGIA":
                 var t = await _db.TipologiasDocumentales.FirstOrDefaultAsync(x => x.Id == id, ct);
                 if (t is null) { return; }
+                (codigo, anterior, tenantId) = (t.Codigo, t.Nombre, t.TenantId);
                 t.Nombre = limpio; t.UpdatedBy = actor;
                 break;
             default:
                 return;
         }
 
+        // Bitacora: el renombre queda con el nombre anterior (mismo SaveChanges).
+        _papelera?.RegistrarRenombre(tenantId, nivel, id, codigo, anterior, limpio, Origen, actor, actorNombre);
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task EliminarAsync(string nivel, Guid id, CancellationToken ct = default)
+    public async Task EliminarAsync(string nivel, Guid id, Guid actor, string? actorNombre = null, CancellationToken ct = default)
     {
-        switch (nivel.ToUpperInvariant())
+        // Antes este metodo borraba con solo revisar la TRD y la base arrastraba en cascada
+        // subseries, tipologias, cargos y directorios. Ahora pasa por la compuerta unica del
+        // catalogo: bloquea si hay hijos o uso y deja copia restaurable en la papelera.
+        if (_papelera is null || _tenant?.TenantId is not Guid tenantId)
         {
-            case "SERIE":
-                var s = await _db.Series.FirstOrDefaultAsync(x => x.Id == id, ct);
-                if (s is null) { return; }
-                // Borrar una serie con matriz diligenciada dejaria respuestas huerfanas.
-                if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.SerieId == id, ct))
-                {
-                    throw new InvalidOperationException($"\"{s.Nombre}\" ya tiene registros en alguna TRD; no se puede eliminar.");
-                }
-                _db.Series.Remove(s);
-                break;
-
-            case "SUBSERIE":
-                var sb = await _db.Subseries.FirstOrDefaultAsync(x => x.Id == id, ct);
-                if (sb is null) { return; }
-                if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.SubserieId == id, ct))
-                {
-                    throw new InvalidOperationException($"\"{sb.Nombre}\" ya tiene registros en alguna TRD; no se puede eliminar.");
-                }
-                _db.Subseries.Remove(sb);
-                break;
-
-            case "TIPOLOGIA":
-                var t = await _db.TipologiasDocumentales.FirstOrDefaultAsync(x => x.Id == id, ct);
-                if (t is null) { return; }
-                if (await _db.RespuestasTablaDocumental.AnyAsync(r => r.TipologiaId == id, ct))
-                {
-                    throw new InvalidOperationException($"\"{t.Nombre}\" ya tiene registros en alguna TRD; no se puede eliminar.");
-                }
-                _db.TipologiasDocumentales.Remove(t);
-                break;
-
-            default:
-                return;
+            throw new InvalidOperationException("No se puede eliminar sin entidad activa.");
         }
-
-        await LimpiarCamposAsync(nivel, id, ct);
-        await _db.SaveChangesAsync(ct);
+        await _papelera.EliminarAsync(tenantId, nivel, id, Origen, actor, actorNombre, ct);
     }
 
     public async Task AlternarSinSubseriesAsync(Guid serieId, Guid actor, CancellationToken ct = default)
@@ -676,16 +666,6 @@ public sealed class EditorSeriesService : IEditorSeriesService
             .OrderBy(c => c.Orden)
             .Select(c => new CampoDinamicoDto(c.Id, c.Clave, c.Tipo, c.Valor, c.Orden))
             .ToListAsync(ct);
-
-    /// <summary>Al borrar un nodo se van con el sus campos dinamicos.</summary>
-    private async Task LimpiarCamposAsync(string nivel, Guid id, CancellationToken ct)
-    {
-        var tipoEntidad = nivel.ToLowerInvariant();
-        var campos = await _db.CatalogoCaracteristicas
-            .Where(c => c.EntidadTipo == tipoEntidad && c.EntidadId == id)
-            .ToListAsync(ct);
-        if (campos.Count > 0) { _db.CatalogoCaracteristicas.RemoveRange(campos); }
-    }
 
     private static async Task<string> CodigoLibreAsync(string prefijo, Func<string, Task<bool>> existe)
     {

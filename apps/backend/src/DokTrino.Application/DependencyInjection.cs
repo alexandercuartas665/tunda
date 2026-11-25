@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IIndicadoresService, Tenancy.IndicadoresService>();
         services.AddScoped<Trd.IIndicadoresExcelExporter, Trd.IndicadoresExcelExporter>();
         services.AddScoped<Tenancy.IConfiguracionDocumentalService, Tenancy.ConfiguracionDocumentalService>();
+        services.AddScoped<Tenancy.ICatalogoPapeleraService, Tenancy.CatalogoPapeleraService>();
         services.AddScoped<Tenancy.IEditorSeriesService, Tenancy.EditorSeriesService>();
         services.AddScoped<Tenancy.IImportadorBancoAgnService, Tenancy.ImportadorBancoAgnService>();
         services.AddScoped<Tenancy.ICursoService, Tenancy.CursoService>();
