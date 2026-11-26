@@ -1729,3 +1729,37 @@ textarea.cb-in { resize:vertical; min-height:38px; }
 .cb-prop-v { color:#37415c; display:flex; flex-wrap:wrap; gap:4px; overflow-wrap:anywhere; }
 .cb-prop-vacio { color:#b3bad0; }
 .cb-chip { display:inline-block; padding:1px 8px; border-radius:20px; font-size:11.5px; background:color-mix(in srgb, var(--primary) 10%, #fff); color:var(--primary); font-weight:600; }
+
+/* ---- Arbol de notas de un cerebro (carpetas tipo explorador de Obsidian) ---- */
+.an { display:flex; flex-direction:column; min-height:0; flex:1; }
+.an-barra { display:flex; align-items:center; gap:6px; margin-bottom:6px; font-size:11px; color:#8a93ad; }
+.an-barra-t { flex:1; font-weight:700; }
+.an-mini { border:0; background:transparent; color:var(--primary); font-size:11px; font-weight:700; padding:2px 6px; border-radius:6px; cursor:pointer; }
+.an-mini:hover { background:color-mix(in srgb, var(--primary) 8%, transparent); }
+.an-scroll { flex:1; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:1px; padding-bottom:6px; }
+.an-carpeta, .an-nota { display:flex; align-items:center; gap:6px; flex-shrink:0; width:100%; min-height:28px; padding-top:4px; padding-bottom:4px;
+    padding-right:8px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:12.5px; text-align:left;
+    color:var(--foreground); text-decoration:none; cursor:pointer; }
+.an-carpeta { font-weight:700; color:#3a4158; user-select:none; }
+.an-carpeta:hover, .an-nota:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); }
+.an-nota.on { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); font-weight:700; }
+.an-caret { width:12px; flex-shrink:0; font-size:10px; color:#9aa3bd; text-align:center; }
+.an-nom { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.an-cnt { flex-shrink:0; font-size:10.5px; font-weight:700; color:#9aa3bd; background:#eef1f7; border-radius:10px; padding:0 7px; line-height:17px; }
+.an-ic-carpeta { width:15px; height:11px; flex-shrink:0; position:relative; border-radius:2px 3px 3px 3px; background:#f2c14e; }
+.an-ic-carpeta::before { content:""; position:absolute; left:0; top:-3px; width:7px; height:4px; border-radius:2px 2px 0 0; background:#f2c14e; }
+.an-carpeta.abierta .an-ic-carpeta, .an-carpeta.abierta .an-ic-carpeta::before { background:#e9a92a; }
+.an-ic-nota { width:10px; height:12px; flex-shrink:0; margin-left:12px; border:1.5px solid #b3bad0; border-radius:2px; background:#fff; }
+.an-nota.on .an-ic-nota { border-color:var(--primary); }
+.an-hijos { position:relative; display:flex; flex-direction:column; gap:1px; }
+.an-hijos::before { content:""; position:absolute; left:var(--an-guia); top:0; bottom:4px; border-left:1px solid #e3e7f0; pointer-events:none; }
+.an-mas { flex-shrink:0; width:20px; height:20px; border:0; border-radius:6px; background:transparent; color:var(--primary); font-weight:800;
+    line-height:1; cursor:pointer; opacity:0; transition:opacity .12s; }
+.an-carpeta:hover .an-mas { opacity:1; }
+.an-mas:hover { background:color-mix(in srgb, var(--primary) 14%, transparent); }
+.an-vacio { font-size:12px; color:#9aa3bd; font-style:italic; padding:8px; }
+
+/* Ruta de carpeta sobre el titulo de la nota */
+.cd-ruta { display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:11.5px; color:#8a93ad; margin-bottom:2px; }
+.cd-ruta-seg { display:inline-flex; align-items:center; gap:5px; }
+.cd-ruta-seg + .cd-ruta-seg::before { content:"/"; color:#c4cada; margin-right:1px; }

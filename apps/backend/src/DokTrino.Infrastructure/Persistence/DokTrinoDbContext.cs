@@ -1114,6 +1114,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
             b.Property(x => x.TituloClave).HasMaxLength(200).IsRequired();
             b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
+            b.Property(x => x.Carpeta).HasMaxLength(400);
             b.HasOne(x => x.Plantilla).WithMany(p => p.Notas).HasForeignKey(x => x.PlantillaId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.PlantillaId, x.TituloClave }).IsUnique();
         });
@@ -1123,6 +1124,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
             b.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
             b.Property(x => x.TituloClave).HasMaxLength(200).IsRequired();
             b.Property(x => x.Contenido).HasColumnType("text").IsRequired();
+            b.Property(x => x.Carpeta).HasMaxLength(400);
             b.Property(x => x.ActualizadoPorNombre).HasMaxLength(200);
             b.Property(x => x.ArchivadaPorNombre).HasMaxLength(200);
             b.HasOne(x => x.Cerebro).WithMany(c => c.Notas).HasForeignKey(x => x.CerebroId).OnDelete(DeleteBehavior.Cascade);

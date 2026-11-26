@@ -107,17 +107,9 @@ else
                     <ImportadorNotas Importar="ImportarNotas" Terminado="TrasImportar" />
                 </div>
             }
-            <input class="cb-in" style="margin-bottom:8px;" placeholder="Buscar nota..." @bind="_filtro" @bind:event="oninput" />
-            <div class="cd-lista-scroll">
-                @foreach (var n in NotasFiltradas)
-                {
-                    <a class="cd-item @(_nota?.Id == n.Id ? "on" : "")" href="@MarkdownCerebro.UrlNota(_cerebro.Slug, n.Titulo)">@n.Titulo</a>
-                }
-                @if (_cerebro.Notas.Count == 0)
-                {
-                    <div class="trx-empty">Sin notas todavia.</div>
-                }
-            </div>
+            <input class="cb-in" style="margin-bottom:8px;" placeholder="Buscar nota o carpeta..." @bind="_filtro" @bind:event="oninput" />
+            <ArbolNotas Items="_itemsArbol" Activa="_nota?.Id" Filtro="@_filtro"
+                        NuevaEnCarpeta="@(PuedeEditar ? EventCallback.Factory.Create<string?>(this, NuevaEnCarpeta) : default)" />
         </aside>
 
         @* ---------------- Nota ---------------- *@
@@ -125,7 +117,16 @@ else
             @if (_editando)
             {
                 <div class="cd-editor">
-                    <input class="cb-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" />
+                    <div class="cd-ed-fila">
+                        <input class="cb-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" />
+                        <div class="cd-ed-carpeta" title="Carpeta de la nota. Vacio = raiz. Usa / para subcarpetas.">
+                            <span class="an-ic-carpeta" aria-hidden="true"></span>
+                            <input class="cb-in" @bind="_edCarpeta" placeholder="Carpeta (vacio = raiz)" maxlength="400" list="cd-carpetas" />
+                        </div>
+                    </div>
+                    <datalist id="cd-carpetas">
+                        @foreach (var c in _carpetas) { <option value="@c"></option> }
+                    </datalist>
                     <div class="cd-ed-tabs">
                         <button class="cd-ed-tab @(!_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = false">Escribir</button>
                         <button class="cd-ed-tab @(_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = true">Vista previa</button>
@@ -147,6 +148,13 @@ else
             }
             else if (_nota is not null)
             {
+                @if (!string.IsNullOrWhiteSpace(_nota.Carpeta))
+                {
+                    <div class="cd-ruta">
+                        <span class="an-ic-carpeta" aria-hidden="true"></span>
+                        @foreach (var seg in _nota.Carpeta.Split('/')) { <span class="cd-ruta-seg">@seg</span> }
+                    </div>
+                }
                 <div class="cd-nota-h">
                     <h2 class="cd-nota-titulo">@_nota.Titulo</h2>
                     @if (PuedeEditar)
@@ -236,7 +244,7 @@ else
     .cd-tag { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cb-acento);
               background:color-mix(in srgb, var(--cb-acento) 12%, transparent); padding:3px 9px; border-radius:999px; }
     .cd-head-acc { display:flex; gap:8px; flex-shrink:0; }
-    .cd-split { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
+    .cd-split { display:grid; grid-template-columns:300px minmax(0,1fr); gap:16px; align-items:start; }
     @@media (max-width: 900px) { .cd-split { grid-template-columns:1fr; } }
     .cd-plat { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#1f5bb5;
                background:#e7f0ff; padding:3px 9px; border-radius:999px; }
@@ -266,6 +274,10 @@ else
     .cd-vacio-s { font-size:12.5px; margin-top:4px; }
     .cd-editor { display:flex; flex-direction:column; gap:10px; }
     .cd-ed-titulo { font-size:16px; font-weight:700; }
+    .cd-ed-fila { display:flex; gap:8px; flex-wrap:wrap; }
+    .cd-ed-fila .cd-ed-titulo { flex:2 1 260px; }
+    .cd-ed-carpeta { flex:1 1 200px; display:flex; align-items:center; gap:7px; border:1px solid var(--border); border-radius:9px; padding:0 0 0 10px; background:#fff; }
+    .cd-ed-carpeta .cb-in { border:0; box-shadow:none; padding-left:0; background:transparent; }
     .cd-ed-tabs { display:flex; align-items:center; gap:6px; }
     .cd-ed-tab { border:1px solid var(--border); background:var(--card); border-radius:7px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--foreground); }
     .cd-ed-tab.on { border-color:var(--primary); color:var(--primary); }
@@ -346,7 +358,11 @@ else
     // Editor.
     private bool _editando, _vistaPrevia, _guardando;
     private Guid? _edId;
-    private string _edTitulo = "", _edContenido = "";
+    private string _edTitulo = "", _edContenido = "", _edCarpeta = "";
+
+    // Indice como arbol de carpetas.
+    private List<ArbolNotas.ItemArbolNota> _itemsArbol = new();
+    private List<string> _carpetas = new();
 
     // Editar cerebro.
     private bool _formCerebro;
@@ -354,10 +370,6 @@ else
     private string _fNombre = "", _fDesc = "", _fCategoria = "";
     private string? _formError;
 
-    private IEnumerable<NotaResumenDto> NotasFiltradas =>
-        _cerebro is null ? Enumerable.Empty<NotaResumenDto>()
-        : string.IsNullOrWhiteSpace(_filtro) ? _cerebro.Notas
-        : _cerebro.Notas.Where(n => n.Titulo.Contains(_filtro.Trim(), StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -383,6 +395,17 @@ else
     {
         _cerebro = await Svc.ObtenerAsync(Slug);
         _claves = _cerebro?.Notas.Select(n => n.TituloClave).ToHashSet() ?? new();
+        _itemsArbol = _cerebro is null ? new()
+            : _cerebro.Notas.Select(n => new ArbolNotas.ItemArbolNota(n.Id, n.Titulo, n.Carpeta, MarkdownCerebro.UrlNota(_cerebro.Slug, n.Titulo))).ToList();
+        // Todas las carpetas (y sus ancestros) para sugerir en el editor.
+        _carpetas = (_cerebro?.Notas ?? Array.Empty<NotaResumenDto>())
+            .Where(n => !string.IsNullOrWhiteSpace(n.Carpeta))
+            .SelectMany(n =>
+            {
+                var segs = n.Carpeta!.Split('/');
+                return Enumerable.Range(1, segs.Length).Select(i => string.Join('/', segs.Take(i)));
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private async Task CargarNota()
@@ -419,8 +442,16 @@ else
         _edId = null;
         _edTitulo = titulo ?? "";
         _edContenido = "";
+        // Por defecto, en la carpeta de la nota abierta.
+        _edCarpeta = _nota?.Carpeta ?? "";
         _vistaPrevia = false;
         _editando = true;
+    }
+
+    private void NuevaEnCarpeta(string? carpeta)
+    {
+        NuevaNota(null);
+        _edCarpeta = carpeta ?? "";
     }
 
     private void EditarNota()
@@ -430,6 +461,7 @@ else
         _edId = _nota.Id;
         _edTitulo = _nota.Titulo;
         _edContenido = _nota.Contenido;
+        _edCarpeta = _nota.Carpeta ?? "";
         _vistaPrevia = false;
         _editando = true;
     }
@@ -443,7 +475,7 @@ else
         _guardando = true;
         try
         {
-            var n = await Svc.GuardarNotaAsync(_cerebro.Id, _edId, _edTitulo, _edContenido);
+            var n = await Svc.GuardarNotaAsync(_cerebro.Id, _edId, _edTitulo, _edContenido, carpeta: _edCarpeta ?? "");
             _editando = false;
             _ok = "Nota guardada.";
             await Refrescar(n.Titulo);

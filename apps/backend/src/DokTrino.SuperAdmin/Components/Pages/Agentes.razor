@@ -914,6 +914,7 @@ else
         AiProvider.Claude => "Claude",
         AiProvider.Gemini => "Gemini",
         AiProvider.ChatGpt => "ChatGPT",
+        AiProvider.DeepSeek => "DeepSeek",
         _ => p.ToString()
     };
     private static string ProviderClass(AiProvider p) => p switch
@@ -928,6 +929,7 @@ else
         AiProvider.Claude => "claude-opus-4-7",
         AiProvider.Gemini => "gemini-2.5-pro",
         AiProvider.ChatGpt => "gpt-4o",
+        AiProvider.DeepSeek => "deepseek-chat",
         _ => ""
     };
     private static string DetailHint(AgentResourceType t) => t switch

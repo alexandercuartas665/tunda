@@ -57,6 +57,9 @@ public class NotaCerebroPlantilla : BaseEntity
     public string TituloClave { get; set; } = "";
 
     public string Contenido { get; set; } = "";
+
+    /// <summary>Carpeta de la nota (como en el vault importado). Null = raiz.</summary>
+    public string? Carpeta { get; set; }
 }
 
 /// <summary>Modos de destino de la siembra de una plantilla.</summary>

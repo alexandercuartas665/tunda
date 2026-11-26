@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DokTrino.Application.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +16,7 @@ namespace DokTrino.Application.Tenancy;
 /// <summary>Nota que el agente consulto: Leida = la abrio con ver_nota; si no, solo vio su fragmento en una busqueda.</summary>
 public sealed record FuenteNotaDto(string CerebroSlug, string CerebroNombre, string Titulo, bool Leida, bool Truncada);
 
-public sealed class CerebroToolset : IAgentToolset
+public sealed partial class CerebroToolset : IAgentToolset
 {
     public const string ToolListar = "listar_cerebros";
     public const string ToolBuscar = "buscar_notas";
@@ -66,7 +67,7 @@ public sealed class CerebroToolset : IAgentToolset
             """{"type":"object","properties":{"texto":{"type":"string","description":"Palabras clave a buscar (p. ej. 'Ley 594 eliminacion')."},"cerebro":{"type":"string","description":"Slug del cerebro para buscar solo en el (opcional)."}},"required":["texto"],"additionalProperties":false}"""),
 
         new AiToolSpec(ToolVer,
-            "Devuelve el contenido completo (markdown) de una nota de un cerebro y las notas a las que enlaza. Usala cuando buscar_notas encontro una nota relevante.",
+            "Devuelve el contenido (texto markdown) de una nota de un cerebro y las notas a las que enlaza. Usala cuando buscar_notas encontro una nota relevante. Los PDF y demas adjuntos NO se cargan: su texto esta en notas de transcripcion (si pides un .pdf se entrega la transcripcion de mismo nombre, si existe).",
             """{"type":"object","properties":{"cerebro":{"type":"string","description":"Slug del cerebro."},"titulo":{"type":"string","description":"Titulo de la nota."}},"required":["cerebro","titulo"],"additionalProperties":false}"""),
     ];
 
@@ -136,7 +137,7 @@ public sealed class CerebroToolset : IAgentToolset
         // Cerebros de cientos de notas: se puntua en memoria (titulo pesa mas que el cuerpo).
         var notas = await _db.NotasCerebro.AsNoTracking()
             .Where(n => ids.Contains(n.CerebroId) && !n.Archivada)
-            .Select(n => new { n.Titulo, n.Contenido, Cerebro = n.Cerebro.Slug, CerebroNombre = n.Cerebro.Nombre })
+            .Select(n => new { n.Titulo, n.Contenido, n.Carpeta, Cerebro = n.Cerebro.Slug, CerebroNombre = n.Cerebro.Nombre })
             .ToListAsync(ct);
 
         var top = notas
@@ -153,7 +154,11 @@ public sealed class CerebroToolset : IAgentToolset
             .ToList();
         foreach (var x in top) { Registrar(x.n.Cerebro, x.n.CerebroNombre, x.n.Titulo, false, false); }
         var resultados = top
-            .Select(x => new { cerebro = x.n.Cerebro, titulo = x.n.Titulo, fragmento = Fragmento(x.n.Contenido, x.cuerpo, palabras) })
+            .Select(x =>
+            {
+                var texto = SinAdjuntos(x.n.Contenido);
+                return new { cerebro = x.n.Cerebro, titulo = x.n.Titulo, carpeta = x.n.Carpeta, fragmento = Fragmento(texto, texto.ToLowerInvariant(), palabras) };
+            })
             .ToList();
 
         return Ok(new { total = resultados.Count, resultados });
@@ -162,7 +167,12 @@ public sealed class CerebroToolset : IAgentToolset
     private async Task<AgentToolResult> VerAsync(string? cerebro, string? titulo, CancellationToken ct)
     {
         var slug = (cerebro ?? "").Trim().ToLowerInvariant();
-        var clave = CerebroService.ClaveTitulo(CerebroService.DestinoEnlace(titulo ?? ""));
+        var destino = CerebroService.DestinoEnlace(titulo ?? "");
+        // Un adjunto (PDF, imagen...) nunca se carga: se busca la nota de texto con su mismo nombre
+        // (p. ej. Res_01738_2026-09-24.pdf -> transcripcion Res_01738_2026-09-24).
+        var pidioAdjunto = EsAdjunto(destino);
+        if (pidioAdjunto) { destino = Path.GetFileNameWithoutExtension(destino); }
+        var clave = CerebroService.ClaveTitulo(destino);
         if (slug.Length == 0 || clave.Length == 0) { return Error("Indica el slug del cerebro y el titulo de la nota."); }
 
         var c = await Cerebros().Where(x => x.Slug == slug).Select(x => new { x.Id, x.Nombre }).FirstOrDefaultAsync(ct);
@@ -170,23 +180,69 @@ public sealed class CerebroToolset : IAgentToolset
 
         var n = await _db.NotasCerebro.AsNoTracking()
             .Where(x => x.CerebroId == c.Id && x.TituloClave == clave && !x.Archivada)
-            .Select(x => new { x.Titulo, x.Contenido })
+            .Select(x => new { x.Titulo, x.Contenido, x.Carpeta })
             .FirstOrDefaultAsync(ct);
-        if (n is null) { return Error($"El cerebro '{slug}' no tiene una nota titulada '{titulo}'."); }
+        if (n is null)
+        {
+            return Error(pidioAdjunto
+                ? $"Los PDF y adjuntos no se cargan, solo el texto de las notas, y no hay una nota de texto (transcripcion) llamada '{destino}'. Busca su contenido con buscar_notas."
+                : $"El cerebro '{slug}' no tiene una nota titulada '{titulo}'.");
+        }
 
-        var truncada = n.Contenido.Length > MaxContenidoNota;
+        var texto = SinAdjuntos(n.Contenido);
+        var truncada = texto.Length > MaxContenidoNota;
         Registrar(slug, c.Nombre, n.Titulo, true, truncada);
         return Ok(new
         {
             cerebro = slug,
             cerebro_nombre = c.Nombre,
             titulo = n.Titulo,
-            contenido = truncada ? n.Contenido[..MaxContenidoNota] : n.Contenido,
+            carpeta = n.Carpeta,
+            transcripcion_de_adjunto = pidioAdjunto ? CerebroService.DestinoEnlace(titulo ?? "") : null,
+            contenido = truncada ? texto[..MaxContenidoNota] : texto,
             truncada,
             enlaza_a = CerebroService.EnlaceRegex().Matches(n.Contenido)
-                .Select(m => CerebroService.DestinoEnlace(m.Groups[1].Value)).Where(x => x.Length > 0).Distinct().Take(30)
+                .Select(m => CerebroService.DestinoEnlace(m.Groups[1].Value))
+                .Where(x => x.Length > 0 && !EsAdjunto(x)).Distinct().Take(30)
         });
     }
+
+    private static readonly HashSet<string> ExtensionesAdjunto = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff",
+        ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".csv",
+        ".mp3", ".wav", ".ogg", ".m4a", ".mp4", ".mov", ".webm", ".avi", ".zip", ".rar", ".7z"
+    };
+
+    /// <summary>True si el destino de un enlace es un adjunto (PDF, imagen, office...) y no una nota.</summary>
+    public static bool EsAdjunto(string destino)
+    {
+        var d = (destino ?? "").Trim();
+        var punto = d.LastIndexOf('.');
+        return punto > 0 && ExtensionesAdjunto.Contains(d[punto..]);
+    }
+
+    /// <summary>
+    /// Texto de la nota sin referencias a adjuntos: quita los enlaces/embebidos [[x.pdf|...]] y
+    /// [x](y.pdf) y las propiedades cuyo valor es la ruta de un adjunto (fuente_pdf: "...pdf").
+    /// El modelo solo ve texto; asi no intenta abrir archivos que el cerebro no tiene.
+    /// </summary>
+    public static string SinAdjuntos(string contenido)
+    {
+        var s = EnlaceAdjunto().Replace(contenido ?? "", m => EsAdjunto(CerebroService.DestinoEnlace(m.Groups[1].Value)) ? "" : m.Value);
+        s = LinkMdAdjunto().Replace(s, m => EsAdjunto(m.Groups[1].Value) ? "" : m.Value);
+        s = PropiedadAdjunto().Replace(s, m => EsAdjunto(m.Groups[1].Value) ? "" : m.Value);
+        return s;
+    }
+
+    [GeneratedRegex(@"!?\[\[([^\[\]|]+)(?:\|[^\[\]]*)?\]\]")]
+    private static partial Regex EnlaceAdjunto();
+
+    [GeneratedRegex(@"!?\[[^\]\r\n]*\]\(([^)\s]+)\)")]
+    private static partial Regex LinkMdAdjunto();
+
+    [GeneratedRegex(@"^[ \t]*[\w\-]+:[ \t]*[""']?([^""'\r\n]+?)[""']?[ \t]*\r?\n", RegexOptions.Multiline)]
+    private static partial Regex PropiedadAdjunto();
 
     private static int Ocurrencias(string texto, string palabra)
     {

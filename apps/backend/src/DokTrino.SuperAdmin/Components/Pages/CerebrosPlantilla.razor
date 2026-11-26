@@ -194,11 +194,8 @@
                 </div>
                 <div class="cp-notas">
                     <div class="cp-notas-lista">
-                        @foreach (var n in _sel.Notas)
-                        {
-                            <button type="button" class="cd-item @(_edId == n.Id ? "on" : "")" @onclick="() => AbrirNota(n.Id)">@n.Titulo</button>
-                        }
-                        @if (_sel.Notas.Count == 0) { <div class="trx-empty">Sin notas.</div> }
+                        <ArbolNotas Items="@(_sel.Notas.Select(n => new ArbolNotas.ItemArbolNota(n.Id, n.Titulo, n.Carpeta)).ToList())"
+                                    Activa="_edId" Seleccionar="AbrirNota" />
                     </div>
                     <div class="cp-notas-editor">
                         @if (_editando)

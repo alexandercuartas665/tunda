@@ -41,6 +41,17 @@
             var primario = colorPrimario();
             var foco = opts.foco || null;
             var muchos = data.nodos.length > 80;
+            // Grupos por carpeta de primer nivel (como los grupos de color de Obsidian).
+            var paleta = ['#4f6bed', '#e0803a', '#2fa37a', '#c2477a', '#8a5cd6', '#d4a72c', '#2b9bc4', '#7a8b2e', '#d0563f', '#5a6f8f'];
+            var grupos = [];
+            data.nodos.forEach(function (n) { if (!n.fantasma && n.grupo && grupos.indexOf(n.grupo) < 0) { grupos.push(n.grupo); } });
+            grupos.sort(function (a, b) { return a.localeCompare(b); });
+            var conRaiz = data.nodos.some(function (n) { return !n.fantasma && !n.grupo; });
+            var categorias = grupos.map(function (g, i) { return { name: g, itemStyle: { color: paleta[i % paleta.length] } }; });
+            var catRaiz = categorias.length;
+            if (conRaiz || grupos.length === 0) { categorias.push({ name: grupos.length ? 'Raiz' : 'Nota', itemStyle: { color: primario } }); }
+            var catFantasma = categorias.length;
+            categorias.push({ name: 'Sin crear', itemStyle: { color: '#b3bad0', opacity: 0.7 } });
             var nodos = data.nodos.map(function (n) {
                 var tam = Math.min(40, 8 + Math.sqrt(n.grado) * 5);
                 var esFoco = n.id === foco;
@@ -50,7 +61,8 @@
                     value: n.grado,
                     fantasma: n.fantasma,
                     symbolSize: esFoco ? tam + 8 : tam,
-                    category: n.fantasma ? 1 : 0,
+                    grupo: n.grupo,
+                    category: n.fantasma ? catFantasma : (n.grupo ? grupos.indexOf(n.grupo) : catRaiz),
                     itemStyle: esFoco ? { borderColor: '#1f2433', borderWidth: 3 } : undefined,
                     label: { show: !muchos || n.grado >= 3 || esFoco }
                 };
@@ -62,10 +74,11 @@
                         if (p.dataType !== 'node') { return ''; }
                         var d = p.data;
                         var t = (d.name || '').replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; });
-                        return '<b>' + t + '</b><br/>' + d.value + ' conexion(es)' + (d.fantasma ? '<br/><i>Nota aun no creada</i>' : '');
+                        var g = (d.grupo || '').replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; });
+                        return '<b>' + t + '</b>' + (g ? '<br/><span style="color:#8a93ad">' + g + '</span>' : '') + '<br/>' + d.value + ' conexion(es)' + (d.fantasma ? '<br/><i>Nota aun no creada</i>' : '');
                     }
                 },
-                legend: opts.compacto ? undefined : [{ data: ['Nota', 'Sin crear'], bottom: 8, left: 12, textStyle: { color: '#59617a' } }],
+                legend: opts.compacto ? undefined : [{ type: 'scroll', data: categorias.map(function (c) { return c.name; }), bottom: 8, left: 12, right: 12, textStyle: { color: '#59617a' } }],
                 animationDurationUpdate: 600,
                 series: [{
                     type: 'graph',
@@ -75,10 +88,7 @@
                     scaleLimit: { min: 0.15, max: 6 },
                     data: nodos,
                     links: aristas,
-                    categories: [
-                        { name: 'Nota', itemStyle: { color: primario } },
-                        { name: 'Sin crear', itemStyle: { color: '#b3bad0', opacity: 0.7 } }
-                    ],
+                    categories: categorias,
                     force: {
                         repulsion: muchos ? 90 : 180,
                         edgeLength: muchos ? [30, 90] : [60, 140],

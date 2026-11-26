@@ -96,6 +96,45 @@ public sealed class CerebrosIaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Herramientas_de_cerebros_entregan_solo_texto_nunca_los_PDF()
+    {
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var svc = Cerebros(ctx);
+            var id = (await svc.CrearAsync("Minas", null, null)).Id;
+            await svc.GuardarNotaAsync(id, null, "Resolucion 01738 de 2026",
+                "---\nnumero: \"01738\"\nfuente_pdf: \"99 Fuentes PDF/PDF/Res_01738_2026-09-24.pdf\"\n---\n" +
+                "Subsidios FOES. | [[99 Fuentes PDF/PDF/Res_01738_2026-09-24.pdf|PDF]] | ![[anexo.png]] | [copia](docs/res.pdf) | " +
+                "[[99 Fuentes PDF/Transcripciones/Res_01738_2026-09-24|Transcripcion]]");
+            await svc.GuardarNotaAsync(id, null, "Res_01738_2026-09-24", "Texto oficial: ordena el giro de subsidios FOES.");
+        }
+
+        await using var ctxA = Contexto(_tenant, _admin);
+        var tool = new CerebroToolset(ctxA);
+
+        var ficha = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"Resolucion 01738 de 2026"}""");
+        Assert.True(ficha.Ok);
+        Assert.DoesNotContain(".pdf", ficha.Json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".png", ficha.Json);
+        Assert.Contains("numero", ficha.Json);           // las demas propiedades siguen
+        Assert.Contains("Res_01738_2026-09-24", ficha.Json); // enlace a la transcripcion (texto)
+
+        // Pedir el PDF entrega la transcripcion de mismo nombre, nunca el archivo.
+        var pdf = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"99 Fuentes PDF/PDF/Res_01738_2026-09-24.pdf"}""");
+        Assert.True(pdf.Ok);
+        Assert.Contains("Texto oficial", pdf.Json);
+        Assert.Contains(tool.Fuentes, f => f.Titulo == "Res_01738_2026-09-24" && f.Leida);
+
+        // Un PDF sin transcripcion: error que explica que solo hay texto.
+        var sin = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"otro.pdf"}""");
+        Assert.False(sin.Ok);
+        Assert.Contains("no se cargan", sin.Json);
+
+        var busqueda = await tool.ExecuteAsync(CerebroToolset.ToolBuscar, """{"texto":"FOES subsidios"}""");
+        Assert.DoesNotContain(".pdf", busqueda.Json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Procedimiento_TRD_consulta_los_cerebros_marcados_como_referencia()
     {
         var respuestaId = await CrearRespuestaAsync();
@@ -133,6 +172,52 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         await using var verif = Contexto(_tenant, _admin);
         var guardada = await verif.RespuestasTablaDocumental.FirstAsync(r => r.Id == respuestaId);
         Assert.False(string.IsNullOrWhiteSpace(guardada.Procedimiento));
+    }
+
+    [Fact]
+    public async Task El_motor_de_IA_elegido_para_el_agente_es_el_que_genera()
+    {
+        var respuestaId = await CrearRespuestaAsync();
+        await using (var ctx = Contexto(null, null))
+        {
+            ctx.AiProviderConfigs.Add(new AiProviderConfig { Provider = AiProvider.DeepSeek, IsEnabled = true, ApiKeyEncrypted = "clave-ds", Model = "deepseek-v4-flash" });
+            ctx.AiProviderConfigs.Add(new AiProviderConfig { Provider = AiProvider.Gemini, IsEnabled = false, ApiKeyEncrypted = "clave-g" });
+            await ctx.SaveChangesAsync();
+        }
+
+        // Primera generacion: siembra el agente con el primer motor habilitado (Claude).
+        var cliente = new ClienteIaFalso();
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            Assert.True((await Inferencia(ctx, cliente).GenerarProcedimientoAsync(respuestaId)).Ok);
+        }
+        Assert.All(cliente.Proveedores, p => Assert.Equal(AiProvider.Claude, p));
+
+        Guid agenteId;
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            agenteId = (await ctx.AiAgents.FirstAsync(a => a.Role == ProcedimientoPrompts.AgenteRol)).Id;
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _admin));
+            var motores = await svc.MotoresAsync();
+            Assert.Equal([AiProvider.Claude, AiProvider.DeepSeek], motores.Select(m => m.Provider).ToArray());
+            Assert.Equal("deepseek-v4-flash", motores.Single(m => m.Provider == AiProvider.DeepSeek).Modelo);
+
+            // Un motor deshabilitado no se puede elegir; un asesor no lo cambia.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.FijarMotorAsync(agenteId, AiProvider.Gemini));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new AgenteCerebrosService(Contexto(_tenant, _asesor), new ContextoPrueba(_tenant, _asesor)).FijarMotorAsync(agenteId, AiProvider.DeepSeek));
+            await svc.FijarMotorAsync(agenteId, AiProvider.DeepSeek);
+        }
+
+        var cliente2 = new ClienteIaFalso();
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            Assert.True((await Inferencia(ctx, cliente2).GenerarProcedimientoAsync(respuestaId)).Ok);
+            Assert.True((await Inferencia(ctx, cliente2).ConversarAsync(agenteId, [new AiChatTurn("user", "hola")])).Ok);
+        }
+        Assert.NotEmpty(cliente2.Proveedores);
+        Assert.All(cliente2.Proveedores, p => Assert.Equal(AiProvider.DeepSeek, p));
+        Assert.All(cliente2.Modelos, m => Assert.Equal("deepseek-v4-flash", m));
     }
 
     [Fact]
@@ -330,10 +415,14 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         public string[] HerramientasOfrecidas { get; private set; } = [];
         public List<string> ResultadosHerramienta { get; } = new();
         public int LlamadasSinHerramientas { get; private set; }
+        public List<AiProvider> Proveedores { get; } = new();
+        public List<string> Modelos { get; } = new();
 
         public Task<AiChatResult> CompleteAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt,
             IReadOnlyList<AiChatTurn> turns, CancellationToken cancellationToken = default)
         {
+            Proveedores.Add(provider);
+            Modelos.Add(model);
             LlamadasSinHerramientas++;
             return Task.FromResult(new AiChatResult(true, "<PROCEDIMIENTO>Texto sin consulta.</PROCEDIMIENTO>", null, 10, 5));
         }
@@ -341,6 +430,8 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         public Task<AiCompletion> CompleteWithToolsAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt,
             IReadOnlyList<AiToolMessage> messages, IReadOnlyList<AiToolSpec> tools, CancellationToken cancellationToken = default)
         {
+            Proveedores.Add(provider);
+            Modelos.Add(model);
             HerramientasOfrecidas = tools.Select(t => t.Name).ToArray();
             var resultado = messages.LastOrDefault(m => m.Role == "tool");
             if (resultado is null)

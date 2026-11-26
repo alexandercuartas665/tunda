@@ -4093,6 +4093,11 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("archivada_por_nombre");
 
+                    b.Property<string>("Carpeta")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("carpeta");
+
                     b.Property<Guid>("CerebroId")
                         .HasColumnType("uuid")
                         .HasColumnName("cerebro_id");
@@ -4151,6 +4156,11 @@ namespace DokTrino.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("Carpeta")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("carpeta");
 
                     b.Property<string>("Contenido")
                         .IsRequired()

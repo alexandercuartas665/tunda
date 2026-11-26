@@ -83,6 +83,12 @@ public class NotaCerebro : TenantEntity
 
     public string Contenido { get; set; } = "";
 
+    /// <summary>
+    /// Carpeta de la nota dentro del cerebro ("02 Resoluciones/2026"), como en el vault de
+    /// Obsidian del que se importo. Null = raiz. Solo organiza: los [[enlaces]] van por titulo.
+    /// </summary>
+    public string? Carpeta { get; set; }
+
     public string? ActualizadoPorNombre { get; set; }
 
     public bool Archivada { get; set; }

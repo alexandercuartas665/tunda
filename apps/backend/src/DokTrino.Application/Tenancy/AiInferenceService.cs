@@ -32,8 +32,7 @@ public sealed class AiInferenceService : IAiInferenceService
     public async Task<AiChatResult> ConsultarConHerramientasAsync(string systemPrompt, string pregunta, string source = "clasificador", CancellationToken cancellationToken = default)
     {
         // Primer proveedor habilitado con clave. Sin proveedor, el modulo cae a su heuristica.
-        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, cancellationToken);
+        var providerCfg = await ProveedorAsync(null, cancellationToken);
         if (providerCfg is null)
         {
             return new AiChatResult(false, null, "No hay un proveedor de IA habilitado. Configuralo en Servidores de IA.");
@@ -139,10 +138,7 @@ public sealed class AiInferenceService : IAiInferenceService
 
         // Proveedor del agente; si no esta habilitado, el primero habilitado (el de generacion se
         // siembra con el proveedor que habia entonces).
-        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
-                              .FirstOrDefaultAsync(c => c.Provider == agent.Provider && c.IsEnabled && c.ApiKeyEncrypted != null, ct)
-                          ?? await _db.AiProviderConfigs.AsNoTracking()
-                              .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        var providerCfg = await ProveedorAsync(agent.Provider, ct);
         if (providerCfg is null) { return new AiChatResult(false, null, "No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
 
         string apiKey;
@@ -179,7 +175,9 @@ public sealed class AiInferenceService : IAiInferenceService
               .Append("CEREBROS DISPONIBLES (bases de conocimiento de la entidad, solo lectura): ").Append(string.Join("; ", nombres))
               .Append(". Para responder, busca primero en ellos con buscar_notas y abre con ver_nota las notas relevantes. ")
               .Append("Fundamenta tu respuesta en lo que encuentres y menciona el titulo de las notas que usaste. ")
-              .Append("Si la respuesta no esta en los cerebros, dilo claramente en lugar de inventar.");
+              .Append("Si la respuesta no esta en los cerebros, dilo claramente en lugar de inventar. ")
+              .Append("Trabajas SOLO con el texto de las notas: los PDF y demas adjuntos no se cargan; el texto de cada PDF ")
+              .Append("esta en su nota de transcripcion (mismo nombre, p. ej. Res_01738_2026-09-24). No digas que abriste un PDF.");
             cerebrosTool = CerebroToolset.SoloCerebros(_db, ids);
             herramientas.Add(cerebrosTool);
         }
@@ -216,8 +214,10 @@ public sealed class AiInferenceService : IAiInferenceService
         var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
         if (r is null) { return ProcedimientoGeneradoDto.Fail("El documento ya no existe; recarga la tabla."); }
 
-        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        // Motor elegido para el agente de generacion (Agentes TRD); si no esta habilitado, el primero habilitado.
+        var agenteGen = await _db.AiAgents.AsNoTracking().Where(a => a.Role == ProcedimientoPrompts.AgenteRol)
+            .Select(a => new { a.Provider, a.Model }).FirstOrDefaultAsync(ct);
+        var providerCfg = await ProveedorAsync(agenteGen?.Provider, ct);
         if (providerCfg is null) { return ProcedimientoGeneradoDto.Fail("No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
 
         string apiKey;
@@ -225,7 +225,9 @@ public sealed class AiInferenceService : IAiInferenceService
         catch { return ProcedimientoGeneradoDto.Fail("La API key esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
 
         var meta = AiProviderCatalog.For(providerCfg.Provider);
-        var model = !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model! : meta.DefaultModel;
+        var model = agenteGen is not null && agenteGen.Provider == providerCfg.Provider && !string.IsNullOrWhiteSpace(agenteGen.Model) ? agenteGen.Model!
+            : !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model!
+            : meta.DefaultModel;
 
         var quota = await _usage.GetQuotaAsync(ct);
         if (quota.Exceeded && quota.Hard)
@@ -291,8 +293,10 @@ public sealed class AiInferenceService : IAiInferenceService
         var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);
         if (r is null) { return ProcedimientoGeneradoDto.Fail("El documento ya no existe; recarga la tabla."); }
 
-        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        // Motor elegido para el agente de generacion (Agentes TRD); si no esta habilitado, el primero habilitado.
+        var agenteGen = await _db.AiAgents.AsNoTracking().Where(a => a.Role == ProcedimientoPrompts.AgenteRol)
+            .Select(a => new { a.Provider, a.Model }).FirstOrDefaultAsync(ct);
+        var providerCfg = await ProveedorAsync(agenteGen?.Provider, ct);
         if (providerCfg is null) { return ProcedimientoGeneradoDto.Fail("No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
 
         string apiKey;
@@ -300,7 +304,9 @@ public sealed class AiInferenceService : IAiInferenceService
         catch { return ProcedimientoGeneradoDto.Fail("La API key esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
 
         var meta = AiProviderCatalog.For(providerCfg.Provider);
-        var model = !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model! : meta.DefaultModel;
+        var model = agenteGen is not null && agenteGen.Provider == providerCfg.Provider && !string.IsNullOrWhiteSpace(agenteGen.Model) ? agenteGen.Model!
+            : !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model!
+            : meta.DefaultModel;
 
         var quota = await _usage.GetQuotaAsync(ct);
         if (quota.Exceeded && quota.Hard)
@@ -348,6 +354,19 @@ public sealed class AiInferenceService : IAiInferenceService
         }
         await _db.SaveChangesAsync(ct);
         return new ProcedimientoGeneradoDto(true, null, r.ProcQueEs, r.ProcElimina, r.ProcConserva, r.Procedimiento);
+    }
+
+    /// <summary>
+    /// Configuracion del motor de IA a usar: el preferido (el del agente) si esta habilitado con
+    /// clave; si no, el primero habilitado en orden fijo (Claude, Gemini, ChatGPT, DeepSeek).
+    /// </summary>
+    private async Task<AiProviderConfig?> ProveedorAsync(AiProvider? preferido, CancellationToken ct)
+    {
+        var activos = await _db.AiProviderConfigs.AsNoTracking()
+            .Where(c => c.IsEnabled && c.ApiKeyEncrypted != null)
+            .OrderBy(c => c.Provider)
+            .ToListAsync(ct);
+        return activos.FirstOrDefault(c => c.Provider == preferido) ?? activos.FirstOrDefault();
     }
 
     // Siembra (una vez por tenant) el agente "Procedimientos TRD" con sus 5 prompts y los devuelve por nombre.

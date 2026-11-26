@@ -19,10 +19,12 @@ public sealed record CerebroTarjetaDto(
     bool Bloqueado = false, bool DePlataforma = false, bool UsoIa = false);
 
 /// <summary>Nota en una lista (sin contenido).</summary>
-public sealed record NotaResumenDto(Guid Id, string Titulo, string TituloClave, DateTimeOffset Actualizado);
+/// <summary>Carpeta: ruta dentro del cerebro ("a/b"), null = raiz.</summary>
+public sealed record NotaResumenDto(Guid Id, string Titulo, string TituloClave, DateTimeOffset Actualizado, string? Carpeta = null);
 
 /// <summary>Nodo del grafo: una nota (o un enlace a una nota que aun no existe: Fantasma).</summary>
-public sealed record NodoGrafoDto(string Id, string Titulo, int Grado, bool Fantasma);
+/// <summary>Grupo: carpeta de primer nivel de la nota (colorea el grafo); null = raiz o fantasma.</summary>
+public sealed record NodoGrafoDto(string Id, string Titulo, int Grado, bool Fantasma, string? Grupo = null);
 
 /// <summary>Arista del grafo: Origen enlaza a Destino (claves de titulo).</summary>
 public sealed record AristaGrafoDto(string Origen, string Destino);
@@ -43,7 +45,7 @@ public sealed record SiembraCerebroDto(string Resultado, string? Slug, int Cread
 public sealed record NotaCerebroDto(
     Guid Id, Guid CerebroId, string Titulo, string TituloClave, string Contenido,
     DateTimeOffset Actualizado, string? ActualizadoPorNombre,
-    IReadOnlyList<NotaResumenDto> EnlazadaDesde);
+    IReadOnlyList<NotaResumenDto> EnlazadaDesde, string? Carpeta = null);
 
 public sealed record CategoriaCerebroDto(Guid Id, string Nombre, string? Color, int Orden, int Cerebros);
 
@@ -82,7 +84,11 @@ public interface ICerebroService
 
     /// <summary>Grafo de notas del cerebro (vista tipo Obsidian): nodos = notas, aristas = [[enlaces]].</summary>
     Task<GrafoCerebroDto> GrafoAsync(Guid cerebroId, CancellationToken ct = default);
-    Task<NotaCerebroDto> GuardarNotaAsync(Guid cerebroId, Guid? notaId, string titulo, string contenido, CancellationToken ct = default);
+    /// <summary>
+    /// Crea o edita una nota. carpeta: null = conservar la actual (o raiz si es nueva); "" = raiz;
+    /// "a/b" = esa carpeta (se normaliza).
+    /// </summary>
+    Task<NotaCerebroDto> GuardarNotaAsync(Guid cerebroId, Guid? notaId, string titulo, string contenido, CancellationToken ct = default, string? carpeta = null);
     Task ArchivarNotaAsync(Guid notaId, CancellationToken ct = default);
 
     /// <summary>Importa notas (.md de un vault de Obsidian): crea o actualiza por titulo.</summary>
@@ -181,6 +187,53 @@ public sealed partial class CerebroService : ICerebroService
         if (t.Length > MaxTitulo) { return $"El titulo admite maximo {MaxTitulo} caracteres."; }
         if (t.IndexOfAny(CaracteresProhibidos) >= 0) { return "El titulo no puede llevar [ ] | # ^ \\ ni /."; }
         return null;
+    }
+
+    /// <summary>Largo maximo de la ruta de carpeta de una nota.</summary>
+    public const int MaxCarpeta = 400;
+
+    /// <summary>
+    /// Carpeta normalizada: segmentos sin espacios sobrantes separados por "/", sin "." ni "..",
+    /// sin barras al inicio o al final. Null si queda vacia (raiz).
+    /// </summary>
+    public static string? NormalizarCarpeta(string? carpeta)
+    {
+        var segs = (carpeta ?? "").Replace((char)92, '/').Split('/')
+            .Select(x => string.Join(' ', x.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
+            .Where(x => x.Length > 0 && x != "." && x != "..")
+            .ToList();
+        return segs.Count == 0 ? null : string.Join('/', segs);
+    }
+
+    /// <summary>
+    /// Carpeta raiz que comparten TODOS los archivos de una importacion, si la hay: el zip de un
+    /// vault suele traer la carpeta del vault ("MiVault/...") y esa no es una carpeta del cerebro.
+    /// Solo se quita si ademas hay notas directamente en ella (si no, es una carpeta real).
+    /// </summary>
+    public static string? RaizComun(IReadOnlyList<ArchivoNotaDto> archivos)
+    {
+        if (archivos.Count == 0) { return null; }
+        var rutas = archivos.Select(a => (a.NombreArchivo ?? "").Replace((char)92, '/').TrimStart('/').Split('/')).ToList();
+        if (rutas.Any(r => r.Length < 2)) { return null; }
+        var primera = rutas[0][0];
+        if (!rutas.All(r => string.Equals(r[0], primera, StringComparison.Ordinal))) { return null; }
+        return rutas.Any(r => r.Length == 2) ? primera : null;
+    }
+
+    /// <summary>Carpeta de un archivo importado (sin la raiz comun). Null si esta en la raiz.</summary>
+    public static string? CarpetaDeArchivo(string nombreArchivo, string? raiz)
+    {
+        var ruta = (nombreArchivo ?? "").Replace((char)92, '/').TrimStart('/');
+        var barra = ruta.LastIndexOf('/');
+        if (barra < 0) { return null; }
+        var dir = ruta[..barra];
+        if (raiz is not null)
+        {
+            if (dir == raiz) { return null; }
+            if (dir.StartsWith(raiz + "/", StringComparison.Ordinal)) { dir = dir[(raiz.Length + 1)..]; }
+        }
+        var c = NormalizarCarpeta(dir);
+        return c is { Length: > MaxCarpeta } ? c[..MaxCarpeta] : c;
     }
 
     /// <summary>
@@ -324,7 +377,7 @@ public sealed partial class CerebroService : ICerebroService
         var notas = await _db.NotasCerebro.AsNoTracking()
             .Where(n => n.CerebroId == c.Id && !n.Archivada)
             .OrderBy(n => n.Titulo)
-            .Select(n => new NotaResumenDto(n.Id, n.Titulo, n.TituloClave, n.UpdatedAt ?? n.CreatedAt))
+            .Select(n => new NotaResumenDto(n.Id, n.Titulo, n.TituloClave, n.UpdatedAt ?? n.CreatedAt, n.Carpeta))
             .ToListAsync(ct);
         var cat = c.Categoria is { Archivada: false } k ? k : null;
         return new CerebroDetalleDto(c.Id, c.Slug, c.Nombre, c.Descripcion, cat?.Id, cat?.Nombre, cat?.Color, notas,
@@ -506,7 +559,7 @@ public sealed partial class CerebroService : ICerebroService
         // Solo se lee el titulo y los enlaces de cada nota; el filtro global de tenant ya acota.
         var notas = await _db.NotasCerebro.AsNoTracking()
             .Where(x => x.CerebroId == cerebroId && !x.Archivada)
-            .Select(x => new { x.Titulo, x.TituloClave, x.Contenido })
+            .Select(x => new { x.Titulo, x.TituloClave, x.Contenido, x.Carpeta })
             .ToListAsync(ct);
 
         var existentes = notas.ToDictionary(n => n.TituloClave, n => n.Titulo, StringComparer.Ordinal);
@@ -518,6 +571,8 @@ public sealed partial class CerebroService : ICerebroService
             foreach (Match m in EnlaceRegex().Matches(n.Contenido))
             {
                 var destino = DestinoEnlace(m.Groups[1].Value);
+                // Los adjuntos (PDF, imagenes) no son notas del cerebro: no entran al grafo.
+                if (CerebroToolset.EsAdjunto(destino)) { continue; }
                 var clave = ClaveTitulo(destino);
                 if (clave.Length == 0 || clave == n.TituloClave) { continue; }
                 if (!existentes.ContainsKey(clave)) { fantasmas.TryAdd(clave, destino); }
@@ -533,7 +588,8 @@ public sealed partial class CerebroService : ICerebroService
         }
 
         var nodos = notas
-            .Select(n => new NodoGrafoDto(n.TituloClave, n.Titulo, grado.GetValueOrDefault(n.TituloClave), false))
+            .Select(n => new NodoGrafoDto(n.TituloClave, n.Titulo, grado.GetValueOrDefault(n.TituloClave), false,
+                string.IsNullOrWhiteSpace(n.Carpeta) ? null : n.Carpeta.Split('/')[0]))
             .Concat(fantasmas.Select(f => new NodoGrafoDto(f.Key, f.Value, grado.GetValueOrDefault(f.Key), true)))
             .ToList();
         return new GrafoCerebroDto(nodos, aristas.Select(a => new AristaGrafoDto(a.Item1, a.Item2)).ToList());
@@ -545,18 +601,18 @@ public sealed partial class CerebroService : ICerebroService
         // de cientos de notas, asi que se calcula en memoria sin tabla de enlaces.
         var otras = await _db.NotasCerebro.AsNoTracking()
             .Where(x => x.CerebroId == n.CerebroId && !x.Archivada && x.Id != n.Id && x.Contenido.Contains("[["))
-            .Select(x => new { x.Id, x.Titulo, x.TituloClave, x.Contenido, Act = x.UpdatedAt ?? x.CreatedAt })
+            .Select(x => new { x.Id, x.Titulo, x.TituloClave, x.Contenido, x.Carpeta, Act = x.UpdatedAt ?? x.CreatedAt })
             .ToListAsync(ct);
         var desde = otras
             .Where(o => ClavesEnlazadas(o.Contenido).Contains(n.TituloClave))
             .OrderBy(o => o.Titulo)
-            .Select(o => new NotaResumenDto(o.Id, o.Titulo, o.TituloClave, o.Act))
+            .Select(o => new NotaResumenDto(o.Id, o.Titulo, o.TituloClave, o.Act, o.Carpeta))
             .ToList();
         return new NotaCerebroDto(n.Id, n.CerebroId, n.Titulo, n.TituloClave, n.Contenido,
-            n.UpdatedAt ?? n.CreatedAt, n.ActualizadoPorNombre, desde);
+            n.UpdatedAt ?? n.CreatedAt, n.ActualizadoPorNombre, desde, n.Carpeta);
     }
 
-    public async Task<NotaCerebroDto> GuardarNotaAsync(Guid cerebroId, Guid? notaId, string titulo, string contenido, CancellationToken ct = default)
+    public async Task<NotaCerebroDto> GuardarNotaAsync(Guid cerebroId, Guid? notaId, string titulo, string contenido, CancellationToken ct = default, string? carpeta = null)
     {
         var autor = await ExigirAdminAsync(ct);
         if (!await _db.Cerebros.AnyAsync(c => c.Id == cerebroId && !c.Archivado, ct))
@@ -569,6 +625,8 @@ public sealed partial class CerebroService : ICerebroService
         var clave = ClaveTitulo(t);
         var cuerpo = contenido ?? "";
         if (cuerpo.Length > MaxContenido) { throw new InvalidOperationException("La nota es demasiado larga."); }
+        var carpetaNueva = carpeta is null ? null : NormalizarCarpeta(carpeta);
+        if (carpetaNueva is { Length: > MaxCarpeta }) { throw new InvalidOperationException($"La carpeta admite maximo {MaxCarpeta} caracteres."); }
 
         if (await _db.NotasCerebro.AnyAsync(x => x.CerebroId == cerebroId && !x.Archivada && x.TituloClave == clave && x.Id != notaId, ct))
         {
@@ -589,6 +647,7 @@ public sealed partial class CerebroService : ICerebroService
         n.Titulo = t;
         n.TituloClave = clave;
         n.Contenido = cuerpo;
+        if (carpeta is not null) { n.Carpeta = carpetaNueva; }
         n.ActualizadoPorNombre = autor;
         await TocarCerebroAsync(cerebroId, ct);
         await _db.SaveChangesAsync(ct);
@@ -623,9 +682,11 @@ public sealed partial class CerebroService : ICerebroService
 
         int creadas = 0, actualizadas = 0, sinCambios = 0;
         var omitidas = new List<string>();
+        var raiz = RaizComun(archivos);
         foreach (var a in archivos)
         {
             var titulo = DestinoEnlace(a.NombreArchivo);
+            var carpeta = CarpetaDeArchivo(a.NombreArchivo, raiz);
             if (ValidarTitulo(titulo) is string err) { omitidas.Add($"{a.NombreArchivo}: {err}"); continue; }
             var cuerpo = a.Contenido ?? "";
             if (cuerpo.Length > MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga (maximo {MaxContenido / 1_000_000} millones de caracteres)."); continue; }
@@ -634,8 +695,11 @@ public sealed partial class CerebroService : ICerebroService
 
             if (existentes.TryGetValue(clave, out var n))
             {
-                if (n.Contenido == cuerpo) { sinCambios++; continue; }
+                // Un .md suelto (sin carpeta) no mueve la nota; el zip si la ubica en su carpeta.
+                var nuevaCarpeta = carpeta ?? n.Carpeta;
+                if (n.Contenido == cuerpo && n.Carpeta == nuevaCarpeta) { sinCambios++; continue; }
                 n.Contenido = cuerpo;
+                n.Carpeta = nuevaCarpeta;
                 n.ActualizadoPorNombre = autor;
                 actualizadas++;
             }
@@ -644,7 +708,7 @@ public sealed partial class CerebroService : ICerebroService
                 n = new NotaCerebro
                 {
                     TenantId = TenantId, CerebroId = cerebroId,
-                    Titulo = t, TituloClave = clave, Contenido = cuerpo, ActualizadoPorNombre = autor
+                    Titulo = t, TituloClave = clave, Contenido = cuerpo, Carpeta = carpeta, ActualizadoPorNombre = autor
                 };
                 _db.NotasCerebro.Add(n);
                 existentes[clave] = n;
@@ -689,7 +753,7 @@ public sealed partial class CerebroService : ICerebroService
             _db.NotasCerebro.Add(new NotaCerebro
             {
                 TenantId = TenantId, CerebroId = copia.Id,
-                Titulo = n.Titulo, TituloClave = n.TituloClave, Contenido = n.Contenido, ActualizadoPorNombre = autor
+                Titulo = n.Titulo, TituloClave = n.TituloClave, Contenido = n.Contenido, Carpeta = n.Carpeta, ActualizadoPorNombre = autor
             });
         }
         await _db.SaveChangesAsync(ct);
@@ -761,7 +825,7 @@ public sealed partial class CerebroService : ICerebroService
                 _db.NotasCerebro.Add(new NotaCerebro
                 {
                     TenantId = tenantId, CerebroId = c.Id,
-                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido,
+                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido, Carpeta = pn.Carpeta,
                     ActualizadoPorNombre = AutorPlataforma
                 });
                 creadas++;
@@ -788,10 +852,11 @@ public sealed partial class CerebroService : ICerebroService
             clavesPlantilla.Add(pn.TituloClave);
             if (porClave.TryGetValue(pn.TituloClave, out var n))
             {
-                if (n.Titulo != pn.Titulo || n.Contenido != pn.Contenido)
+                if (n.Titulo != pn.Titulo || n.Contenido != pn.Contenido || n.Carpeta != pn.Carpeta)
                 {
                     n.Titulo = pn.Titulo;
                     n.Contenido = pn.Contenido;
+                    n.Carpeta = pn.Carpeta;
                     n.ActualizadoPorNombre = AutorPlataforma;
                     actualizadas++;
                 }
@@ -801,7 +866,7 @@ public sealed partial class CerebroService : ICerebroService
                 _db.NotasCerebro.Add(new NotaCerebro
                 {
                     TenantId = tenantId, CerebroId = existente.Id,
-                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido,
+                    Titulo = pn.Titulo, TituloClave = pn.TituloClave, Contenido = pn.Contenido, Carpeta = pn.Carpeta,
                     ActualizadoPorNombre = AutorPlataforma
                 });
                 creadas++;

@@ -16,7 +16,7 @@ public sealed record PlantillaCerebroItemDto(
     bool Bloqueado, string DestinoModo, int Notas, int VersionPublicada, DateTimeOffset? PublicadaEn,
     int Entidades, bool CambiosSinPublicar, bool Archivada);
 
-public sealed record NotaPlantillaResumenDto(Guid Id, string Titulo, string TituloClave);
+public sealed record NotaPlantillaResumenDto(Guid Id, string Titulo, string TituloClave, string? Carpeta = null);
 
 public sealed record NotaPlantillaDto(Guid Id, string Titulo, string Contenido);
 
@@ -166,7 +166,7 @@ public sealed partial class CerebroPlantillaService : ICerebroPlantillaService
         if (p is null) { return null; }
         var notas = await _db.NotasCerebroPlantilla.AsNoTracking()
             .Where(n => n.PlantillaId == id).OrderBy(n => n.Titulo)
-            .Select(n => new NotaPlantillaResumenDto(n.Id, n.Titulo, n.TituloClave))
+            .Select(n => new NotaPlantillaResumenDto(n.Id, n.Titulo, n.TituloClave, n.Carpeta))
             .ToListAsync(ct);
         var modificada = p.ModificadaEn ?? p.CreatedAt;
         return new PlantillaCerebroDto(p.Id, p.Nombre, p.Descripcion, p.CategoriaNombre, p.CategoriaColor, p.Bloqueado,
@@ -335,9 +335,11 @@ public sealed partial class CerebroPlantillaService : ICerebroPlantillaService
 
         int creadas = 0, actualizadas = 0, sinCambios = 0;
         var omitidas = new List<string>();
+        var raiz = CerebroService.RaizComun(archivos);
         foreach (var a in archivos)
         {
             var titulo = CerebroService.DestinoEnlace(a.NombreArchivo);
+            var carpeta = CerebroService.CarpetaDeArchivo(a.NombreArchivo, raiz);
             if (CerebroService.ValidarTitulo(titulo) is string err) { omitidas.Add($"{a.NombreArchivo}: {err}"); continue; }
             var cuerpo = a.Contenido ?? "";
             if (cuerpo.Length > CerebroService.MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga (maximo {CerebroService.MaxContenido / 1_000_000} millones de caracteres)."); continue; }
@@ -345,13 +347,15 @@ public sealed partial class CerebroPlantillaService : ICerebroPlantillaService
             var clave = CerebroService.ClaveTitulo(t);
             if (existentes.TryGetValue(clave, out var n))
             {
-                if (n.Contenido == cuerpo) { sinCambios++; continue; }
+                var nuevaCarpeta = carpeta ?? n.Carpeta;
+                if (n.Contenido == cuerpo && n.Carpeta == nuevaCarpeta) { sinCambios++; continue; }
                 n.Contenido = cuerpo;
+                n.Carpeta = nuevaCarpeta;
                 actualizadas++;
             }
             else
             {
-                n = new NotaCerebroPlantilla { PlantillaId = plantillaId, Titulo = t, TituloClave = clave, Contenido = cuerpo };
+                n = new NotaCerebroPlantilla { PlantillaId = plantillaId, Titulo = t, TituloClave = clave, Contenido = cuerpo, Carpeta = carpeta };
                 _db.NotasCerebroPlantilla.Add(n);
                 existentes[clave] = n;
                 creadas++;

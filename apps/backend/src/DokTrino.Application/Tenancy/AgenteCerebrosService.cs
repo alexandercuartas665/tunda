@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DokTrino.Application.Admin;
 using DokTrino.Application.Common;
 using DokTrino.Domain.Entities;
 using DokTrino.Domain.Enums;
@@ -8,6 +9,9 @@ namespace DokTrino.Application.Tenancy;
 
 /// <summary>Un cerebro de la entidad visto desde un agente: si lo usa y si se puede cambiar.</summary>
 public sealed record CerebroDeAgenteDto(Guid Id, string Nombre, int Notas, bool Seleccionado, bool Bloqueado);
+
+/// <summary>Motor de IA que la plataforma tiene habilitado (con API key) y su modelo efectivo.</summary>
+public sealed record MotorIaDto(AiProvider Provider, string Nombre, string Modelo);
 
 /// <summary>
 /// Que cerebros puede consultar cada agente de IA de la entidad.
@@ -24,6 +28,15 @@ public interface IAgenteCerebrosService
 
     /// <summary>Ids de los cerebros activos que el agente puede consultar.</summary>
     Task<IReadOnlyList<Guid>> SeleccionadosAsync(Guid agentId, CancellationToken ct = default);
+
+    /// <summary>Motores de IA habilitados por la plataforma (con API key), para elegir el del agente.</summary>
+    Task<IReadOnlyList<MotorIaDto>> MotoresAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Fija el motor de IA del agente (Owner/Admin). Solo un motor habilitado; el modelo queda en
+    /// el de la plataforma para ese motor. Lo usan el chat y la generacion de procedimientos.
+    /// </summary>
+    Task FijarMotorAsync(Guid agentId, AiProvider provider, CancellationToken ct = default);
 }
 
 public sealed class AgenteCerebrosService : IAgenteCerebrosService
@@ -102,12 +115,40 @@ public sealed class AgenteCerebrosService : IAgenteCerebrosService
         return await db.Cerebros.AsNoTracking().Where(c => ids.Contains(c.Id) && !c.Archivado).Select(c => c.Id).ToListAsync(ct);
     }
 
-    private async Task ExigirAdminAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<MotorIaDto>> MotoresAsync(CancellationToken ct = default)
+    {
+        var cfgs = await _db.AiProviderConfigs.AsNoTracking()
+            .Where(c => c.IsEnabled && c.ApiKeyEncrypted != null)
+            .OrderBy(c => c.Provider)
+            .Select(c => new { c.Provider, c.Model })
+            .ToListAsync(ct);
+        return cfgs.Select(c =>
+        {
+            var meta = AiProviderCatalog.For(c.Provider);
+            return new MotorIaDto(c.Provider, meta.DisplayName, string.IsNullOrWhiteSpace(c.Model) ? meta.DefaultModel : c.Model!);
+        }).ToList();
+    }
+
+    public async Task FijarMotorAsync(Guid agentId, AiProvider provider, CancellationToken ct = default)
+    {
+        await ExigirAdminAsync(ct, "Solo el administrador de la entidad puede cambiar el motor de IA de un agente.");
+        var agent = await _db.AiAgents.FirstOrDefaultAsync(a => a.Id == agentId, ct)
+                    ?? throw new InvalidOperationException("El agente no existe.");
+        if (!await _db.AiProviderConfigs.AnyAsync(c => c.Provider == provider && c.IsEnabled && c.ApiKeyEncrypted != null, ct))
+        {
+            throw new InvalidOperationException("Ese motor de IA no esta habilitado en la plataforma.");
+        }
+        agent.Provider = provider;
+        agent.Model = null; // el modelo lo define la plataforma para ese motor
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task ExigirAdminAsync(CancellationToken ct, string? mensaje = null)
     {
         var esAdmin = _tenant.TenantId is not null && _tenant.UserId is Guid uid
             && await _db.TenantUsers.AsNoTracking()
                 .AnyAsync(u => u.PlatformUserId == uid && (u.TenantRole == TenantRole.Owner || u.TenantRole == TenantRole.Admin), ct);
-        if (!esAdmin) { throw new InvalidOperationException("Solo el administrador de la entidad puede elegir los cerebros de un agente."); }
+        if (!esAdmin) { throw new InvalidOperationException(mensaje ?? "Solo el administrador de la entidad puede elegir los cerebros de un agente."); }
     }
 
     private static HashSet<Guid> Parse(string? json)

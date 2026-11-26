@@ -1,0 +1,171 @@
+@using Microsoft.AspNetCore.Components.Rendering
+@*
+    Indice de notas de un cerebro como arbol de carpetas (estilo explorador de Obsidian):
+    carpetas primero, luego notas, cada nivel en orden alfabetico. Una nota sin carpeta va en
+    la raiz. Con filtro se muestran solo las notas que coinciden y sus carpetas abiertas.
+    La nota activa abre automaticamente su ruta.
+*@
+
+<div class="an">
+    @if (_raiz.Carpetas.Count > 0)
+    {
+        <div class="an-barra">
+            <span class="an-barra-t">@_raiz.Carpetas.Count carpeta@(_raiz.Carpetas.Count == 1 ? "" : "s")</span>
+            <button type="button" class="an-mini" @onclick="AbrirTodo" title="Abrir todas las carpetas">Abrir todo</button>
+            <button type="button" class="an-mini" @onclick="CerrarTodo" title="Cerrar todas las carpetas">Cerrar todo</button>
+        </div>
+    }
+    <div class="an-scroll">
+        @{ Rama(__builder, _raiz, 0); }
+        @if (Items.Count == 0)
+        {
+            <div class="trx-empty">Sin notas todavia.</div>
+        }
+        else if (_raiz.Total == 0)
+        {
+            <div class="an-vacio">Ninguna nota coincide con la busqueda.</div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Nota del indice. Href: enlace (navega); si es null se usa Seleccionar.</summary>
+    public sealed record ItemArbolNota(Guid Id, string Titulo, string? Carpeta, string? Href = null);
+
+    [Parameter, EditorRequired] public IReadOnlyList<ItemArbolNota> Items { get; set; } = Array.Empty<ItemArbolNota>();
+    [Parameter] public Guid? Activa { get; set; }
+    [Parameter] public string? Filtro { get; set; }
+    [Parameter] public EventCallback<Guid> Seleccionar { get; set; }
+
+    /// <summary>Si se pasa, cada carpeta muestra un "+" para crear una nota dentro de ella.</summary>
+    [Parameter] public EventCallback<string?> NuevaEnCarpeta { get; set; }
+
+    private sealed class Nodo
+    {
+        public string Nombre = "";
+        public string Ruta = "";
+        public SortedDictionary<string, Nodo> Hijos = new(StringComparer.OrdinalIgnoreCase);
+        public List<ItemArbolNota> Notas = new();
+        public int Total;
+        public List<Nodo> Carpetas => Hijos.Values.ToList();
+    }
+
+    private Nodo _raiz = new();
+    private readonly HashSet<string> _abiertas = new(StringComparer.OrdinalIgnoreCase);
+    private Guid? _activaVista;
+    private bool _inicial = true;
+
+    private bool Filtrando => !string.IsNullOrWhiteSpace(Filtro);
+
+    protected override void OnParametersSet()
+    {
+        var f = (Filtro ?? "").Trim();
+        _raiz = new Nodo();
+        foreach (var it in Items)
+        {
+            if (f.Length > 0
+                && !it.Titulo.Contains(f, StringComparison.OrdinalIgnoreCase)
+                && !(it.Carpeta ?? "").Contains(f, StringComparison.OrdinalIgnoreCase)) { continue; }
+            var nodo = _raiz;
+            nodo.Total++;
+            if (!string.IsNullOrWhiteSpace(it.Carpeta))
+            {
+                foreach (var seg in it.Carpeta.Split('/', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (!nodo.Hijos.TryGetValue(seg, out var h))
+                    {
+                        h = new Nodo { Nombre = seg, Ruta = nodo.Ruta.Length == 0 ? seg : nodo.Ruta + "/" + seg };
+                        nodo.Hijos[seg] = h;
+                    }
+                    nodo = h;
+                    nodo.Total++;
+                }
+            }
+            nodo.Notas.Add(it);
+        }
+
+        // Pocas carpetas: se abren las de primer nivel la primera vez.
+        if (_inicial && Items.Count > 0)
+        {
+            _inicial = false;
+            if (_raiz.Hijos.Count <= 3) { foreach (var h in _raiz.Hijos.Values) { _abiertas.Add(h.Ruta); } }
+        }
+
+        // La nota activa abre su ruta (solo cuando cambia, para no reabrir lo que el usuario cerro).
+        if (Activa != _activaVista)
+        {
+            _activaVista = Activa;
+            var carpeta = Items.FirstOrDefault(i => i.Id == Activa)?.Carpeta;
+            if (!string.IsNullOrWhiteSpace(carpeta))
+            {
+                var ruta = "";
+                foreach (var seg in carpeta.Split('/', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    ruta = ruta.Length == 0 ? seg : ruta + "/" + seg;
+                    _abiertas.Add(ruta);
+                }
+            }
+        }
+    }
+
+    private bool Abierta(Nodo n) => Filtrando || _abiertas.Contains(n.Ruta);
+
+    private void Alternar(Nodo n)
+    {
+        if (Filtrando) { return; }
+        if (!_abiertas.Remove(n.Ruta)) { _abiertas.Add(n.Ruta); }
+    }
+
+    private void AbrirTodo()
+    {
+        void Abrir(Nodo n) { foreach (var h in n.Hijos.Values) { _abiertas.Add(h.Ruta); Abrir(h); } }
+        Abrir(_raiz);
+    }
+
+    private void CerrarTodo() => _abiertas.Clear();
+
+    private static string Sangria(int nivel) => $"padding-left:{6 + nivel * 14}px";
+
+    private void Rama(RenderTreeBuilder __builder, Nodo nodo, int nivel)
+    {
+        foreach (var c in nodo.Hijos.Values)
+        {
+            var abierta = Abierta(c);
+            <div class="an-carpeta @(abierta ? "abierta" : "")" style="@Sangria(nivel)" title="@c.Ruta"
+                 @onclick="() => Alternar(c)">
+                <span class="an-caret">@((MarkupString)(abierta ? "&#9662;" : "&#9656;"))</span>
+                <span class="an-ic-carpeta" aria-hidden="true"></span>
+                <span class="an-nom">@c.Nombre</span>
+                <span class="an-cnt">@c.Total</span>
+                @if (NuevaEnCarpeta.HasDelegate)
+                {
+                    <button type="button" class="an-mas" title="Nueva nota en @c.Ruta"
+                            @onclick="() => NuevaEnCarpeta.InvokeAsync(c.Ruta)" @onclick:stopPropagation="true">&#43;</button>
+                }
+            </div>
+            @if (abierta)
+            {
+                <div class="an-hijos" style="--an-guia:@(13 + nivel * 14)px">
+                    @{ Rama(__builder, c, nivel + 1); }
+                </div>
+            }
+        }
+        foreach (var n in nodo.Notas.OrderBy(x => x.Titulo, StringComparer.OrdinalIgnoreCase))
+        {
+            var on = n.Id == Activa;
+            @if (n.Href is not null)
+            {
+                <a class="an-nota @(on ? "on" : "")" style="@Sangria(nivel)" href="@n.Href" title="@n.Titulo">
+                    <span class="an-ic-nota" aria-hidden="true"></span><span class="an-nom">@n.Titulo</span>
+                </a>
+            }
+            else
+            {
+                <button type="button" class="an-nota @(on ? "on" : "")" style="@Sangria(nivel)" title="@n.Titulo"
+                        @onclick="() => Seleccionar.InvokeAsync(n.Id)">
+                    <span class="an-ic-nota" aria-hidden="true"></span><span class="an-nom">@n.Titulo</span>
+                </button>
+            }
+        }
+    }
+}

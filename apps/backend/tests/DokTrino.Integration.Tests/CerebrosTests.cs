@@ -185,6 +185,49 @@ public sealed class CerebrosTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Importar_zip_conserva_las_carpetas_del_vault()
+    {
+        await using var ctx = CreateContext(_tenant, _admin);
+        var svc = Svc(ctx, _tenant, _admin);
+        var c = await svc.CrearAsync("Minas", null, null);
+
+        // La carpeta raiz del vault (comun a todo y con notas directas) no es carpeta del cerebro.
+        var zip = Zip(("MiVault/Inicio.md", "Ver [[Res 1]]"),
+                      ("MiVault/02 Resoluciones/Res 1.md", "uno"),
+                      ("MiVault/02 Resoluciones/2026/Res 2.md", "dos"),
+                      ("MiVault/99 Fuentes PDF/PDF/res.pdf", "bin"));
+        var r = await svc.ImportarNotasAsync(c.Id, CerebroService.LeerZip(zip).Notas);
+        Assert.Equal(3, r.Creadas);
+
+        var det = (await svc.ObtenerAsync(c.Slug))!;
+        Assert.Null(det.Notas.Single(n => n.Titulo == "Inicio").Carpeta);
+        Assert.Equal("02 Resoluciones", det.Notas.Single(n => n.Titulo == "Res 1").Carpeta);
+        Assert.Equal("02 Resoluciones/2026", det.Notas.Single(n => n.Titulo == "Res 2").Carpeta);
+
+        // Un .md suelto (sin carpeta) actualiza el contenido pero no saca la nota de su carpeta.
+        await svc.ImportarNotasAsync(c.Id, [new ArchivoNotaDto("Res 1.md", "uno v2")]);
+        var res1 = (await svc.NotaAsync(c.Id, "Res 1"))!;
+        Assert.Equal("02 Resoluciones", res1.Carpeta);
+        Assert.Equal("uno v2", res1.Contenido);
+
+        // Editar sin carpeta la conserva; "" la lleva a la raiz; la ruta se normaliza.
+        await svc.GuardarNotaAsync(c.Id, res1.Id, "Res 1", "uno v3");
+        Assert.Equal("02 Resoluciones", (await svc.NotaAsync(c.Id, "Res 1"))!.Carpeta);
+        await svc.GuardarNotaAsync(c.Id, res1.Id, "Res 1", "uno v3", carpeta: "  /Normas//  Vigentes / ");
+        Assert.Equal("Normas/Vigentes", (await svc.NotaAsync(c.Id, "Res 1"))!.Carpeta);
+        await svc.GuardarNotaAsync(c.Id, res1.Id, "Res 1", "uno v3", carpeta: "");
+        Assert.Null((await svc.NotaAsync(c.Id, "Res 1"))!.Carpeta);
+
+        // El grafo agrupa por carpeta de primer nivel.
+        var g = await svc.GrafoAsync(c.Id);
+        Assert.Equal("02 Resoluciones", g.Nodos.Single(n => n.Titulo == "Res 2").Grupo);
+
+        // Sin notas en la raiz comun, esa carpeta si es real y se conserva.
+        Assert.Null(CerebroService.RaizComun([new ArchivoNotaDto("A/B/x.md", ""), new ArchivoNotaDto("A/C/y.md", "")]));
+        Assert.Equal("A/B", CerebroService.CarpetaDeArchivo("A/B/x.md", null));
+    }
+
+    [Fact]
     public async Task Slug_unico_categoria_archivada_y_cerebro_archivado()
     {
         await using var ctx = CreateContext(_tenant, _admin);

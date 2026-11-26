@@ -86,6 +86,37 @@ else
                     <span class="ag-estado @(a.Agent.IsActive ? "on" : "off")">@(a.Agent.IsActive ? "Activo" : "Inactivo")</span>
                 </div>
 
+                @* --- Motor de IA del agente --- *@
+                <div class="agm">
+                    <span class="agm-t">Motor de IA</span>
+                    @if (_motores.Count == 0)
+                    {
+                        <span class="agc-vacio">La plataforma no tiene motores de IA habilitados.</span>
+                    }
+                    else
+                    {
+                        var efectivo = _motores.FirstOrDefault(m => m.Provider == a.Agent.Provider) ?? _motores[0];
+                        <div class="agm-ops">
+                            @foreach (var m in _motores)
+                            {
+                                var on = m.Provider == efectivo.Provider;
+                                <button type="button" class="agm-op @(on ? "on" : "") agm-@m.Provider.ToString().ToLowerInvariant()"
+                                        disabled="@(!_esAdmin || _guardando)"
+                                        title="@(!_esAdmin ? "Solo el administrador de la entidad lo cambia" : on ? "Motor actual" : "Usar " + m.Nombre)"
+                                        @onclick="() => FijarMotor(a.Agent, m.Provider)">
+                                    <span class="agm-dot"></span>
+                                    <span class="agm-n">@m.Nombre</span>
+                                    <span class="agm-m">@m.Modelo</span>
+                                </button>
+                            }
+                        </div>
+                        @if (_motores.All(m => m.Provider != a.Agent.Provider))
+                        {
+                            <div class="agc-ayuda">El motor guardado (@a.Agent.Provider) no esta habilitado: usa @efectivo.Nombre.</div>
+                        }
+                    }
+                </div>
+
                 <div class="ag-sec-t">Mision</div>
                 @if (_editMisionId == a.Agent.Id)
                 {
@@ -292,6 +323,21 @@ else
     .ase-ok { background:#e8f5ee; color:#2f7d54; border-radius:10px; padding:10px 13px; margin-bottom:12px; font-size:13px; }
     .dep-ind-load { color:#9aa3bd; font-style:italic; }
 
+    /* Motor de IA del agente */
+    .agm { display:flex; flex-direction:column; gap:6px; margin:2px 0 12px; }
+    .agm-t { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#8a93ad; }
+    .agm-ops { display:flex; flex-wrap:wrap; gap:6px; }
+    .agm-op { --agm:#5b6b8c; display:inline-flex; align-items:center; gap:7px; border:1px solid #dfe4ef; background:#fff;
+              border-radius:10px; padding:6px 11px; font-size:12.5px; color:#3a4158; cursor:pointer; transition:all .15s; }
+    .agm-op:hover:not(:disabled) { border-color:var(--agm); }
+    .agm-op:disabled { cursor:not-allowed; }
+    .agm-op:disabled:not(.on) { opacity:.6; }
+    .agm-op.on { border-color:var(--agm); box-shadow:0 0 0 2px color-mix(in srgb, var(--agm) 18%, transparent); font-weight:700; }
+    .agm-dot { width:9px; height:9px; border-radius:50%; background:#d5dae6; }
+    .agm-op.on .agm-dot { background:var(--agm); }
+    .agm-m { font-size:10.5px; color:#9aa3bd; font-weight:600; font-family:ui-monospace, monospace; }
+    .agm-claude { --agm:#c96442; } .agm-gemini { --agm:#3b74e6; } .agm-chatgpt { --agm:#10a37f; } .agm-deepseek { --agm:#4d6bfe; }
+
     /* Cerebros del agente */
     .agc-cbs { display:flex; flex-wrap:wrap; gap:6px; }
     .agc-cb { display:inline-flex; align-items:center; gap:7px; border:1px solid #dfe4ef; background:#fff; border-radius:20px;
@@ -361,6 +407,7 @@ else
         await CargarConsumo();
         await CargarAgentes();
         _esAdmin = await Cerebros.EsAdminAsync();
+        _motores = (await AgenteCerebros.MotoresAsync()).ToList();
         try { await CargarCerebrosAgentes(); }
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
@@ -425,6 +472,23 @@ else
             await CargarAgentes();
         }
         catch (Exception ex) { _error = ex.Message; }
+        finally { _guardando = false; }
+    }
+
+    private List<MotorIaDto> _motores = new();
+
+    private async Task FijarMotor(AiAgentDto a, AiProvider provider)
+    {
+        if (a.Provider == provider) { return; }
+        _ok = _error = null;
+        _guardando = true;
+        try
+        {
+            await AgenteCerebros.FijarMotorAsync(a.Id, provider);
+            _ok = $"{a.Name} ahora usa {_motores.First(m => m.Provider == provider).Nombre}.";
+            await CargarAgentes();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
         finally { _guardando = false; }
     }
 
