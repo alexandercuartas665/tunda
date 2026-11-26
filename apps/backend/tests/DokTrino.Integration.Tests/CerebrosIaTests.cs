@@ -221,6 +221,114 @@ public sealed class CerebrosIaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Busqueda_ignora_tildes_y_plurales_y_lee_notas_largas_por_partes()
+    {
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var svc = Cerebros(ctx);
+            var id = (await svc.CrearAsync("Minas", null, null)).Id;
+            await svc.GuardarNotaAsync(id, null, "Resoluci\u00f3n 00168 de 2026", "Ordena el giro de subsidios del FSSRI a CEDENAR por los trimestres de 2018.");
+            await svc.GuardarNotaAsync(id, null, "Glosario", "Que es un subsidio y para que sirve.");
+            var largo = new string('a', 13_000) + " La clave CONCILIACION FINAL esta aqui. " + new string('b', 14_000);
+            await svc.GuardarNotaAsync(id, null, "Res_00169_2026-02-17", largo);
+        }
+
+        await using var ctxA = Contexto(_tenant, _admin);
+        var tool = new CerebroToolset(ctxA);
+
+        // Sin tilde, en plural y con palabras vacias ("que", "los"): igual la encuentra primero.
+        var b = await tool.ExecuteAsync(CerebroToolset.ToolBuscar, """{"texto":"que resoluciones dan los subsidios a Cedenar"}""");
+        using (var doc = JsonDocument.Parse(b.Json))
+        {
+            Assert.Equal("Resoluci\u00f3n 00168 de 2026", doc.RootElement.GetProperty("resultados")[0].GetProperty("titulo").GetString());
+            Assert.DoesNotContain("que", doc.RootElement.GetProperty("buscado").EnumerateArray().Select(x => x.GetString()));
+        }
+
+        // Nota larga: por partes y con busqueda interna.
+        var p1 = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"Res_00169_2026-02-17"}""");
+        using (var doc = JsonDocument.Parse(p1.Json))
+        {
+            Assert.Equal(3, doc.RootElement.GetProperty("total_partes").GetInt32());
+            Assert.DoesNotContain("CONCILIACION", doc.RootElement.GetProperty("contenido").GetString());
+        }
+        var p2 = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"Res_00169_2026-02-17","parte":2}""");
+        Assert.Contains("CONCILIACION FINAL", p2.Json);
+        var bus = await tool.ExecuteAsync(CerebroToolset.ToolVer, """{"cerebro":"minas","titulo":"Res_00169_2026-02-17","buscar":"conciliacion"}""");
+        using (var doc = JsonDocument.Parse(bus.Json))
+        {
+            var pasajes = doc.RootElement.GetProperty("pasajes");
+            Assert.Equal(1, pasajes.GetArrayLength());
+            Assert.Contains("CONCILIACION FINAL", pasajes[0].GetProperty("texto").GetString());
+            Assert.Equal(2, pasajes[0].GetProperty("parte").GetInt32());
+        }
+    }
+
+    [Theory]
+    [InlineData("profundo", 14)]
+    [InlineData("rapido", 5)]
+    public async Task Si_agota_las_consultas_el_agente_responde_con_lo_que_encontro(string modo, int rondas)
+    {
+        Guid agente;
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var manual = (await Cerebros(ctx).CrearAsync("Manual", null, null)).Id;
+            await Cerebros(ctx).GuardarNotaAsync(manual, null, "Tabla de plazos", "Los contratos se conservan 20 anios.");
+            await Cerebros(ctx).GuardarNotaAsync(manual, null, "Indice", "Ver [[Tabla de plazos]]");
+            var a = new AiAgent { TenantId = _tenant, Name = "Asesor", Provider = AiProvider.Claude, SystemPrompt = "Ayuda." };
+            ctx.AiAgents.Add(a);
+            await ctx.SaveChangesAsync();
+            agente = a.Id;
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _admin));
+            await svc.FijarAsync(agente, manual, true);
+            await svc.FijarModoAsync(agente, modo);
+            Assert.Equal(modo, await svc.ModoAsync(agente));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.FijarModoAsync(agente, "turbo"));
+        }
+
+        var cliente = new ClienteIaInsaciable();
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var res = await Inferencia(ctx, cliente).ConversarAsync(agente, [new AiChatTurn("user", "cuanto se conservan los contratos?")]);
+            Assert.True(res.Ok, res.Error);
+            Assert.Equal("Cierre: 20 anios segun Tabla de plazos.", res.Text);
+            Assert.Contains(res.Fuentes!, f => f.Titulo == "Tabla de plazos");
+        }
+        Assert.Equal(rondas, cliente.RondasConHerramientas);
+        // El cierre recibe lo consultado y la orden de responder sin herramientas.
+        Assert.Contains("Los contratos se conservan 20 anios", cliente.CierrePrompt);
+        Assert.Contains("Ya no puedes hacer mas consultas", cliente.CierrePrompt);
+        // El prompt trae el mapa del cerebro y el modo.
+        Assert.Contains("Puntos de entrada: Indice", cliente.SystemPrompt);
+        Assert.Contains(modo == "profundo" ? "INVESTIGA A FONDO" : "MODO RAPIDO", cliente.SystemPrompt);
+    }
+
+    /// <summary>Modelo que nunca deja de pedir herramientas; solo responde cuando se le llama sin ellas.</summary>
+    private sealed class ClienteIaInsaciable : IAiProviderClient
+    {
+        public int RondasConHerramientas { get; private set; }
+        public string CierrePrompt { get; private set; } = "";
+        public string SystemPrompt { get; private set; } = "";
+
+        public Task<AiChatResult> CompleteAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt,
+            IReadOnlyList<AiChatTurn> turns, CancellationToken cancellationToken = default)
+        {
+            CierrePrompt = turns[^1].Text;
+            return Task.FromResult(new AiChatResult(true, "Cierre: 20 anios segun Tabla de plazos.", null, 10, 5));
+        }
+
+        public Task<AiCompletion> CompleteWithToolsAsync(AiProvider provider, string apiKey, string? baseUrl, string model, string systemPrompt,
+            IReadOnlyList<AiToolMessage> messages, IReadOnlyList<AiToolSpec> tools, CancellationToken cancellationToken = default)
+        {
+            SystemPrompt = systemPrompt;
+            RondasConHerramientas++;
+            var call = RondasConHerramientas % 2 == 1
+                ? new AiToolCall("c" + RondasConHerramientas, CerebroToolset.ToolBuscar, """{"texto":"contratos plazos"}""")
+                : new AiToolCall("c" + RondasConHerramientas, CerebroToolset.ToolVer, """{"cerebro":"manual","titulo":"Tabla de plazos"}""");
+            return Task.FromResult(new AiCompletion(true, "", [call], null, 10, 5));
+        }
+    }
+
+    [Fact]
     public async Task Sin_cerebros_de_referencia_el_procedimiento_no_usa_herramientas()
     {
         var respuestaId = await CrearRespuestaAsync();

@@ -50,6 +50,11 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("model");
 
+                    b.Property<string>("ModoCerebro")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("modo_cerebro");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)

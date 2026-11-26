@@ -40,4 +40,10 @@ public class AiAgent : TenantEntity
     /// sus cerebros son los marcados con Cerebro.UsoIa (asi se ven igual desde ambos lados).
     /// </summary>
     public string? CerebroIds { get; set; }
+
+    /// <summary>
+    /// Profundidad con que el agente investiga sus cerebros en el chat: "rapido" (pocas
+    /// consultas) o "profundo" (investiga a fondo, cruza notas). Null = profundo.
+    /// </summary>
+    public string? ModoCerebro { get; set; }
 }

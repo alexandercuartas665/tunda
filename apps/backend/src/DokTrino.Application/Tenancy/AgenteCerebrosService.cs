@@ -37,10 +37,19 @@ public interface IAgenteCerebrosService
     /// el de la plataforma para ese motor. Lo usan el chat y la generacion de procedimientos.
     /// </summary>
     Task FijarMotorAsync(Guid agentId, AiProvider provider, CancellationToken ct = default);
+
+    /// <summary>Profundidad de investigacion en el chat: "rapido" | "profundo" (por defecto).</summary>
+    Task<string> ModoAsync(Guid agentId, CancellationToken ct = default);
+
+    /// <summary>Fija la profundidad del agente (Owner/Admin).</summary>
+    Task FijarModoAsync(Guid agentId, string modo, CancellationToken ct = default);
 }
 
 public sealed class AgenteCerebrosService : IAgenteCerebrosService
 {
+    public const string ModoRapido = "rapido";
+    public const string ModoProfundo = "profundo";
+
     private readonly IApplicationDbContext _db;
     private readonly ITenantContext _tenant;
 
@@ -140,6 +149,22 @@ public sealed class AgenteCerebrosService : IAgenteCerebrosService
         }
         agent.Provider = provider;
         agent.Model = null; // el modelo lo define la plataforma para ese motor
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<string> ModoAsync(Guid agentId, CancellationToken ct = default)
+    {
+        var modo = await _db.AiAgents.AsNoTracking().Where(a => a.Id == agentId).Select(a => a.ModoCerebro).FirstOrDefaultAsync(ct);
+        return modo == ModoRapido ? ModoRapido : ModoProfundo;
+    }
+
+    public async Task FijarModoAsync(Guid agentId, string modo, CancellationToken ct = default)
+    {
+        await ExigirAdminAsync(ct, "Solo el administrador de la entidad puede cambiar la profundidad de un agente.");
+        if (modo is not (ModoRapido or ModoProfundo)) { throw new InvalidOperationException("Profundidad no valida."); }
+        var agent = await _db.AiAgents.FirstOrDefaultAsync(a => a.Id == agentId, ct)
+                    ?? throw new InvalidOperationException("El agente no existe.");
+        agent.ModoCerebro = modo;
         await _db.SaveChangesAsync(ct);
     }
 

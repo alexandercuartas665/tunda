@@ -13,6 +13,13 @@ public sealed class AiInferenceService : IAiInferenceService
 {
     private const int MaxToolRounds = 6;
 
+    /// <summary>Rondas de herramientas del chat segun la profundidad del agente.</summary>
+    private const int RondasChatRapido = 5;
+    private const int RondasChatProfundo = 14;
+
+    /// <summary>Tope del mapa de cada cerebro que va en el prompt del chat (caracteres).</summary>
+    private const int MaxMapaCerebro = 9_000;
+
     private readonly IApplicationDbContext _db;
     private readonly ISecretProtector _secretProtector;
     private readonly IAiProviderClient _client;
@@ -167,17 +174,30 @@ public sealed class AiInferenceService : IAiInferenceService
         var ids = await AgenteCerebrosService.SeleccionadosAsync(_db, agent, ct);
         var herramientas = new List<IAgentToolset>();
         CerebroToolset? cerebrosTool = null;
+        var profundo = !string.Equals(agent.ModoCerebro, AgenteCerebrosService.ModoRapido, StringComparison.Ordinal);
         if (ids.Count > 0)
         {
-            var nombres = await _db.Cerebros.AsNoTracking().Where(c => ids.Contains(c.Id)).OrderBy(c => c.Nombre)
-                .Select(c => c.Nombre + " (slug: " + c.Slug + ")").ToListAsync(ct);
             sb.AppendLine().AppendLine()
-              .Append("CEREBROS DISPONIBLES (bases de conocimiento de la entidad, solo lectura): ").Append(string.Join("; ", nombres))
-              .Append(". Para responder, busca primero en ellos con buscar_notas y abre con ver_nota las notas relevantes. ")
-              .Append("Fundamenta tu respuesta en lo que encuentres y menciona el titulo de las notas que usaste. ")
-              .Append("Si la respuesta no esta en los cerebros, dilo claramente en lugar de inventar. ")
-              .Append("Trabajas SOLO con el texto de las notas: los PDF y demas adjuntos no se cargan; el texto de cada PDF ")
-              .Append("esta en su nota de transcripcion (mismo nombre, p. ej. Res_01738_2026-09-24). No digas que abriste un PDF.");
+              .AppendLine("CEREBROS DISPONIBLES (bases de conocimiento de la entidad, solo lectura). Este es su mapa: carpetas y notas.")
+              .Append(await MapaCerebrosAsync(ids, ct))
+              .AppendLine()
+              .AppendLine("COMO USAR LOS CEREBROS:")
+              .AppendLine("- Trabajas SOLO con el texto de las notas: los PDF y demas adjuntos no se cargan; el texto de cada PDF esta en su nota de transcripcion (mismo nombre, p. ej. Res_01738_2026-09-24). No digas que abriste un PDF.")
+              .AppendLine("- Cita el titulo de las notas que usaste. No inventes datos, cifras ni numeros de resolucion que no hayas leido.");
+            if (profundo)
+            {
+                sb.AppendLine("- INVESTIGA A FONDO antes de responder, como un analista experto:")
+                  .AppendLine("  1) Usa el mapa: empieza por los indices, notas de tema y entidades relacionadas con la pregunta.")
+                  .AppendLine("  2) Haz VARIAS busquedas (buscar_notas) con sinonimos, siglas, numeros de resolucion y nombres de entidades; puedes pedir varias herramientas a la vez.")
+                  .AppendLine("  3) Abre con ver_nota las notas mas relevantes (normalmente 3 a 6) y sigue sus enlaces (enlaza_a) cuando aporten. En notas largas usa 'buscar' para ir al pasaje exacto o pide la 'parte' siguiente.")
+                  .AppendLine("  4) Cruza y sintetiza: responde con conclusiones claras, listas, fechas, numeros y entidades concretas, y explica la relacion entre normas cuando aplique.")
+                  .AppendLine("  5) Si la pregunta es amplia, responde con lo que SI encontraste y aclara que parte no cubre el cerebro. Solo di que algo no esta despues de buscarlo con varias palabras distintas.")
+                  .AppendLine("- Responde dentro de las consultas disponibles: no abras notas de mas cuando ya tienes con que responder.");
+            }
+            else
+            {
+                sb.AppendLine("- MODO RAPIDO: haz una o dos busquedas, abre solo la nota mas relevante y responde de forma breve. Si no lo encuentras, dilo.");
+            }
             cerebrosTool = CerebroToolset.SoloCerebros(_db, ids);
             herramientas.Add(cerebrosTool);
         }
@@ -199,7 +219,8 @@ public sealed class AiInferenceService : IAiInferenceService
         if (herramientas.Count > 0)
         {
             var conHerramientas = await LoopHerramientasAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(),
-                turns.Select(t => new AiToolMessage(t.Role, t.Text)).ToList(), herramientas, agent.Id, "chat", ct);
+                turns.Select(t => new AiToolMessage(t.Role, t.Text)).ToList(), herramientas, agent.Id, "chat", ct,
+                profundo ? RondasChatProfundo : RondasChatRapido);
             // Fuentes reales: lo que el toolset le entrego al modelo, no lo que el modelo dice.
             return cerebrosTool is null ? conHerramientas : conHerramientas with { Fuentes = cerebrosTool.Fuentes };
         }
@@ -499,7 +520,7 @@ public sealed class AiInferenceService : IAiInferenceService
     /// </summary>
     private async Task<AiChatResult> LoopHerramientasAsync(AiProvider provider, string apiKey, string? baseUrl, string model,
         string systemPrompt, List<AiToolMessage> messages, IReadOnlyList<IAgentToolset> toolsets, Guid? agentId, string source,
-        CancellationToken ct)
+        CancellationToken ct, int maxRondas = MaxToolRounds)
     {
         var specs = toolsets.SelectMany(t => t.GetSpecs()).ToList();
         var ownerByTool = new Dictionary<string, IAgentToolset>(StringComparer.Ordinal);
@@ -510,7 +531,7 @@ public sealed class AiInferenceService : IAiInferenceService
 
         int totalIn = 0, totalOut = 0;
         string? lastText = null;
-        for (var round = 1; round <= MaxToolRounds; round++)
+        for (var round = 1; round <= maxRondas; round++)
         {
             var completion = await _client.CompleteWithToolsAsync(provider, apiKey, baseUrl, model, systemPrompt, messages, specs, ct);
             totalIn += completion.InputTokens;
@@ -522,11 +543,15 @@ public sealed class AiInferenceService : IAiInferenceService
             }
             lastText = completion.Text ?? lastText;
 
-            // Sin herramientas pedidas: respuesta final.
+            // Sin herramientas pedidas: respuesta final (si vino vacia, se le pide cerrar con lo consultado).
             if (completion.ToolCalls.Count == 0)
             {
-                await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, true, ct);
-                return new AiChatResult(true, completion.Text, null, totalIn, totalOut);
+                if (!string.IsNullOrWhiteSpace(completion.Text))
+                {
+                    await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, true, ct);
+                    return new AiChatResult(true, completion.Text, null, totalIn, totalOut);
+                }
+                break;
             }
 
             messages.Add(new AiToolMessage("assistant", completion.Text, completion.ToolCalls));
@@ -540,9 +565,92 @@ public sealed class AiInferenceService : IAiInferenceService
             }
         }
 
-        // Agoto las rondas de herramientas sin cerrar.
-        await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, true, ct);
-        return new AiChatResult(true, lastText ?? "El analisis no pudo completarse; intenta reformular la pregunta.", null, totalIn, totalOut);
+        // Agoto las rondas (o respondio vacio): ultima llamada SIN herramientas con todo lo consultado,
+        // para que responda con lo que encontro en vez de quedarse sin respuesta.
+        var cierre = await _client.CompleteAsync(provider, apiKey, baseUrl, model, systemPrompt, [CierreConLoConsultado(messages)], ct);
+        totalIn += cierre.InputTokens;
+        totalOut += cierre.OutputTokens;
+        await _usage.RecordAsync(agentId, provider, model, totalIn, totalOut, source, cierre.Ok, ct);
+        if (cierre.Ok && !string.IsNullOrWhiteSpace(cierre.Text)) { return new AiChatResult(true, cierre.Text, null, totalIn, totalOut); }
+        return string.IsNullOrWhiteSpace(lastText)
+            ? new AiChatResult(false, null, "El agente consulto sus cerebros pero no logro redactar la respuesta; intenta de nuevo o haz una pregunta mas puntual.", totalIn, totalOut)
+            : new AiChatResult(true, lastText, null, totalIn, totalOut);
+    }
+
+    /// <summary>Tope de lo consultado que se pasa al cierre (caracteres).</summary>
+    private const int MaxCierre = 70_000;
+
+    /// <summary>
+    /// Un solo turno de usuario con la conversacion y los resultados de herramientas (los mas
+    /// recientes primero si no caben), y la orden de responder ya, sin mas consultas.
+    /// </summary>
+    private static AiChatTurn CierreConLoConsultado(IReadOnlyList<AiToolMessage> messages)
+    {
+        var conversacion = new StringBuilder();
+        foreach (var m in messages.Where(m => m.Role is "user" or "model" or "assistant" && m.ToolCalls is not { Count: > 0 } && !string.IsNullOrWhiteSpace(m.Text)))
+        {
+            conversacion.Append(m.Role == "user" ? "USUARIO: " : "AGENTE: ").AppendLine(m.Text);
+        }
+        var consultas = new List<string>();
+        var usado = 0;
+        foreach (var m in messages.Where(m => m.Role == "tool").Reverse())
+        {
+            var t = m.Text ?? "";
+            if (t.Length > 14_000) { t = t[..14_000] + "..."; }
+            if (usado + t.Length > MaxCierre) { continue; }
+            usado += t.Length;
+            consultas.Insert(0, $"[{m.ToolName}] {t}");
+        }
+        var sb = new StringBuilder()
+            .AppendLine("CONVERSACION:").AppendLine(conversacion.ToString())
+            .AppendLine("LO QUE CONSULTASTE EN LOS CEREBROS (resultados de herramientas):")
+            .AppendLine(consultas.Count == 0 ? "(nada)" : string.Join("\n\n", consultas))
+            .AppendLine()
+            .Append("Ya no puedes hacer mas consultas. Responde AHORA la ultima pregunta del usuario usando solo esta informacion: ")
+            .Append("sintetiza lo encontrado, cita los titulos de las notas y aclara lo que no quedo cubierto. No pidas herramientas.");
+        return new AiChatTurn("user", sb.ToString());
+    }
+
+    /// <summary>
+    /// Mapa de los cerebros para el prompt del chat: por cerebro, sus carpetas con el numero de
+    /// notas y los titulos (primero indices, temas y entidades). Asi el agente sabe por donde empezar.
+    /// </summary>
+    private async Task<string> MapaCerebrosAsync(IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        var cerebros = await _db.Cerebros.AsNoTracking().Where(c => ids.Contains(c.Id)).OrderBy(c => c.Nombre)
+            .Select(c => new { c.Id, c.Nombre, c.Slug, c.Descripcion }).ToListAsync(ct);
+        var notas = await _db.NotasCerebro.AsNoTracking().Where(n => ids.Contains(n.CerebroId) && !n.Archivada)
+            .Select(n => new { n.CerebroId, n.Titulo, n.Carpeta }).ToListAsync(ct);
+        var sb = new StringBuilder();
+        foreach (var c in cerebros)
+        {
+            var propias = notas.Where(n => n.CerebroId == c.Id).ToList();
+            var m = new StringBuilder();
+            m.Append("## ").Append(c.Nombre).Append(" (slug: ").Append(c.Slug).Append(", ").Append(propias.Count).AppendLine(" notas)");
+            if (!string.IsNullOrWhiteSpace(c.Descripcion)) { m.AppendLine(c.Descripcion.Trim()); }
+            var entradas = propias.Where(n => EsPuntoDeEntrada(n.Titulo)).Select(n => n.Titulo).OrderBy(t => t).ToList();
+            if (entradas.Count > 0) { m.Append("Puntos de entrada: ").AppendLine(string.Join("; ", entradas)); }
+            foreach (var g in propias.GroupBy(n => string.IsNullOrWhiteSpace(n.Carpeta) ? "(raiz)" : n.Carpeta!).OrderBy(g => g.Key))
+            {
+                var titulos = g.Select(n => n.Titulo).OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+                const int maxPorCarpeta = 45;
+                m.Append("- ").Append(g.Key).Append(" (").Append(titulos.Count).Append("): ")
+                 .Append(string.Join("; ", titulos.Take(maxPorCarpeta)))
+                 .AppendLine(titulos.Count > maxPorCarpeta ? $"; ... y {titulos.Count - maxPorCarpeta} mas (buscalas con buscar_notas)" : "");
+            }
+            var texto = m.ToString();
+            if (texto.Length > MaxMapaCerebro) { texto = texto[..MaxMapaCerebro] + "\n... (mapa recortado; usa buscar_notas)\n"; }
+            sb.Append(texto);
+        }
+        return sb.ToString();
+    }
+
+    private static bool EsPuntoDeEntrada(string titulo)
+    {
+        var t = CerebroToolset.Normalizar(titulo);
+        return t.Contains("indice", StringComparison.Ordinal) || t.Contains("mapa", StringComparison.Ordinal)
+            || t.Contains("inicio", StringComparison.Ordinal) || t.Contains("glosario", StringComparison.Ordinal)
+            || t.Contains("catalogo", StringComparison.Ordinal) || t.Contains("readme", StringComparison.Ordinal);
     }
 
     /// <summary>Expone solo las herramientas habilitadas para un agente (AiAgent.ToolKeys).</summary>

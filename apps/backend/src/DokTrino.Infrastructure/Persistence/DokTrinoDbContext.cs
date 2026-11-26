@@ -494,6 +494,7 @@ public class DokTrinoDbContext : DbContext, IApplicationDbContext, IDataProtecti
 
         modelBuilder.Entity<AiAgent>(b =>
         {
+            b.Property(x => x.ModoCerebro).HasMaxLength(20);
             b.Property(x => x.Name).HasMaxLength(150).IsRequired();
             b.Property(x => x.Role).HasMaxLength(100);
             b.Property(x => x.Model).HasMaxLength(100);
