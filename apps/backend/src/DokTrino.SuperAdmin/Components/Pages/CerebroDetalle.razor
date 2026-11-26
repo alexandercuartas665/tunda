@@ -70,7 +70,7 @@ else
         <div class="cd-ia on">&#10024; <span><b>Referencia de la IA documental</b>: la generacion del Procedimiento de la TRD consulta este cerebro.</span></div>
     }
 
-    @if (_error is not null) { <div class="trx-error" style="margin:10px 0;">@_error</div> }
+    @if (_error is not null) { <div class="cb-error" style="margin:10px 0;">@_error</div> }
     @if (_ok is not null) { <div class="ase-ok" style="margin:10px 0;">@_ok</div> }
 
     <div class="cd-split">
@@ -89,7 +89,7 @@ else
                     </label>
                 </div>
             }
-            <input class="dep-in" style="margin-bottom:8px;" placeholder="Buscar nota..." @bind="_filtro" @bind:event="oninput" />
+            <input class="cb-in" style="margin-bottom:8px;" placeholder="Buscar nota..." @bind="_filtro" @bind:event="oninput" />
             <div class="cd-lista-scroll">
                 @foreach (var n in NotasFiltradas)
                 {
@@ -107,7 +107,7 @@ else
             @if (_editando)
             {
                 <div class="cd-editor">
-                    <input class="dep-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" />
+                    <input class="cb-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" />
                     <div class="cd-ed-tabs">
                         <button class="cd-ed-tab @(!_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = false">Escribir</button>
                         <button class="cd-ed-tab @(_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = true">Vista previa</button>
@@ -119,7 +119,7 @@ else
                     }
                     else
                     {
-                        <textarea class="dep-in cd-ed-texto" @bind="_edContenido" @bind:event="oninput" spellcheck="true"></textarea>
+                        <textarea class="cb-in cd-ed-texto" @bind="_edContenido" @bind:event="oninput" spellcheck="true"></textarea>
                     }
                     <div class="cb-btns">
                         <button class="trx-btn ghost" @onclick="CancelarEdicion">Cancelar</button>
@@ -186,21 +186,21 @@ else
 {
     <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCerebro = false"></div>
     <div class="cb-modal-wrap">
-        <div class="per-modal cb-modal">
-            <div class="per-h">
-                <div><div class="per-t">Editar cerebro</div></div>
-                <span class="per-x" @onclick="() => _formCerebro = false">&#10005;</span>
+        <div class="cb-modal">
+            <div class="cb-mh">
+                <div><div class="cb-mt">Editar cerebro</div></div>
+                <span class="cb-mx" @onclick="() => _formCerebro = false">&#10005;</span>
             </div>
-            <div class="per-b">
-                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_fNombre" maxlength="150" /></label>
-                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_fDesc" maxlength="600"></textarea></label>
-                <label class="dep-f" style="margin-top:10px;"><span>Categoria</span>
-                    <select class="dep-in" @bind="_fCategoria">
+            <div class="cb-mb">
+                <label class="cb-f"><span>Nombre</span><input class="cb-in" @bind="_fNombre" maxlength="150" /></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="cb-in" rows="3" @bind="_fDesc" maxlength="600"></textarea></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Categoria</span>
+                    <select class="cb-in" @bind="_fCategoria">
                         <option value="">Sin categoria</option>
                         @foreach (var k in _categorias) { <option value="@k.Id">@k.Nombre</option> }
                     </select>
                 </label>
-                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
+                @if (_formError is not null) { <div class="cb-error" style="margin-top:10px;">@_formError</div> }
                 <div class="cb-btns">
                     <button class="trx-btn ghost" @onclick="() => _formCerebro = false">Cancelar</button>
                     <button class="trx-btn" @onclick="GuardarCerebro">Guardar</button>

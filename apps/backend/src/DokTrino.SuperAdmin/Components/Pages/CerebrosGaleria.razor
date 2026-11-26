@@ -23,11 +23,11 @@
     }
 </div>
 
-@if (_error is not null) { <div class="trx-error" style="margin-bottom:12px;">@_error</div> }
+@if (_error is not null) { <div class="cb-error" style="margin-bottom:12px;">@_error</div> }
 @if (_ok is not null) { <div class="ase-ok" style="margin-bottom:12px;">@_ok</div> }
 
 <div class="cb-filtros">
-    <input class="dep-in cb-buscar" placeholder="Buscar cerebro..." value="@_busqueda"
+    <input class="cb-in cb-buscar" placeholder="Buscar cerebro..." value="@_busqueda"
            @oninput="e => Buscar(e.Value?.ToString())" />
     <div class="cb-chips">
         <button class="cb-chip @(_categoriaSel is null ? "on" : "")" @onclick="() => Filtrar(null)">Todas</button>
@@ -90,21 +90,21 @@ else
 {
     <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCerebro = false"></div>
     <div class="cb-modal-wrap">
-        <div class="per-modal cb-modal">
-            <div class="per-h">
-                <div><div class="per-t">Nuevo cerebro</div></div>
-                <span class="per-x" @onclick="() => _formCerebro = false">&#10005;</span>
+        <div class="cb-modal">
+            <div class="cb-mh">
+                <div><div class="cb-mt">Nuevo cerebro</div></div>
+                <span class="cb-mx" @onclick="() => _formCerebro = false">&#10005;</span>
             </div>
-            <div class="per-b">
-                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_fNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
-                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_fDesc" maxlength="600" placeholder="Para que sirve este cerebro..."></textarea></label>
-                <label class="dep-f" style="margin-top:10px;"><span>Categoria</span>
-                    <select class="dep-in" @bind="_fCategoria">
+            <div class="cb-mb">
+                <label class="cb-f"><span>Nombre</span><input class="cb-in" @bind="_fNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="cb-in" rows="3" @bind="_fDesc" maxlength="600" placeholder="Para que sirve este cerebro..."></textarea></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Categoria</span>
+                    <select class="cb-in" @bind="_fCategoria">
                         <option value="">Sin categoria</option>
                         @foreach (var k in _categorias) { <option value="@k.Id">@k.Nombre</option> }
                     </select>
                 </label>
-                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
+                @if (_formError is not null) { <div class="cb-error" style="margin-top:10px;">@_formError</div> }
                 <div class="cb-btns">
                     <button class="trx-btn ghost" @onclick="() => _formCerebro = false">Cancelar</button>
                     <button class="trx-btn" @onclick="GuardarCerebro">Crear cerebro</button>
@@ -119,18 +119,18 @@ else
 {
     <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _formCategorias = false"></div>
     <div class="cb-modal-wrap">
-        <div class="per-modal cb-modal">
-            <div class="per-h">
-                <div><div class="per-t">Categorias de cerebros</div></div>
-                <span class="per-x" @onclick="() => _formCategorias = false">&#10005;</span>
+        <div class="cb-modal">
+            <div class="cb-mh">
+                <div><div class="cb-mt">Categorias de cerebros</div></div>
+                <span class="cb-mx" @onclick="() => _formCategorias = false">&#10005;</span>
             </div>
-            <div class="per-b">
+            <div class="cb-mb">
                 @foreach (var k in _categorias)
                 {
                     <div class="cb-cat-row">
                         <input type="color" class="cb-color" value="@(k.Color ?? "#64748b")"
                                @onchange="e => GuardarCategoria(k.Id, k.Nombre, e.Value?.ToString())" />
-                        <input class="dep-in celda" value="@k.Nombre"
+                        <input class="cb-in celda" value="@k.Nombre"
                                @onchange="e => GuardarCategoria(k.Id, e.Value?.ToString() ?? k.Nombre, k.Color)" />
                         <span class="cb-cat-n">@k.Cerebros cerebro(s)</span>
                         <button class="trx-btn danger mini" title="Archivar categoria" @onclick="() => ArchivarCategoria(k)">&times;</button>
@@ -139,11 +139,11 @@ else
                 @if (_categorias.Count == 0) { <div class="trx-empty">Sin categorias todavia.</div> }
                 <div class="cb-cat-row" style="margin-top:12px;">
                     <input type="color" class="cb-color" @bind="_nuevaCatColor" />
-                    <input class="dep-in" @bind="_nuevaCatNombre" placeholder="Nueva categoria" maxlength="80" />
+                    <input class="cb-in" @bind="_nuevaCatNombre" placeholder="Nueva categoria" maxlength="80" />
                     <button class="trx-btn" @onclick="CrearCategoria">&#43; Agregar</button>
                 </div>
-                @if (_formError is not null) { <div class="trx-error" style="margin-top:10px;">@_formError</div> }
-                <small class="trd-muted" style="display:block; margin-top:10px;">Archivar una categoria deja sus cerebros sin categoria; no borra ningun cerebro.</small>
+                @if (_formError is not null) { <div class="cb-error" style="margin-top:10px;">@_formError</div> }
+                <small class="cb-muted" style="display:block; margin-top:10px;">Archivar una categoria deja sus cerebros sin categoria; no borra ningun cerebro.</small>
             </div>
         </div>
     </div>

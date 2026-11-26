@@ -23,7 +23,7 @@
     </div>
 </div>
 
-@if (_error is not null) { <div class="trx-error" style="margin-bottom:12px;">@_error</div> }
+@if (_error is not null) { <div class="cb-error" style="margin-bottom:12px;">@_error</div> }
 @if (_ok is not null) { <div class="ase-ok" style="margin-bottom:12px;">@_ok</div> }
 
 <div class="cp-split">
@@ -118,15 +118,15 @@
             <div class="cp-box">
                 <div class="cp-box-t">Datos y destinos</div>
                 <div class="cp-grid">
-                    <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_f.Nombre" maxlength="150" disabled="@_sel.Archivada" /></label>
-                    <label class="dep-f"><span>Categoria con la que llega</span>
+                    <label class="cb-f"><span>Nombre</span><input class="cb-in" @bind="_f.Nombre" maxlength="150" disabled="@_sel.Archivada" /></label>
+                    <label class="cb-f"><span>Categoria con la que llega</span>
                         <div style="display:flex; gap:6px;">
                             <input type="color" class="cb-color" @bind="_fColor" disabled="@_sel.Archivada" />
-                            <input class="dep-in" @bind="_f.CategoriaNombre" maxlength="80" placeholder="Ej: Normativa" disabled="@_sel.Archivada" />
+                            <input class="cb-in" @bind="_f.CategoriaNombre" maxlength="80" placeholder="Ej: Normativa" disabled="@_sel.Archivada" />
                         </div>
                     </label>
                 </div>
-                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="2" @bind="_f.Descripcion" maxlength="600" disabled="@_sel.Archivada"></textarea></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="cb-in" rows="2" @bind="_f.Descripcion" maxlength="600" disabled="@_sel.Archivada"></textarea></label>
 
                 <label class="cp-check" style="margin-top:12px;">
                     <input type="checkbox" @bind="_f.Bloqueado" disabled="@_sel.Archivada" />
@@ -138,7 +138,7 @@
                 </label>
 
                 <div class="cp-destino">
-                    <span class="est-cap">Sembrar en:</span>
+                    <span class="cb-cap">Sembrar en:</span>
                     @foreach (var (modo, etiqueta) in Modos)
                     {
                         <label class="cp-radio"><input type="radio" name="destino" checked="@(_f.DestinoModo == modo)" disabled="@_sel.Archivada"
@@ -152,7 +152,7 @@
                         {
                             <label class="cp-check"><input type="checkbox" checked="@_f.DestinoIds.Contains(o.Id)" @onchange="e => Marcar(o.Id, e)" /> @o.Nombre</label>
                         }
-                        @if (_opciones.Planes.Count == 0) { <span class="trd-muted">No hay planes activos.</span> }
+                        @if (_opciones.Planes.Count == 0) { <span class="cb-muted">No hay planes activos.</span> }
                     </div>
                 }
                 else if (_f.DestinoModo == DestinosPlantilla.Entidades && _opciones is not null)
@@ -160,7 +160,7 @@
                     <div class="cp-opciones">
                         @foreach (var o in _opciones.Entidades)
                         {
-                            <label class="cp-check"><input type="checkbox" checked="@_f.DestinoIds.Contains(o.Id)" @onchange="e => Marcar(o.Id, e)" /> @o.Nombre <span class="trd-muted">(@o.Detalle)</span></label>
+                            <label class="cp-check"><input type="checkbox" checked="@_f.DestinoIds.Contains(o.Id)" @onchange="e => Marcar(o.Id, e)" /> @o.Nombre <span class="cb-muted">(@o.Detalle)</span></label>
                         }
                     </div>
                 }
@@ -206,7 +206,7 @@
                     <div class="cp-notas-editor">
                         @if (_editando)
                         {
-                            <input class="dep-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" disabled="@_sel.Archivada" />
+                            <input class="cb-in cd-ed-titulo" @bind="_edTitulo" placeholder="Titulo de la nota" maxlength="200" disabled="@_sel.Archivada" />
                             <div class="cd-ed-tabs" style="margin-top:8px;">
                                 <button class="cd-ed-tab @(!_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = false">Escribir</button>
                                 <button class="cd-ed-tab @(_vistaPrevia ? "on" : "")" @onclick="() => _vistaPrevia = true">Vista previa</button>
@@ -218,7 +218,7 @@
                             }
                             else
                             {
-                                <textarea class="dep-in cd-ed-texto" style="margin-top:8px;" @bind="_edContenido" @bind:event="oninput" disabled="@_sel.Archivada"></textarea>
+                                <textarea class="cb-in cd-ed-texto" style="margin-top:8px;" @bind="_edContenido" @bind:event="oninput" disabled="@_sel.Archivada"></textarea>
                             }
                             @if (!_sel.Archivada)
                             {
@@ -245,15 +245,15 @@
 {
     <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="() => _nueva = false"></div>
     <div class="cb-modal-wrap">
-        <div class="per-modal cb-modal">
-            <div class="per-h">
-                <div><div class="per-t">Nueva plantilla de cerebro</div></div>
-                <span class="per-x" @onclick="() => _nueva = false">&#10005;</span>
+        <div class="cb-modal">
+            <div class="cb-mh">
+                <div><div class="cb-mt">Nueva plantilla de cerebro</div></div>
+                <span class="cb-mx" @onclick="() => _nueva = false">&#10005;</span>
             </div>
-            <div class="per-b">
-                <label class="dep-f"><span>Nombre</span><input class="dep-in" @bind="_nNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
-                <label class="dep-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="dep-in" rows="3" @bind="_nDesc" maxlength="600"></textarea></label>
-                <small class="trd-muted" style="display:block; margin-top:8px;">Nace bloqueada y dirigida a todas las entidades; lo ajustas antes de publicar.</small>
+            <div class="cb-mb">
+                <label class="cb-f"><span>Nombre</span><input class="cb-in" @bind="_nNombre" maxlength="150" placeholder="Ej: Normativa archivistica AGN" /></label>
+                <label class="cb-f" style="margin-top:10px;"><span>Descripcion</span><textarea class="cb-in" rows="3" @bind="_nDesc" maxlength="600"></textarea></label>
+                <small class="cb-muted" style="display:block; margin-top:8px;">Nace bloqueada y dirigida a todas las entidades; lo ajustas antes de publicar.</small>
                 <div class="cb-btns">
                     <button class="trx-btn ghost" @onclick="() => _nueva = false">Cancelar</button>
                     <button class="trx-btn" @onclick="CrearNueva">Crear</button>
