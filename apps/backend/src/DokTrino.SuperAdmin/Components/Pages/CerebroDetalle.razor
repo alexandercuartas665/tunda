@@ -86,8 +86,29 @@ else
     {
         <div class="cbv-grafo-wrap">
             <div class="cbv-grafo-barra">
-                <span>@_grafoResumen</span>
-                <span class="cbv-grafo-ayuda">Rueda: zoom &middot; arrastra para mover &middot; pasa el cursor para ver conexiones &middot; clic abre la nota</span>
+                <div class="cbv-buscar">
+                    <span class="cbv-buscar-ic" aria-hidden="true">&#128269;</span>
+                    <input class="cb-in" placeholder="Buscar nota en el grafo..." @bind="_buscarGrafo" @bind:event="oninput"
+                           @onkeydown="TeclaBuscarGrafo" @onfocus="() => _sugOcultas = false" />
+                    @if (Sugerencias.Count > 0)
+                    {
+                        <div class="cbv-sug">
+                            @foreach (var n in Sugerencias)
+                            {
+                                <div class="cbv-sug-i">
+                                    <button type="button" class="cbv-sug-t" title="Ubicar en el grafo" @onclick="() => EnfocarNodo(n)">
+                                        <span class="cbv-sug-n">@n.Titulo</span>
+                                        <span class="cbv-sug-g">@(n.Fantasma ? "sin crear" : n.Grupo ?? "raiz") &middot; @n.Grado conex.</span>
+                                    </button>
+                                    <button type="button" class="cbv-sug-a" title="Abrir la nota" @onclick="() => AbrirNodoGrafo(n.Id, n.Fantasma)">Abrir</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="trx-btn ghost mini" @onclick="EncuadrarGrafo" title="Volver a ver todo el grafo">Ver todo</button>
+                <span class="cbv-grafo-res">@_grafoResumen</span>
+                <span class="cbv-grafo-ayuda">Rueda: zoom &middot; arrastra el fondo para mover &middot; cursor sobre un nodo: conexiones &middot; clic: abre la nota</span>
             </div>
             <div id="@GrafoId" class="cbv-grafo"></div>
         </div>
@@ -105,6 +126,11 @@ else
                 <div class="cd-lista-acc">
                     <button class="trx-btn mini" @onclick="() => NuevaNota(null)">&#43; Nueva nota</button>
                     <ImportadorNotas Importar="ImportarNotas" Terminado="TrasImportar" />
+                    @if (_cerebro.Notas.Count > 0 && _cerebro.Notas.All(n => n.Carpeta is null))
+                    {
+                        <button class="trx-btn ghost mini" @onclick="RecuperarCarpetas" disabled="@_guardando"
+                                title="Reconstruye las carpetas del vault a partir de los enlaces con ruta de las notas">&#128193; Recuperar carpetas</button>
+                    }
                 </div>
             }
             <input class="cb-in" style="margin-bottom:8px;" placeholder="Buscar nota o carpeta..." @bind="_filtro" @bind:event="oninput" />
@@ -334,7 +360,23 @@ else
                       border:1px solid #e6e9f2; border-radius:12px; overflow:hidden; }
     .cbv-grafo-barra { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:9px 14px; font-size:12px;
                        font-weight:700; color:#37415c; border-bottom:1px solid #eef1f7; }
-    .cbv-grafo-ayuda { font-weight:500; color:#8a93ad; }
+    .cbv-grafo-ayuda { font-weight:500; color:#8a93ad; margin-left:auto; }
+    .cbv-grafo-res { font-weight:700; }
+    .cbv-grafo-barra { align-items:center; }
+    .cbv-buscar { position:relative; flex:0 1 340px; min-width:220px; display:flex; align-items:center; }
+    .cbv-buscar-ic { position:absolute; left:10px; font-size:12px; opacity:.55; pointer-events:none; }
+    .cbv-buscar .cb-in { padding-left:30px; margin:0; height:32px; }
+    .cbv-sug { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:20; background:#fff; border:1px solid #e6e9f2;
+               border-radius:10px; box-shadow:0 10px 28px rgba(20,30,60,.16); padding:4px; max-height:320px; overflow:auto; }
+    .cbv-sug-i { display:flex; align-items:center; gap:4px; border-radius:7px; }
+    .cbv-sug-i:hover { background:color-mix(in srgb, var(--primary) 7%, transparent); }
+    .cbv-sug-t { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; border:0; background:transparent;
+                 padding:6px 8px; cursor:pointer; text-align:left; font:inherit; }
+    .cbv-sug-n { font-size:12.5px; font-weight:700; color:#1f2433; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cbv-sug-g { font-size:10.5px; color:#8a93ad; }
+    .cbv-sug-a { flex-shrink:0; border:1px solid #dfe4ef; background:#fff; color:var(--primary); border-radius:7px; font-size:11px;
+                 font-weight:700; padding:3px 9px; margin-right:4px; cursor:pointer; }
+    .cbv-sug-a:hover { border-color:var(--primary); }
     .cbv-grafo { flex:1; min-height:300px; }
 </style>
 
@@ -384,6 +426,9 @@ else
             await CargarCerebro();
             _slugCargado = Slug;
             _cargando = false;
+            // Al abrir un cerebro (sin una nota pedida en la URL) se muestra el grafo.
+            if (_vista == Vista.Grafo) { await LiberarGrafo(); _vista = Vista.Notas; }
+            if (string.IsNullOrWhiteSpace(Nota) && _cerebro is { Notas.Count: > 0 }) { await CambiarVista(Vista.Grafo); }
         }
         // Cambiar de nota por un enlace cancela una edicion en curso (no hay cambios que perder
         // si se guardo; si no, el usuario eligio navegar).
@@ -554,6 +599,68 @@ else
             return;
         }
         Nav.NavigateTo(MarkdownCerebro.UrlNota(_cerebro.Slug, titulo));
+    }
+
+    // Buscador del grafo.
+    private string _buscarGrafo = "";
+    private bool _sugOcultas;
+
+    private List<NodoGrafoDto> Sugerencias
+    {
+        get
+        {
+            if (_grafo is null || _sugOcultas || string.IsNullOrWhiteSpace(_buscarGrafo)) { return new(); }
+            var terminos = CerebroToolset.Normalizar(_buscarGrafo).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return _grafo.Nodos
+                .Select(n => new { n, t = CerebroToolset.Normalizar(n.Titulo) })
+                .Where(x => terminos.All(t => x.t.Contains(t, StringComparison.Ordinal)))
+                .OrderByDescending(x => x.t.StartsWith(terminos[0], StringComparison.Ordinal))
+                .ThenByDescending(x => x.n.Grado).ThenBy(x => x.n.Titulo)
+                .Take(8).Select(x => x.n).ToList();
+        }
+    }
+
+    private async Task EnfocarNodo(NodoGrafoDto n)
+    {
+        _buscarGrafo = n.Titulo;
+        _sugOcultas = true;
+        try { await JS.InvokeAsync<bool>("cerebroGrafo.enfocar", GrafoId, n.Id); }
+        catch (JSException) { }
+    }
+
+    private async Task TeclaBuscarGrafo(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            var primero = Sugerencias.FirstOrDefault();
+            if (primero is not null) { await EnfocarNodo(primero); }
+        }
+        else if (e.Key == "Escape") { _buscarGrafo = ""; await EncuadrarGrafo(); }
+        else { _sugOcultas = false; }
+    }
+
+    private async Task EncuadrarGrafo()
+    {
+        _sugOcultas = true;
+        try { await JS.InvokeVoidAsync("cerebroGrafo.encuadrar", GrafoId); }
+        catch (JSException) { }
+    }
+
+    private async Task RecuperarCarpetas()
+    {
+        if (_cerebro is null) { return; }
+        _error = _ok = null;
+        _guardando = true;
+        try
+        {
+            var n = await Svc.RecuperarCarpetasAsync(_cerebro.Id);
+            _ok = n > 0
+                ? $"Se recuperaron las carpetas de {n} nota(s) a partir de sus enlaces."
+                : "No se encontraron rutas de carpeta en los enlaces. Vuelve a importar el .zip para recuperarlas.";
+            await CargarCerebro();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+        finally { _guardando = false; }
     }
 
     private async Task LiberarGrafo()

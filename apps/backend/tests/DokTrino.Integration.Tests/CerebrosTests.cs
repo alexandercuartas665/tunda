@@ -228,6 +228,34 @@ public sealed class CerebrosTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Recuperar_carpetas_desde_los_enlaces_con_ruta()
+    {
+        await using var ctx = CreateContext(_tenant, _admin);
+        var svc = Svc(ctx, _tenant, _admin);
+        var c = await svc.CrearAsync("Sin carpetas", null, null);
+        // Importado como .md sueltos (sin carpetas), pero los enlaces traen la ruta del vault.
+        await svc.ImportarNotasAsync(c.Id, [
+            new ArchivoNotaDto("Indice.md", "| [[02 Resoluciones/Res 1|Ficha]] | [[99 Fuentes/PDF/Res_1.pdf|PDF]] | [[99 Fuentes/Transcripciones/Res_1|T]] |"),
+            new ArchivoNotaDto("Tema.md", "Ver [[02 Resoluciones/Res 1#Considerandos]] y [[Otra/Res 1]] y [[Huerfana]]"),
+            new ArchivoNotaDto("Res 1.md", "uno"),
+            new ArchivoNotaDto("Res_1.md", "texto"),
+            new ArchivoNotaDto("Huerfana.md", "sin ruta")
+        ]);
+
+        // Un asesor no puede.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Svc(CreateContext(_tenant, _asesor), _tenant, _asesor).RecuperarCarpetasAsync(c.Id));
+
+        Assert.Equal(2, await svc.RecuperarCarpetasAsync(c.Id));
+        var det = (await svc.ObtenerAsync(c.Slug))!;
+        Assert.Equal("02 Resoluciones", det.Notas.Single(n => n.Titulo == "Res 1").Carpeta); // 2 votos contra 1
+        Assert.Equal("99 Fuentes/Transcripciones", det.Notas.Single(n => n.Titulo == "Res_1").Carpeta);
+        Assert.Null(det.Notas.Single(n => n.Titulo == "Huerfana").Carpeta);
+        Assert.Null(det.Notas.Single(n => n.Titulo == "Indice").Carpeta);
+        // Idempotente: lo ya ubicado no se toca.
+        Assert.Equal(0, await svc.RecuperarCarpetasAsync(c.Id));
+    }
+
+    [Fact]
     public async Task Slug_unico_categoria_archivada_y_cerebro_archivado()
     {
         await using var ctx = CreateContext(_tenant, _admin);

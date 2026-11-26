@@ -95,6 +95,14 @@ public interface ICerebroService
     Task<ImportacionNotasDto> ImportarNotasAsync(Guid cerebroId, IReadOnlyList<ArchivoNotaDto> archivos, CancellationToken ct = default);
 
     /// <summary>
+    /// Reconstruye la carpeta de las notas que no tienen, a partir de los enlaces con ruta de las
+    /// demas notas ([[02 Resoluciones/Resolucion 01738]] dice que esa nota vive en "02 Resoluciones").
+    /// Sirve para cerebros importados antes de que se guardaran las carpetas. Owner/Admin.
+    /// Devuelve cuantas notas ubico.
+    /// </summary>
+    Task<int> RecuperarCarpetasAsync(Guid cerebroId, CancellationToken ct = default);
+
+    /// <summary>
     /// Copia editable de un cerebro (tipicamente uno de la plataforma, que es de solo
     /// lectura): mismas notas activas y categoria, sin plantilla ni candado. Owner/Admin.
     /// </summary>
@@ -722,6 +730,59 @@ public sealed partial class CerebroService : ICerebroService
             await _db.SaveChangesAsync(ct);
         }
         return new ImportacionNotasDto(creadas, actualizadas, sinCambios, omitidas);
+    }
+
+    public async Task<int> RecuperarCarpetasAsync(Guid cerebroId, CancellationToken ct = default)
+    {
+        await ExigirAdminAsync(ct);
+        if (!await _db.Cerebros.AnyAsync(c => c.Id == cerebroId && !c.Archivado, ct))
+        {
+            throw new InvalidOperationException("El cerebro no existe.");
+        }
+        await ExigirNoBloqueadoAsync(cerebroId, ct);
+
+        var notas = await _db.NotasCerebro.Where(n => n.CerebroId == cerebroId && !n.Archivada).ToListAsync(ct);
+        var votos = CarpetasPorEnlaces(notas.Select(n => n.Contenido));
+        var ubicadas = 0;
+        foreach (var n in notas.Where(x => x.Carpeta is null))
+        {
+            if (!votos.TryGetValue(n.TituloClave, out var v)) { continue; }
+            // Si varias notas la enlazan con rutas distintas, gana la mas usada.
+            n.Carpeta = v.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).First().Key;
+            ubicadas++;
+        }
+        if (ubicadas > 0)
+        {
+            await TocarCerebroAsync(cerebroId, ct);
+            await _db.SaveChangesAsync(ct);
+        }
+        return ubicadas;
+    }
+
+    /// <summary>Por cada titulo enlazado con ruta: carpeta -> veces que aparece. Ignora adjuntos.</summary>
+    public static Dictionary<string, Dictionary<string, int>> CarpetasPorEnlaces(IEnumerable<string> contenidos)
+    {
+        var votos = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
+        foreach (var contenido in contenidos)
+        {
+            if (string.IsNullOrEmpty(contenido) || !contenido.Contains("[[")) { continue; }
+            foreach (Match m in EnlaceRegex().Matches(contenido))
+            {
+                var ruta = m.Groups[1].Value.Replace((char)92, '/');
+                var hash = ruta.IndexOf('#');
+                if (hash >= 0) { ruta = ruta[..hash]; }
+                var barra = ruta.LastIndexOf('/');
+                if (barra <= 0) { continue; }
+                var destino = DestinoEnlace(ruta);
+                if (destino.Length == 0 || CerebroToolset.EsAdjunto(destino)) { continue; }
+                var carpeta = NormalizarCarpeta(ruta[..barra]);
+                if (carpeta is null || carpeta.Length > MaxCarpeta || ruta[..barra].Contains("..", StringComparison.Ordinal)) { continue; }
+                var clave = ClaveTitulo(destino);
+                if (!votos.TryGetValue(clave, out var v)) { v = new Dictionary<string, int>(StringComparer.Ordinal); votos[clave] = v; }
+                v[carpeta] = v.GetValueOrDefault(carpeta) + 1;
+            }
+        }
+        return votos;
     }
 
     // ------------------------------------------------------------ duplicar y plantillas
