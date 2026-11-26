@@ -188,10 +188,7 @@
                     {
                         <span style="margin-left:auto; display:flex; gap:6px;">
                             <button class="trx-btn mini" @onclick="NuevaNota">&#43; Nueva nota</button>
-                            <label class="trx-btn ghost mini cd-importar" title="Archivos .md o un .zip de un vault de Obsidian. Las notas con el mismo titulo se actualizan. Zip de hasta 500 MB; los adjuntos se ignoran.">
-                                @(_importando ? "Importando..." : "Importar .md / .zip")
-                                <InputFile OnChange="Importar" multiple accept=".md,.zip" style="display:none;" />
-                            </label>
+                            <ImportadorNotas Importar="ImportarNotas" Terminado="TrasImportar" NotaFinal="Publica la plantilla para que los cambios lleguen a las entidades." />
                         </span>
                     }
                 </div>
@@ -306,7 +303,6 @@
                font-size:12.5px; color:var(--foreground); cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cd-item:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); }
     .cd-item.on { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); font-weight:700; }
-    .cd-importar { cursor:pointer; }
     .cd-ed-titulo { font-size:15px; font-weight:700; }
     .cd-ed-tabs { display:flex; align-items:center; gap:6px; }
     .cd-ed-tab { border:1px solid var(--border); background:var(--card); border-radius:7px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--foreground); }
@@ -342,7 +338,6 @@
     private OpcionesDestinoCerebroDto? _opciones;
     private bool _verArchivadas;
     private string? _error, _ok;
-    private bool _importando;
 
     // Formulario de datos.
     private GuardarPlantillaCerebroRequest _f = new();
@@ -558,44 +553,13 @@
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
-    private async Task Importar(InputFileChangeEventArgs e)
+    private Task<ImportacionNotasDto> ImportarNotas(IReadOnlyList<ArchivoNotaDto> notas) => Svc.ImportarNotasAsync(_sel!.Id, notas);
+
+    private async Task TrasImportar()
     {
-        if (_sel is null) { return; }
         _error = _ok = null;
-        try
-        {
-            var archivos = new List<ArchivoNotaDto>();
-            foreach (var f in e.GetMultipleFiles(500))
-            {
-                if (f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (f.Size > CerebroService.MaxZipBytes)
-                    {
-                        _error = $"El archivo \"{f.Name}\" pesa {f.Size / 1048576} MB; el maximo es {CerebroService.MaxZipBytes / 1048576} MB.";
-                        return;
-                    }
-                    _importando = true;
-                    StateHasChanged();
-                    await using var s = f.OpenReadStream(maxAllowedSize: CerebroService.MaxZipBytes);
-                    archivos.AddRange(await CerebroService.LeerZipAsync(s));
-                }
-                else if (f.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
-                {
-                    await using var s = f.OpenReadStream(maxAllowedSize: 1_000_000);
-                    using var r = new StreamReader(s);
-                    archivos.Add(new ArchivoNotaDto(f.Name, await r.ReadToEndAsync()));
-                }
-            }
-            if (archivos.Count == 0) { _error = "No se encontraron notas .md para importar."; return; }
-            var res = await Svc.ImportarNotasAsync(_sel.Id, archivos);
-            await Seleccionar(_sel.Id, limpiarMensajes: false);
-            await RecargarLista();
-            _ok = $"Importacion: {res.Creadas} nueva(s), {res.Actualizadas} actualizada(s), {res.SinCambios} sin cambios."
-                  + (res.Omitidas.Count > 0 ? $" Omitidas {res.Omitidas.Count}." : "") + " Publica para que llegue a las entidades.";
-        }
-        catch (InvalidOperationException ex) { _error = ex.Message; }
-        catch (IOException ex) { _error = "No se pudo leer el archivo: " + ex.Message; }
-        catch (InvalidDataException) { _error = "El archivo .zip no es valido."; }
-        finally { _importando = false; }
+        if (_sel is null) { return; }
+        await Seleccionar(_sel.Id, limpiarMensajes: false);
+        await RecargarLista();
     }
 }

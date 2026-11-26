@@ -340,7 +340,7 @@ public sealed partial class CerebroPlantillaService : ICerebroPlantillaService
             var titulo = CerebroService.DestinoEnlace(a.NombreArchivo);
             if (CerebroService.ValidarTitulo(titulo) is string err) { omitidas.Add($"{a.NombreArchivo}: {err}"); continue; }
             var cuerpo = a.Contenido ?? "";
-            if (cuerpo.Length > CerebroService.MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga."); continue; }
+            if (cuerpo.Length > CerebroService.MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga (maximo {CerebroService.MaxContenido / 1_000_000} millones de caracteres)."); continue; }
             var t = string.Join(' ', titulo.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             var clave = CerebroService.ClaveTitulo(t);
             if (existentes.TryGetValue(clave, out var n))

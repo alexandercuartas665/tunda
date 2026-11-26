@@ -1690,3 +1690,34 @@ textarea.cb-in { resize:vertical; min-height:38px; }
 .cb-btns { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 /* Boton pequeno (antes solo existia en el <style> de la pagina de TRD). */
 .trx-btn.mini { padding:5px 9px; font-size:11px; }
+
+/* ===================== Importador de notas (cerebros), prefijo imp- ===================== */
+.imp-btn { cursor:pointer; }
+.imp-modal { width:540px; }
+.imp-sub { font-size:11.5px; opacity:.85; margin-top:2px; word-break:break-all; }
+.imp-pasos { display:flex; flex-direction:column; gap:4px; }
+.imp-paso { display:flex; gap:12px; align-items:flex-start; padding:9px 10px; border-radius:10px; color:#8a93ad; transition:background .25s, color .25s; }
+.imp-paso.activo { background:#eef3ff; color:#37415c; }
+.imp-paso.hecho { color:#37415c; }
+.imp-paso.fallo { background:#fdecec; color:#a33; }
+.imp-ico { flex:0 0 26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+           font-size:12px; font-weight:800; background:#e9ecf4; color:#8a93ad; transition:background .25s, color .25s; }
+.imp-paso.activo .imp-ico { background:#fff; box-shadow:inset 0 0 0 2px var(--primary); }
+.imp-paso.hecho .imp-ico { background:#2e9d6a; color:#fff; }
+.imp-paso.fallo .imp-ico { background:#d64545; color:#fff; }
+.imp-paso-cuerpo { flex:1; min-width:0; padding-top:4px; }
+.imp-paso-t { font-size:13px; font-weight:700; }
+.imp-det { font-size:11.5px; color:#6b7491; margin-top:3px; }
+.imp-barra { height:8px; border-radius:6px; background:#dfe5f3; overflow:hidden; margin-top:7px; }
+.imp-barra > div { height:100%; border-radius:6px; background:linear-gradient(90deg, var(--primary), var(--primary-deep)); transition:width .3s ease; }
+.imp-spin { width:14px; height:14px; border-radius:50%; border:2px solid #cfd8ee; border-top-color:var(--primary); animation:imp-giro .8s linear infinite; }
+@keyframes imp-giro { to { transform:rotate(360deg); } }
+.imp-kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:14px; }
+.imp-kpi { background:#fff; border:1px solid #e3e7f2; border-radius:10px; padding:10px 6px; text-align:center; display:flex; flex-direction:column; gap:2px; }
+.imp-kpi b { font-size:20px; color:#37415c; }
+.imp-kpi span { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:#8a93ad; }
+.imp-kpi.ok b { color:#2e9d6a; }
+.imp-kpi.warn { border-color:#f3d39a; background:#fff8ea; }
+.imp-kpi.warn b { color:#b7791f; }
+.imp-omitidas { margin:6px 0 0; padding:8px 10px 8px 26px; max-height:180px; overflow:auto; background:#fff; border:1px solid #e3e7f2;
+                border-radius:8px; font-size:11.5px; color:#5a6380; display:flex; flex-direction:column; gap:4px; word-break:break-word; }

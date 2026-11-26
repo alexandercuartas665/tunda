@@ -94,15 +94,23 @@ public sealed class CerebrosTests : IAsyncLifetime
     [Fact]
     public async Task LeerZipAsync_lee_desde_stream_no_posicionable_y_no_deja_temporales()
     {
-        var zip = Zip(("Inicio.md", "Hola"), ("adjuntos/doc.pdf", new string('x', 200_000)));
+        // Una nota de mas de 5 MB no detiene la lectura: se omite con su motivo.
+        var zip = Zip(("Inicio.md", "Hola"), ("adjuntos/doc.pdf", new string('x', 200_000)),
+                      ("Transcripciones/Enorme.md", new string('a', 6 * 1024 * 1024)));
         var antes = Directory.GetFiles(Path.GetTempPath(), "cerebro-*.zip").Length;
+        long ultimo = 0;
 
-        var archivos = await CerebroService.LeerZipAsync(new SoloLectura(zip));
+        var lectura = await CerebroService.LeerZipAsync(new SoloLectura(zip), new Progreso(b => ultimo = b));
 
-        Assert.Single(archivos);
-        Assert.Equal("Hola", archivos[0].Contenido);
+        Assert.Single(lectura.Notas);
+        Assert.Equal("Hola", lectura.Notas[0].Contenido);
+        Assert.Equal(1, lectura.AdjuntosIgnorados);
+        Assert.Contains(lectura.Omitidas, o => o.StartsWith("Transcripciones/Enorme.md"));
+        Assert.Equal(zip.Length, ultimo);
         Assert.Equal(antes, Directory.GetFiles(Path.GetTempPath(), "cerebro-*.zip").Length);
     }
+
+    private sealed class Progreso(Action<long> a) : IProgress<long> { public void Report(long v) => a(v); }
 
     /// <summary>Stream de solo avance, como el de una subida de Blazor.</summary>
     private sealed class SoloLectura(Stream interno) : Stream
@@ -129,7 +137,7 @@ public sealed class CerebrosTests : IAsyncLifetime
         // Zip estilo Obsidian: carpetas, .obsidian y no-md se ignoran.
         var zip = Zip(("Procesos/Radicacion.md", "Paso 1"), ("Inicio.md", "Ver [[Procesos/Radicacion]]"),
                       (".obsidian/app.json", "{}"), (".obsidian/x.md", "ignorar"), ("img.png", "bin"));
-        var archivos = CerebroService.LeerZip(zip);
+        var archivos = CerebroService.LeerZip(zip).Notas;
         Assert.Equal(2, archivos.Count);
 
         var r1 = await svc.ImportarNotasAsync(c.Id, archivos);

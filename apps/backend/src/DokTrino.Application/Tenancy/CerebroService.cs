@@ -44,6 +44,9 @@ public sealed record ArchivoNotaDto(string NombreArchivo, string Contenido);
 
 public sealed record ImportacionNotasDto(int Creadas, int Actualizadas, int SinCambios, IReadOnlyList<string> Omitidas);
 
+/// <summary>Notas leidas de un zip, las que se omitieron (con motivo) y cuantos adjuntos se ignoraron.</summary>
+public sealed record LecturaZipDto(IReadOnlyList<ArchivoNotaDto> Notas, IReadOnlyList<string> Omitidas, int AdjuntosIgnorados);
+
 // ---------------------------------------------------------------- contrato
 
 /// <summary>
@@ -105,7 +108,7 @@ public sealed partial class CerebroService : ICerebroService
     public const int MaxDescripcion = 600;
     public const int MaxCategoria = 80;
     public const int MaxTitulo = 200;
-    public const int MaxContenido = 200_000;
+    public const int MaxContenido = 5_000_000;
 
     /// <summary>Caracteres que rompen los [[enlaces]] o la URL de la nota.</summary>
     private static readonly char[] CaracteresProhibidos = ['[', ']', '|', '#', '^', '\\', '/'];
@@ -176,48 +179,69 @@ public sealed partial class CerebroService : ICerebroService
     /// </summary>
     public const long MaxZipBytes = 500L * 1024 * 1024;
 
+    /// <summary>Tamano maximo de una nota .md (5 MB). Las mas grandes se omiten y se reportan.</summary>
+    public const long MaxNotaBytes = 5L * 1024 * 1024;
+
     /// <summary>
     /// Copia el zip subido (stream no posicionable) a un archivo temporal que se borra al
-    /// cerrarse y lee sus notas. Evita cargar cientos de MB en memoria.
+    /// cerrarse y lee sus notas. Evita cargar cientos de MB en memoria. <paramref name="progreso"/>
+    /// recibe los bytes copiados hasta el momento (para una barra de avance).
     /// </summary>
-    public static async Task<IReadOnlyList<ArchivoNotaDto>> LeerZipAsync(Stream subida, CancellationToken ct = default)
+    public static async Task<LecturaZipDto> LeerZipAsync(Stream subida, IProgress<long>? progreso = null, CancellationToken ct = default)
     {
         var ruta = Path.Combine(Path.GetTempPath(), "cerebro-" + Guid.NewGuid().ToString("N") + ".zip");
         await using var tmp = new FileStream(ruta, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
             81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
-        await subida.CopyToAsync(tmp, ct);
+        var buffer = new byte[81920];
+        long copiados = 0;
+        int leidos;
+        while ((leidos = await subida.ReadAsync(buffer, ct)) > 0)
+        {
+            await tmp.WriteAsync(buffer.AsMemory(0, leidos), ct);
+            copiados += leidos;
+            progreso?.Report(copiados);
+        }
         tmp.Position = 0;
-        return LeerZip(tmp);
+        // La descompresion es CPU: fuera del hilo del circuito para que la UI siga respondiendo.
+        return await Task.Run(() => LeerZip(tmp), ct);
     }
 
     /// <summary>
     /// Lee los .md de un zip (vault de Obsidian). Ignora la carpeta .obsidian, los
-    /// metadatos de macOS y cualquier archivo que no sea .md. Limites contra zips
-    /// abusivos: 10000 notas, 1 MB por nota y 100 MB de notas en total descomprimido.
+    /// metadatos de macOS y todo lo que no sea .md (cuenta esos adjuntos). Una nota de mas
+    /// de 5 MB NO detiene la lectura: se omite y se reporta. Limites contra zips abusivos
+    /// (estos si detienen todo): 10000 notas y 150 MB de notas en total descomprimido.
     /// </summary>
-    public static IReadOnlyList<ArchivoNotaDto> LeerZip(Stream zip)
+    public static LecturaZipDto LeerZip(Stream zip)
     {
-        const long MaxNota = 1_000_000, MaxTotal = 100_000_000;
+        const long MaxTotal = 150_000_000;
         const int MaxNotas = 10_000;
         var salida = new List<ArchivoNotaDto>();
+        var omitidas = new List<string>();
+        int adjuntos = 0;
         long total = 0;
         using var archivo = new ZipArchive(zip, ZipArchiveMode.Read);
         foreach (var e in archivo.Entries)
         {
             var ruta = e.FullName.Replace('\\', '/');
-            if (!ruta.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) { continue; }
+            if (ruta.EndsWith('/')) { continue; }
             if (ruta.StartsWith(".obsidian/", StringComparison.OrdinalIgnoreCase)
                 || ruta.Contains("/.obsidian/", StringComparison.OrdinalIgnoreCase)
                 || ruta.StartsWith("__MACOSX/", StringComparison.OrdinalIgnoreCase)) { continue; }
-            if (e.Length > MaxNota) { throw new InvalidOperationException($"La nota \"{ruta}\" supera 1 MB."); }
+            if (!ruta.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) { adjuntos++; continue; }
+            if (e.Length > MaxNotaBytes)
+            {
+                omitidas.Add($"{ruta}: pesa {e.Length / 1048576.0:0.0} MB (maximo {MaxNotaBytes / 1048576} MB por nota).");
+                continue;
+            }
             total += e.Length;
-            if (total > MaxTotal) { throw new InvalidOperationException("El zip supera 100 MB de notas .md."); }
-            if (salida.Count >= MaxNotas) { throw new InvalidOperationException($"El zip trae mas de {MaxNotas} notas."); }
+            if (total > MaxTotal) { throw new InvalidOperationException($"El zip trae mas de {MaxTotal / 1_000_000} MB de notas .md. Dividelo en varios zips."); }
+            if (salida.Count >= MaxNotas) { throw new InvalidOperationException($"El zip trae mas de {MaxNotas} notas. Dividelo en varios zips."); }
             using var s = e.Open();
             using var r = new StreamReader(s, Encoding.UTF8);
             salida.Add(new ArchivoNotaDto(ruta, r.ReadToEnd()));
         }
-        return salida;
+        return new LecturaZipDto(salida, omitidas, adjuntos);
     }
 
     // ------------------------------------------------------------ permisos
@@ -555,7 +579,7 @@ public sealed partial class CerebroService : ICerebroService
             var titulo = DestinoEnlace(a.NombreArchivo);
             if (ValidarTitulo(titulo) is string err) { omitidas.Add($"{a.NombreArchivo}: {err}"); continue; }
             var cuerpo = a.Contenido ?? "";
-            if (cuerpo.Length > MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga."); continue; }
+            if (cuerpo.Length > MaxContenido) { omitidas.Add($"{a.NombreArchivo}: es demasiado larga (maximo {MaxContenido / 1_000_000} millones de caracteres)."); continue; }
             var t = string.Join(' ', titulo.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             var clave = ClaveTitulo(t);
 

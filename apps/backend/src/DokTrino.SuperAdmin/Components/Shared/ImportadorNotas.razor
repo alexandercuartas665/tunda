@@ -1,0 +1,238 @@
+@using DokTrino.Application.Tenancy
+@* Boton "Importar .md / .zip" + ventana de avance. Lo comparten el detalle de un cerebro
+   (tenant) y las plantillas del Super Admin: cada pagina pasa su propia funcion Importar.
+   Fases: subir (barra con MB) -> leer notas -> guardar -> resumen con las omitidas. Una nota
+   problematica no detiene la importacion: queda en la lista de omitidas con su motivo. *@
+
+<label class="trx-btn ghost mini imp-btn" title="Importa archivos .md o un .zip de un vault de Obsidian. Las notas con el mismo titulo se actualizan. Zip de hasta @(CerebroService.MaxZipBytes / 1048576) MB; los adjuntos (PDF, imagenes) se ignoran.">
+    Importar .md / .zip
+    <InputFile OnChange="Seleccionar" multiple accept=".md,.zip" style="display:none;" disabled="@Ocupado" />
+</label>
+
+@if (_abierto)
+{
+    <div class="doktrino-drawer-scrim" style="display:block; z-index:2000;" @onclick="Cerrar"></div>
+    <div class="cb-modal-wrap">
+        <div class="cb-modal imp-modal">
+            <div class="cb-mh">
+                <div>
+                    <div class="cb-mt">@(_fase == Fase.Listo ? "Importacion terminada" : _fase == Fase.Error ? "No se pudo importar" : "Importando notas")</div>
+                    <div class="imp-sub">@_archivoNombre</div>
+                </div>
+                @if (!Ocupado) { <span class="cb-mx" @onclick="Cerrar">&#10005;</span> }
+            </div>
+            <div class="cb-mb">
+                <div class="imp-pasos">
+                    <div class="imp-paso @Estado(Fase.Subiendo)">
+                        <span class="imp-ico">@Icono(Fase.Subiendo)</span>
+                        <div class="imp-paso-cuerpo">
+                            <div class="imp-paso-t">Subir archivo</div>
+                            @if (_fase == Fase.Subiendo)
+                            {
+                                <div class="imp-barra"><div style="width:@(Porcentaje)%;"></div></div>
+                                <div class="imp-det">@Mb(_subidos) de @Mb(_total) MB &middot; @(Porcentaje)%</div>
+                            }
+                            else if (_total > 0 && _fase > Fase.Subiendo) { <div class="imp-det">@Mb(_total) MB</div> }
+                        </div>
+                    </div>
+                    <div class="imp-paso @Estado(Fase.Leyendo)">
+                        <span class="imp-ico">@Icono(Fase.Leyendo)</span>
+                        <div class="imp-paso-cuerpo">
+                            <div class="imp-paso-t">Leer notas del archivo</div>
+                            @if (_fase > Fase.Leyendo && _leidas >= 0)
+                            {
+                                <div class="imp-det">@_leidas nota(s) .md @if (_adjuntos > 0) { <text> &middot; @_adjuntos adjunto(s) ignorado(s)</text> }</div>
+                            }
+                        </div>
+                    </div>
+                    <div class="imp-paso @Estado(Fase.Guardando)">
+                        <span class="imp-ico">@Icono(Fase.Guardando)</span>
+                        <div class="imp-paso-cuerpo"><div class="imp-paso-t">Guardar en el cerebro</div></div>
+                    </div>
+                </div>
+
+                @if (_fase == Fase.Error)
+                {
+                    <div class="cb-error" style="margin-top:14px;">@_error</div>
+                }
+
+                @if (_fase == Fase.Listo && _res is not null)
+                {
+                    <div class="imp-kpis">
+                        <div class="imp-kpi ok"><b>@_res.Creadas</b><span>Nuevas</span></div>
+                        <div class="imp-kpi"><b>@_res.Actualizadas</b><span>Actualizadas</span></div>
+                        <div class="imp-kpi"><b>@_res.SinCambios</b><span>Sin cambios</span></div>
+                        <div class="imp-kpi @(_omitidas.Count > 0 ? "warn" : "")"><b>@_omitidas.Count</b><span>Omitidas</span></div>
+                    </div>
+                    @if (_omitidas.Count > 0)
+                    {
+                        <div class="cb-cap" style="margin-top:12px;">Notas que no se importaron</div>
+                        <ul class="imp-omitidas">
+                            @foreach (var o in _omitidas) { <li>@o</li> }
+                        </ul>
+                    }
+                    @if (!string.IsNullOrEmpty(NotaFinal)) { <div class="cb-muted" style="margin-top:10px;">@NotaFinal</div> }
+                }
+
+                @if (!Ocupado)
+                {
+                    <div class="cb-btns"><button class="trx-btn" @onclick="Cerrar">@(_fase == Fase.Listo ? "Listo" : "Cerrar")</button></div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Guarda las notas leidas (servicio del tenant o de plantillas).</summary>
+    [Parameter, EditorRequired] public Func<IReadOnlyList<ArchivoNotaDto>, Task<ImportacionNotasDto>> Importar { get; set; } = default!;
+
+    /// <summary>Se invoca tras una importacion exitosa para que la pagina recargue.</summary>
+    [Parameter] public EventCallback Terminado { get; set; }
+
+    /// <summary>Texto opcional bajo el resumen (p. ej. recordar publicar la plantilla).</summary>
+    [Parameter] public string? NotaFinal { get; set; }
+
+    private enum Fase { Subiendo = 1, Leyendo = 2, Guardando = 3, Listo = 4, Error = 5 }
+
+    private bool _abierto;
+    private Fase _fase;
+    private Fase _faseFallo;
+    private string _archivoNombre = "";
+    private long _total, _subidos;
+    private int _leidas = -1, _adjuntos;
+    private string? _error;
+    private ImportacionNotasDto? _res;
+    private readonly List<string> _omitidas = new();
+    private int _ultimoPct = -1;
+
+    private bool Ocupado => _abierto && _fase is Fase.Subiendo or Fase.Leyendo or Fase.Guardando;
+    private int Porcentaje => _total <= 0 ? 0 : (int)Math.Min(100, _subidos * 100 / _total);
+    private static string Mb(long b) => (b / 1048576.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Estado(Fase paso)
+    {
+        if (_fase == Fase.Error) { return paso < _faseFallo ? "hecho" : paso == _faseFallo ? "fallo" : ""; }
+        return _fase > paso ? "hecho" : _fase == paso ? "activo" : "";
+    }
+
+    private MarkupString Icono(Fase paso) => Estado(paso) switch
+    {
+        "hecho" => new MarkupString("&#10003;"),
+        "fallo" => new MarkupString("&#10005;"),
+        "activo" => new MarkupString("<span class=\"imp-spin\"></span>"),
+        _ => new MarkupString(((int)paso).ToString())
+    };
+
+    private void Cerrar()
+    {
+        if (Ocupado) { return; }
+        _abierto = false;
+    }
+
+    private async Task Seleccionar(InputFileChangeEventArgs e)
+    {
+        _abierto = true;
+        _fase = Fase.Subiendo;
+        _error = null;
+        _res = null;
+        _omitidas.Clear();
+        _leidas = -1;
+        _adjuntos = 0;
+        _subidos = 0;
+        _ultimoPct = -1;
+
+        try
+        {
+            var files = e.GetMultipleFiles(500);
+            _archivoNombre = files.Count == 1 ? files[0].Name : $"{files.Count} archivos";
+            _total = files.Sum(f => f.Size);
+
+            var grande = files.FirstOrDefault(f => f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && f.Size > CerebroService.MaxZipBytes);
+            if (grande is not null)
+            {
+                throw new InvalidOperationException($"\"{grande.Name}\" pesa {Mb(grande.Size)} MB; el maximo es {CerebroService.MaxZipBytes / 1048576} MB. Dividelo en varios zips.");
+            }
+            StateHasChanged();
+
+            var notas = new List<ArchivoNotaDto>();
+            long base0 = 0;
+            foreach (var f in files)
+            {
+                if (f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    var inicio = base0;
+                    var progreso = new Avance(b => Avanzar(inicio + b));
+                    await using var s = f.OpenReadStream(maxAllowedSize: CerebroService.MaxZipBytes);
+                    var lectura = await CerebroService.LeerZipAsync(s, progreso);
+                    notas.AddRange(lectura.Notas);
+                    _omitidas.AddRange(lectura.Omitidas);
+                    _adjuntos += lectura.AdjuntosIgnorados;
+                }
+                else if (f.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (f.Size > CerebroService.MaxNotaBytes)
+                    {
+                        _omitidas.Add($"{f.Name}: pesa {Mb(f.Size)} MB (maximo {CerebroService.MaxNotaBytes / 1048576} MB por nota).");
+                    }
+                    else
+                    {
+                        await using var s = f.OpenReadStream(maxAllowedSize: CerebroService.MaxNotaBytes);
+                        using var r = new StreamReader(s);
+                        notas.Add(new ArchivoNotaDto(f.Name, await r.ReadToEndAsync()));
+                    }
+                }
+                else
+                {
+                    _adjuntos++;
+                }
+                base0 += f.Size;
+                Avanzar(base0);
+            }
+
+            _fase = Fase.Leyendo;
+            _leidas = notas.Count;
+            StateHasChanged();
+            if (notas.Count == 0)
+            {
+                throw new InvalidOperationException(_omitidas.Count > 0
+                    ? "Ninguna nota se pudo leer: " + string.Join(" ", _omitidas.Take(3))
+                    : "No se encontraron notas .md para importar.");
+            }
+
+            _fase = Fase.Guardando;
+            StateHasChanged();
+            _res = await Importar(notas);
+            _omitidas.AddRange(_res.Omitidas);
+            _fase = Fase.Listo;
+            await Terminado.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or InvalidDataException)
+        {
+            _faseFallo = _fase is Fase.Subiendo or Fase.Leyendo or Fase.Guardando ? _fase : Fase.Subiendo;
+            _error = ex switch
+            {
+                InvalidDataException => "El archivo .zip no es valido o esta danado.",
+                IOException => "No se pudo leer el archivo: " + ex.Message,
+                _ => ex.Message
+            };
+            _fase = Fase.Error;
+        }
+    }
+
+    /// <summary>Actualiza la barra como maximo una vez por punto porcentual.</summary>
+    private void Avanzar(long bytes)
+    {
+        _subidos = bytes;
+        var pct = Porcentaje;
+        if (pct == _ultimoPct) { return; }
+        _ultimoPct = pct;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>IProgress sincrono: reporta en el hilo que copia, sin capturar contexto.</summary>
+    private sealed class Avance(Action<long> accion) : IProgress<long>
+    {
+        public void Report(long value) => accion(value);
+    }
+}
