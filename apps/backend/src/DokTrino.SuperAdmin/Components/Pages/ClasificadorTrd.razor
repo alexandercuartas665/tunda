@@ -178,6 +178,47 @@ else
                                 @if (m.Role == "user") { @m.Text }
                                 else { <div class="agc-md">@((MarkupString)MarkdownCerebro.Render(m.Text, "", _sinClaves))</div> }
                             </div>
+                            @if (m.Role != "user" && m.Fuentes is not null)
+                            {
+                                var leidas = m.Fuentes.Where(f => f.Leida).ToList();
+                                var vistas = m.Fuentes.Where(f => !f.Leida).ToList();
+                                <div class="agc-fuentes">
+                                    @if (m.Fuentes.Count == 0)
+                                    {
+                                        <div class="agc-f-alerta">&#9888; Respondio <b>sin consultar</b> sus cerebros: no tomes esta respuesta como respaldada por ellos.</div>
+                                    }
+                                    else
+                                    {
+                                        @if (leidas.Count > 0)
+                                        {
+                                            <div class="agc-f-fila">
+                                                <span class="agc-f-t">Notas leidas</span>
+                                                @foreach (var f in leidas)
+                                                {
+                                                    <a class="agc-f leida" href="@MarkdownCerebro.UrlNota(f.CerebroSlug, f.Titulo)" target="_blank" rel="noopener"
+                                                       title="@($"{f.CerebroNombre} - abrir la nota{(f.Truncada ? " (el agente leyo solo el inicio: es muy larga)" : "")}")">&#128196; @f.Titulo@(f.Truncada ? " *" : "")</a>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="agc-f-alerta suave">No abrio ninguna nota completa: se baso solo en fragmentos de la busqueda.</div>
+                                        }
+                                        @if (vistas.Count > 0)
+                                        {
+                                            <details class="agc-f-mas">
+                                                <summary>@vistas.Count nota(s) vistas solo en la busqueda</summary>
+                                                <div class="agc-f-fila">
+                                                    @foreach (var f in vistas)
+                                                    {
+                                                        <a class="agc-f" href="@MarkdownCerebro.UrlNota(f.CerebroSlug, f.Titulo)" target="_blank" rel="noopener" title="@f.CerebroNombre">@f.Titulo</a>
+                                                    }
+                                                </div>
+                                            </details>
+                                        }
+                                    }
+                                </div>
+                            }
                         }
                         @if (chat.Ocupado) { <div class="agc-msg bot agc-pensando"><span></span><span></span><span></span></div> }
                     </div>
@@ -285,6 +326,17 @@ else
     .agc-in textarea { flex:1; border:1px solid #dfe4ef; border-radius:9px; padding:7px 10px; font-size:13px; resize:vertical; min-height:40px; font-family:inherit; outline:none; }
     .agc-in textarea:focus { border-color:var(--primary); }
     .agc-in-acc { display:flex; gap:6px; }
+    /* Fuentes de cada respuesta del agente */
+    .agc-fuentes { align-self:flex-start; max-width:88%; margin:-2px 0 4px 4px; display:flex; flex-direction:column; gap:5px; }
+    .agc-f-fila { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+    .agc-f-t { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:#8a93ad; margin-right:2px; }
+    .agc-f { font-size:11.5px; padding:2px 9px; border-radius:20px; border:1px solid #dfe4ef; background:#fff; color:#59617a; text-decoration:none; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .agc-f:hover { border-color:var(--primary); color:var(--primary); }
+    .agc-f.leida { background:var(--primary-soft); border-color:color-mix(in srgb, var(--primary) 35%, transparent); color:var(--primary); font-weight:700; }
+    .agc-f-alerta { font-size:11.5px; color:#8a5a00; background:#fff6e0; border:1px solid #f3d39a; border-radius:8px; padding:5px 9px; }
+    .agc-f-alerta.suave { color:#6b7491; background:#f4f6fb; border-color:#e3e7f2; }
+    .agc-f-mas summary { font-size:11px; color:#8a93ad; cursor:pointer; }
+    .agc-f-mas .agc-f-fila { margin-top:5px; }
 </style>
 
 @code {
@@ -416,9 +468,12 @@ else
     private readonly Dictionary<Guid, ChatAgente> _chats = new();
     private static readonly HashSet<string> _sinClaves = new();
 
+    /// <summary>Un mensaje del chat; Fuentes solo en respuestas del agente con cerebros.</summary>
+    private sealed record MensajeChat(string Role, string Text, IReadOnlyList<FuenteNotaDto>? Fuentes = null);
+
     private sealed class ChatAgente
     {
-        public List<AiChatTurn> Mensajes { get; } = new();
+        public List<MensajeChat> Mensajes { get; } = new();
         public string Texto { get; set; } = "";
         public bool Ocupado { get; set; }
         public string? Error { get; set; }
@@ -463,7 +518,7 @@ else
         var texto = chat.Texto.Trim();
         if (texto.Length == 0 || chat.Ocupado) { return; }
         chat.Error = null;
-        chat.Mensajes.Add(new AiChatTurn("user", texto));
+        chat.Mensajes.Add(new MensajeChat("user", texto));
         chat.Texto = "";
         chat.Ocupado = true;
         StateHasChanged();
@@ -471,9 +526,9 @@ else
         try
         {
             // Se mandan los ultimos 20 turnos: suficiente contexto sin crecer sin limite.
-            var turnos = chat.Mensajes.TakeLast(20).ToList();
+            var turnos = chat.Mensajes.TakeLast(20).Select(m => new AiChatTurn(m.Role, m.Text)).ToList();
             var res = await Inferencia.ConversarAsync(agentId, turnos);
-            if (res.Ok && !string.IsNullOrWhiteSpace(res.Text)) { chat.Mensajes.Add(new AiChatTurn("model", res.Text!)); }
+            if (res.Ok && !string.IsNullOrWhiteSpace(res.Text)) { chat.Mensajes.Add(new MensajeChat("model", res.Text!, res.Fuentes)); }
             else { chat.Error = res.Error ?? "El agente no respondio; intenta de nuevo."; }
             await CargarConsumo();
         }

@@ -10,7 +10,14 @@ public sealed record AiChatAttachment(string Name, AgentResourceType ResourceTyp
 
 /// <summary>Resultado de una llamada de inferencia, con el consumo de tokens y los recursos a adjuntar.</summary>
 public sealed record AiChatResult(bool Ok, string? Text, string? Error, int InputTokens = 0, int OutputTokens = 0,
-    IReadOnlyList<AiChatAttachment>? Attachments = null);
+    IReadOnlyList<AiChatAttachment>? Attachments = null)
+{
+    /// <summary>
+    /// Notas de cerebros que el agente consulto de verdad (registro del toolset). Null si el
+    /// agente no tenia cerebros; vacia si los tenia pero respondio sin consultarlos.
+    /// </summary>
+    public IReadOnlyList<FuenteNotaDto>? Fuentes { get; init; }
+}
 
 /// <summary>
 /// Resultado de la cadena de 4 prompts que genera el Procedimiento de una subserie: cada segmento

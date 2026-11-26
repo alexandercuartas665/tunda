@@ -78,6 +78,8 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         Assert.True(nota.Ok);
         Assert.Contains("20 anios", nota.Json);
         Assert.Contains("Ley 594", nota.Json); // enlaza_a
+        Assert.Contains(todos.Fuentes, f => f.Titulo == "Tabla de plazos" && f.Leida);
+        Assert.Equal(2, todos.Consultas);
 
         // Acotado a "Normativa": el cerebro privado no existe para el agente.
         var acotado = CerebroToolset.SoloCerebros(ctxA, [normativa]);
@@ -225,6 +227,10 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         {
             var r = await Inferencia(ctx, cliente).ConversarAsync(agente, [new AiChatTurn("user", "Cuanto se conservan los contratos?")]);
             Assert.True(r.Ok, r.Error);
+            // Fuentes reales: el falso solo busca (no abre notas), asi que todo es "vista en busqueda".
+            Assert.NotNull(r.Fuentes);
+            Assert.Contains(r.Fuentes!, f => f.Titulo == "Tabla de plazos" && !f.Leida && f.CerebroNombre == "Manual de plazos");
+            Assert.DoesNotContain(r.Fuentes!, f => f.Titulo == "Plazos ocultos");
         }
         Assert.Contains(CerebroToolset.ToolBuscar, cliente.HerramientasOfrecidas);
         Assert.Contains("Manual de plazos", cliente.PromptsConHerramientas.Single());
@@ -241,7 +247,8 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         var cliente2 = new ClienteIaFalso();
         await using (var ctx = Contexto(_tenant, _admin))
         {
-            await Inferencia(ctx, cliente2).ConversarAsync(agente, [new AiChatTurn("user", "Hola")]);
+            var r2 = await Inferencia(ctx, cliente2).ConversarAsync(agente, [new AiChatTurn("user", "Hola")]);
+            Assert.Null(r2.Fuentes);
         }
         Assert.Empty(cliente2.PromptsConHerramientas);
         Assert.Equal(1, cliente2.LlamadasSinHerramientas);

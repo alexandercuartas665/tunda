@@ -12,6 +12,9 @@ namespace DokTrino.Application.Tenancy;
 /// <see cref="SoloCerebros"/> se acota ademas a ciertos cerebros (p. ej. los marcados como
 /// referencia de la IA documental).
 /// </summary>
+/// <summary>Nota que el agente consulto: Leida = la abrio con ver_nota; si no, solo vio su fragmento en una busqueda.</summary>
+public sealed record FuenteNotaDto(string CerebroSlug, string CerebroNombre, string Titulo, bool Leida, bool Truncada);
+
 public sealed class CerebroToolset : IAgentToolset
 {
     public const string ToolListar = "listar_cerebros";
@@ -26,6 +29,25 @@ public sealed class CerebroToolset : IAgentToolset
 
     private readonly IApplicationDbContext _db;
     private HashSet<Guid>? _soloCerebros;
+    private readonly List<FuenteNotaDto> _fuentes = new();
+
+    /// <summary>
+    /// Notas que este toolset entrego al modelo en la conversacion (registro real, no lo que el
+    /// modelo dice haber usado). Primero las leidas completas, luego las vistas en busquedas.
+    /// </summary>
+    public IReadOnlyList<FuenteNotaDto> Fuentes =>
+        _fuentes.Where(f => f.Leida)
+            .Concat(_fuentes.Where(f => !f.Leida && !_fuentes.Any(l => l.Leida && l.CerebroSlug == f.CerebroSlug && l.Titulo == f.Titulo)))
+            .ToList();
+
+    /// <summary>Cuantas veces el modelo llamo a buscar_notas o ver_nota.</summary>
+    public int Consultas { get; private set; }
+
+    private void Registrar(string slug, string nombre, string titulo, bool leida, bool truncada)
+    {
+        if (_fuentes.Any(f => f.CerebroSlug == slug && f.Titulo == titulo && f.Leida == leida)) { return; }
+        _fuentes.Add(new FuenteNotaDto(slug, nombre, titulo, leida, truncada));
+    }
 
     public CerebroToolset(IApplicationDbContext db) => _db = db;
 
@@ -52,6 +74,7 @@ public sealed class CerebroToolset : IAgentToolset
     {
         try
         {
+            if (toolName is ToolBuscar or ToolVer) { Consultas++; }
             return toolName switch
             {
                 ToolListar => await ListarAsync(Arg(argumentsJson, "texto"), ct),
@@ -113,10 +136,10 @@ public sealed class CerebroToolset : IAgentToolset
         // Cerebros de cientos de notas: se puntua en memoria (titulo pesa mas que el cuerpo).
         var notas = await _db.NotasCerebro.AsNoTracking()
             .Where(n => ids.Contains(n.CerebroId) && !n.Archivada)
-            .Select(n => new { n.Titulo, n.Contenido, Cerebro = n.Cerebro.Slug })
+            .Select(n => new { n.Titulo, n.Contenido, Cerebro = n.Cerebro.Slug, CerebroNombre = n.Cerebro.Nombre })
             .ToListAsync(ct);
 
-        var resultados = notas
+        var top = notas
             .Select(n =>
             {
                 var titulo = n.Titulo.ToLowerInvariant();
@@ -127,6 +150,9 @@ public sealed class CerebroToolset : IAgentToolset
             .Where(x => x.puntos > 0)
             .OrderByDescending(x => x.puntos).ThenBy(x => x.n.Titulo)
             .Take(MaxResultados)
+            .ToList();
+        foreach (var x in top) { Registrar(x.n.Cerebro, x.n.CerebroNombre, x.n.Titulo, false, false); }
+        var resultados = top
             .Select(x => new { cerebro = x.n.Cerebro, titulo = x.n.Titulo, fragmento = Fragmento(x.n.Contenido, x.cuerpo, palabras) })
             .ToList();
 
@@ -149,6 +175,7 @@ public sealed class CerebroToolset : IAgentToolset
         if (n is null) { return Error($"El cerebro '{slug}' no tiene una nota titulada '{titulo}'."); }
 
         var truncada = n.Contenido.Length > MaxContenidoNota;
+        Registrar(slug, c.Nombre, n.Titulo, true, truncada);
         return Ok(new
         {
             cerebro = slug,

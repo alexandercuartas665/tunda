@@ -170,6 +170,7 @@ public sealed class AiInferenceService : IAiInferenceService
         // Cerebros que este agente puede consultar: herramientas acotadas a ellos.
         var ids = await AgenteCerebrosService.SeleccionadosAsync(_db, agent, ct);
         var herramientas = new List<IAgentToolset>();
+        CerebroToolset? cerebrosTool = null;
         if (ids.Count > 0)
         {
             var nombres = await _db.Cerebros.AsNoTracking().Where(c => ids.Contains(c.Id)).OrderBy(c => c.Nombre)
@@ -179,7 +180,8 @@ public sealed class AiInferenceService : IAiInferenceService
               .Append(". Para responder, busca primero en ellos con buscar_notas y abre con ver_nota las notas relevantes. ")
               .Append("Fundamenta tu respuesta en lo que encuentres y menciona el titulo de las notas que usaste. ")
               .Append("Si la respuesta no esta en los cerebros, dilo claramente en lugar de inventar.");
-            herramientas.Add(CerebroToolset.SoloCerebros(_db, ids));
+            cerebrosTool = CerebroToolset.SoloCerebros(_db, ids);
+            herramientas.Add(cerebrosTool);
         }
         else
         {
@@ -198,8 +200,10 @@ public sealed class AiInferenceService : IAiInferenceService
 
         if (herramientas.Count > 0)
         {
-            return await LoopHerramientasAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(),
+            var conHerramientas = await LoopHerramientasAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(),
                 turns.Select(t => new AiToolMessage(t.Role, t.Text)).ToList(), herramientas, agent.Id, "chat", ct);
+            // Fuentes reales: lo que el toolset le entrego al modelo, no lo que el modelo dice.
+            return cerebrosTool is null ? conHerramientas : conHerramientas with { Fuentes = cerebrosTool.Fuentes };
         }
 
         var res = await _client.CompleteAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(), turns, ct);
