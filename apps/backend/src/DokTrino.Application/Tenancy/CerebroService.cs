@@ -170,14 +170,35 @@ public sealed partial class CerebroService : ICerebroService
     }
 
     /// <summary>
+    /// Tamano maximo del .zip que se acepta al importar (500 MB). Un vault de Obsidian
+    /// suele pesar sobre todo por sus adjuntos (PDF, imagenes), que se ignoran: solo se
+    /// leen los .md, con sus propios limites en <see cref="LeerZip"/>.
+    /// </summary>
+    public const long MaxZipBytes = 500L * 1024 * 1024;
+
+    /// <summary>
+    /// Copia el zip subido (stream no posicionable) a un archivo temporal que se borra al
+    /// cerrarse y lee sus notas. Evita cargar cientos de MB en memoria.
+    /// </summary>
+    public static async Task<IReadOnlyList<ArchivoNotaDto>> LeerZipAsync(Stream subida, CancellationToken ct = default)
+    {
+        var ruta = Path.Combine(Path.GetTempPath(), "cerebro-" + Guid.NewGuid().ToString("N") + ".zip");
+        await using var tmp = new FileStream(ruta, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
+            81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
+        await subida.CopyToAsync(tmp, ct);
+        tmp.Position = 0;
+        return LeerZip(tmp);
+    }
+
+    /// <summary>
     /// Lee los .md de un zip (vault de Obsidian). Ignora la carpeta .obsidian, los
     /// metadatos de macOS y cualquier archivo que no sea .md. Limites contra zips
-    /// abusivos: 3000 notas, 1 MB por nota y 50 MB en total descomprimido.
+    /// abusivos: 10000 notas, 1 MB por nota y 100 MB de notas en total descomprimido.
     /// </summary>
     public static IReadOnlyList<ArchivoNotaDto> LeerZip(Stream zip)
     {
-        const long MaxNota = 1_000_000, MaxTotal = 50_000_000;
-        const int MaxNotas = 3000;
+        const long MaxNota = 1_000_000, MaxTotal = 100_000_000;
+        const int MaxNotas = 10_000;
         var salida = new List<ArchivoNotaDto>();
         long total = 0;
         using var archivo = new ZipArchive(zip, ZipArchiveMode.Read);
@@ -190,7 +211,7 @@ public sealed partial class CerebroService : ICerebroService
                 || ruta.StartsWith("__MACOSX/", StringComparison.OrdinalIgnoreCase)) { continue; }
             if (e.Length > MaxNota) { throw new InvalidOperationException($"La nota \"{ruta}\" supera 1 MB."); }
             total += e.Length;
-            if (total > MaxTotal) { throw new InvalidOperationException("El zip supera 50 MB de notas."); }
+            if (total > MaxTotal) { throw new InvalidOperationException("El zip supera 100 MB de notas .md."); }
             if (salida.Count >= MaxNotas) { throw new InvalidOperationException($"El zip trae mas de {MaxNotas} notas."); }
             using var s = e.Open();
             using var r = new StreamReader(s, Encoding.UTF8);

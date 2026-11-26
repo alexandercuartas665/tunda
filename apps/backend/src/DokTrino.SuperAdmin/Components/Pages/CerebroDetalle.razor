@@ -83,8 +83,8 @@ else
             {
                 <div class="cd-lista-acc">
                     <button class="trx-btn mini" @onclick="() => NuevaNota(null)">&#43; Nueva nota</button>
-                    <label class="trx-btn ghost mini cd-importar" title="Importa archivos .md o un .zip de tu vault de Obsidian. Las notas con el mismo titulo se actualizan.">
-                        Importar .md / .zip
+                    <label class="trx-btn ghost mini cd-importar" title="Importa archivos .md o un .zip de tu vault de Obsidian. Las notas con el mismo titulo se actualizan. Zip de hasta 500 MB; los adjuntos se ignoran.">
+                        @(_importando ? "Importando..." : "Importar .md / .zip")
                         <InputFile OnChange="Importar" multiple accept=".md,.zip" style="display:none;" />
                     </label>
                 </div>
@@ -294,6 +294,7 @@ else
     private bool PuedeEditar => _esAdmin && _cerebro is { Bloqueado: false };
     private string? _slugCargado;
     private string? _error, _ok;
+    private bool _importando;
     private string _filtro = "";
 
     // Editor.
@@ -432,11 +433,15 @@ else
             {
                 if (f.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 {
-                    await using var s = f.OpenReadStream(maxAllowedSize: 60_000_000);
-                    using var ms = new MemoryStream();
-                    await s.CopyToAsync(ms);
-                    ms.Position = 0;
-                    archivos.AddRange(CerebroService.LeerZip(ms));
+                    if (f.Size > CerebroService.MaxZipBytes)
+                    {
+                        _error = $"El archivo \"{f.Name}\" pesa {f.Size / 1048576} MB; el maximo es {CerebroService.MaxZipBytes / 1048576} MB.";
+                        return;
+                    }
+                    _importando = true;
+                    StateHasChanged();
+                    await using var s = f.OpenReadStream(maxAllowedSize: CerebroService.MaxZipBytes);
+                    archivos.AddRange(await CerebroService.LeerZipAsync(s));
                 }
                 else if (f.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 {
@@ -456,6 +461,7 @@ else
         catch (InvalidOperationException ex) { _error = ex.Message; }
         catch (IOException ex) { _error = "No se pudo leer el archivo: " + ex.Message; }
         catch (InvalidDataException) { _error = "El archivo .zip no es valido."; }
+        finally { _importando = false; }
     }
 
     // ------------------------------------------------ cerebro

@@ -92,6 +92,34 @@ public sealed class CerebrosTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task LeerZipAsync_lee_desde_stream_no_posicionable_y_no_deja_temporales()
+    {
+        var zip = Zip(("Inicio.md", "Hola"), ("adjuntos/doc.pdf", new string('x', 200_000)));
+        var antes = Directory.GetFiles(Path.GetTempPath(), "cerebro-*.zip").Length;
+
+        var archivos = await CerebroService.LeerZipAsync(new SoloLectura(zip));
+
+        Assert.Single(archivos);
+        Assert.Equal("Hola", archivos[0].Contenido);
+        Assert.Equal(antes, Directory.GetFiles(Path.GetTempPath(), "cerebro-*.zip").Length);
+    }
+
+    /// <summary>Stream de solo avance, como el de una subida de Blazor.</summary>
+    private sealed class SoloLectura(Stream interno) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => interno.Read(buffer, offset, count);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task Importar_crea_actualiza_y_respeta_titulos_del_vault()
     {
         await using var ctx = CreateContext(_tenant, _admin);
