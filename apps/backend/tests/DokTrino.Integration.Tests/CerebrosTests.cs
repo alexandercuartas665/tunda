@@ -92,6 +92,29 @@ public sealed class CerebrosTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Grafo_une_notas_por_sus_enlaces_y_marca_las_que_faltan()
+    {
+        await using var ctx = CreateContext(_tenant, _admin);
+        var svc = Svc(ctx, _tenant, _admin);
+        var c = await svc.CrearAsync("Grafo", null, null);
+        await svc.GuardarNotaAsync(c.Id, null, "Ley 594", "Ver [[Acuerdo 004]], [[acuerdo 004|otra vez]] y [[Decreto 1080]].");
+        await svc.GuardarNotaAsync(c.Id, null, "Acuerdo 004", "Reglamenta. Vuelve a [[Ley 594]] y a si misma [[Acuerdo 004]].");
+        await svc.GuardarNotaAsync(c.Id, null, "Suelta", "Sin enlaces.");
+
+        var g = await svc.GrafoAsync(c.Id);
+
+        Assert.Equal(4, g.Nodos.Count);
+        var fantasma = Assert.Single(g.Nodos, n => n.Fantasma);
+        Assert.Equal("Decreto 1080", fantasma.Titulo);
+        // Enlaces repetidos cuentan una vez y el autoenlace no cuenta.
+        Assert.Equal(3, g.Aristas.Count);
+        Assert.Contains(g.Aristas, a => a.Origen == "ley 594" && a.Destino == "acuerdo 004");
+        Assert.Contains(g.Aristas, a => a.Origen == "acuerdo 004" && a.Destino == "ley 594");
+        Assert.Equal(0, g.Nodos.Single(n => n.Titulo == "Suelta").Grado);
+        Assert.Equal(3, g.Nodos.Single(n => n.Titulo == "Ley 594").Grado);
+    }
+
+    [Fact]
     public async Task LeerZipAsync_lee_desde_stream_no_posicionable_y_no_deja_temporales()
     {
         // Una nota de mas de 5 MB no detiene la lectura: se omite con su motivo.
@@ -301,6 +324,24 @@ public sealed class MarkdownCerebroTests
         var html = MarkdownCerebro.Render("[AGN](https://www.archivogeneral.gov.co)", "c", Claves);
         Assert.Contains("target=\"_blank\"", html);
         Assert.Contains("noopener", html);
+    }
+
+    [Fact]
+    public void Encabezado_yaml_se_muestra_como_propiedades_y_no_como_titulo()
+    {
+        var md = "---\ntipo: entidad\nanio: 2026\ntags: [entidad, energia]\naliases:\n  - CEDENAR\n  - <b>x</b>\n---\n# CEDENAR\nCuerpo.";
+        var html = MarkdownCerebro.Render(md, "c", Claves);
+
+        Assert.Contains("cb-props", html);
+        Assert.Contains(">tipo<", html);
+        Assert.Contains("<span class=\"cb-chip\">energia</span>", html);
+        Assert.Contains("<span class=\"cb-chip\">CEDENAR</span>", html);
+        Assert.Contains("&lt;b&gt;x&lt;/b&gt;", html); // valores codificados, nunca HTML crudo
+        Assert.DoesNotContain("tipo: entidad", html);
+        Assert.Contains("<h1", html);
+
+        // Sin encabezado, el texto se renderiza igual que antes.
+        Assert.DoesNotContain("cb-props", MarkdownCerebro.Render("---\nlinea horizontal sin cierre", "c", Claves));
     }
 
     private static int CountOf(string s, string sub)

@@ -29,6 +29,10 @@ namespace DokTrino.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CerebroIds")
+                        .HasColumnType("text")
+                        .HasColumnName("cerebro_ids");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");

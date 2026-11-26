@@ -5,6 +5,10 @@
 @using System.Security.Claims
 @inject IAiUsageService Consumo
 @inject IAiAgentService Agentes
+@inject IAgenteCerebrosService AgenteCerebros
+@inject IAiInferenceService Inferencia
+@inject ICerebroService Cerebros
+@inject IJSRuntime JS
 
 <PageTitle>Agentes TRD - Archimente</PageTitle>
 
@@ -128,6 +132,65 @@ else
                         </div>
                     }
                 }
+
+                @* --- Cerebros que el agente puede consultar --- *@
+                <div class="ag-sec-t">Cerebros que consulta</div>
+                @{ var cbs = _cerebrosPorAgente.GetValueOrDefault(a.Agent.Id) ?? new List<CerebroDeAgenteDto>(); }
+                @if (cbs.Count == 0)
+                {
+                    <div class="agc-vacio">La entidad aun no tiene cerebros. Crealos en <a href="/cerebros">Cerebros</a>.</div>
+                }
+                else
+                {
+                    <div class="agc-cbs">
+                        @foreach (var c in cbs)
+                        {
+                            var bloqueado = c.Bloqueado || !_esAdmin;
+                            <button type="button" class="agc-cb @(c.Seleccionado ? "on" : "")" disabled="@bloqueado"
+                                    title="@(c.Bloqueado ? "Lo decide la plataforma" : !_esAdmin ? "Solo el administrador de la entidad lo cambia" : c.Seleccionado ? "Quitar este cerebro" : "Dejar que el agente lo consulte")"
+                                    @onclick="() => AlternarCerebro(a.Agent.Id, c)">
+                                <span class="agc-check">@((MarkupString)(c.Seleccionado ? "&#10003;" : ""))</span>
+                                <span class="agc-cb-n">@c.Nombre</span>
+                                <span class="agc-cb-c">@c.Notas</span>
+                                @if (c.Bloqueado) { <span>&#128274;</span> }
+                            </button>
+                        }
+                    </div>
+                    <div class="agc-ayuda">
+                        @(cbs.Count(x => x.Seleccionado)) de @cbs.Count seleccionado(s).
+                        @if (EsGeneracion(a.Agent)) { <span>Es la misma marca <i>Referencia de la IA documental</i> de cada cerebro: la usa al generar procedimientos.</span> }
+                        else { <span>El agente los consulta al responder en el chat.</span> }
+                    </div>
+                }
+
+                @* --- Chat con el agente --- *@
+                <div class="ag-sec-t">Hablar con el agente</div>
+                @{ var chat = Chat(a.Agent.Id); }
+                <div class="agc-chat">
+                    <div class="agc-msgs" id="agc-msgs-@a.Agent.Id.ToString("N")">
+                        @if (chat.Mensajes.Count == 0)
+                        {
+                            <div class="agc-vacio">Preguntale algo. @(cbs.Any(x => x.Seleccionado) ? "Buscara la respuesta en sus cerebros." : "Sin cerebros asignados responde solo con conocimiento general.")</div>
+                        }
+                        @foreach (var m in chat.Mensajes)
+                        {
+                            <div class="agc-msg @(m.Role == "user" ? "yo" : "bot")">
+                                @if (m.Role == "user") { @m.Text }
+                                else { <div class="agc-md">@((MarkupString)MarkdownCerebro.Render(m.Text, "", _sinClaves))</div> }
+                            </div>
+                        }
+                        @if (chat.Ocupado) { <div class="agc-msg bot agc-pensando"><span></span><span></span><span></span></div> }
+                    </div>
+                    @if (chat.Error is not null) { <div class="agc-error">@chat.Error</div> }
+                    <div class="agc-in">
+                        <textarea rows="2" placeholder="Escribe tu pregunta... (Ctrl+Enter envia)" @bind="chat.Texto" @bind:event="oninput"
+                                  @onkeydown="e => TeclaChat(e, a.Agent.Id)" disabled="@chat.Ocupado"></textarea>
+                        <div class="agc-in-acc">
+                            @if (chat.Mensajes.Count > 0) { <button class="btn btn-outline-secondary btn-sm" @onclick="() => chat.Limpiar()" disabled="@chat.Ocupado">Limpiar</button> }
+                            <button class="btn btn-primary btn-sm" @onclick="() => EnviarChat(a.Agent.Id)" disabled="@(chat.Ocupado || string.IsNullOrWhiteSpace(chat.Texto))">Enviar</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         }
     </div>
@@ -187,6 +250,41 @@ else
     .ase-alert { background:#fdecea; color:#b02a1a; border-radius:10px; padding:10px 13px; margin-bottom:12px; font-size:13px; }
     .ase-ok { background:#e8f5ee; color:#2f7d54; border-radius:10px; padding:10px 13px; margin-bottom:12px; font-size:13px; }
     .dep-ind-load { color:#9aa3bd; font-style:italic; }
+
+    /* Cerebros del agente */
+    .agc-cbs { display:flex; flex-wrap:wrap; gap:6px; }
+    .agc-cb { display:inline-flex; align-items:center; gap:7px; border:1px solid #dfe4ef; background:#fff; border-radius:20px;
+              padding:5px 11px 5px 6px; font-size:12px; color:#59617a; cursor:pointer; transition:all .15s; max-width:100%; }
+    .agc-cb:hover:not(:disabled) { border-color:var(--primary); }
+    .agc-cb:disabled { cursor:not-allowed; opacity:.75; }
+    .agc-cb.on { border-color:var(--primary); background:var(--primary-soft); color:var(--primary); font-weight:700; }
+    .agc-check { width:18px; height:18px; border-radius:50%; border:1.5px solid #c9d0e0; display:flex; align-items:center;
+                 justify-content:center; font-size:11px; flex-shrink:0; background:#fff; }
+    .agc-cb.on .agc-check { border-color:var(--primary); background:var(--primary); color:#fff; }
+    .agc-cb-n { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .agc-cb-c { font-size:10.5px; color:#9aa3bd; font-weight:600; }
+    .agc-ayuda { font-size:11.5px; color:#8a93ad; margin-top:6px; }
+    .agc-vacio { font-size:12px; color:#9aa3bd; font-style:italic; }
+
+    /* Chat con el agente */
+    .agc-chat { border:1px solid #e6e9f2; border-radius:12px; overflow:hidden; background:#f8f9fc; }
+    .agc-msgs { max-height:360px; min-height:90px; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .agc-msg { max-width:88%; padding:8px 12px; border-radius:12px; font-size:13px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .agc-msg.yo { align-self:flex-end; background:var(--primary); color:#fff; border-bottom-right-radius:4px; }
+    .agc-msg.bot { align-self:flex-start; background:#fff; color:#2a2f3d; border:1px solid #e6e9f2; border-bottom-left-radius:4px; white-space:normal; }
+    .agc-md p { margin:.35em 0; } .agc-md ul, .agc-md ol { margin:.35em 0; padding-left:1.3em; }
+    .agc-md h1, .agc-md h2, .agc-md h3 { font-size:14px; font-weight:800; margin:.6em 0 .3em; }
+    .agc-md code { font-size:12px; background:#f1f3f8; padding:1px 4px; border-radius:4px; }
+    .agc-md table { border-collapse:collapse; font-size:12px; } .agc-md th, .agc-md td { border:1px solid #e6e9f2; padding:4px 7px; }
+    .agc-pensando { display:flex; gap:4px; padding:12px 14px; }
+    .agc-pensando span { width:7px; height:7px; border-radius:50%; background:#b3bad0; animation:agc-pt 1.2s infinite ease-in-out; }
+    .agc-pensando span:nth-child(2) { animation-delay:.2s; } .agc-pensando span:nth-child(3) { animation-delay:.4s; }
+    @@keyframes agc-pt { 0%, 80%, 100% { opacity:.3; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
+    .agc-error { font-size:12px; color:#b02a1a; background:#fdecea; padding:7px 12px; }
+    .agc-in { display:flex; gap:8px; align-items:flex-end; padding:9px; background:#fff; border-top:1px solid #e6e9f2; }
+    .agc-in textarea { flex:1; border:1px solid #dfe4ef; border-radius:9px; padding:7px 10px; font-size:13px; resize:vertical; min-height:40px; font-family:inherit; outline:none; }
+    .agc-in textarea:focus { border-color:var(--primary); }
+    .agc-in-acc { display:flex; gap:6px; }
 </style>
 
 @code {
@@ -210,6 +308,9 @@ else
     {
         await CargarConsumo();
         await CargarAgentes();
+        _esAdmin = await Cerebros.EsAdminAsync();
+        try { await CargarCerebrosAgentes(); }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
     private async Task CargarConsumo()
@@ -307,4 +408,84 @@ else
     }
 
     private static string Tokens(long n) => n >= 1000 ? $"{n / 1000.0:0.#}k" : n.ToString();
+
+    // ------------------------------------------------ cerebros del agente y chat
+
+    private bool _esAdmin;
+    private Dictionary<Guid, List<CerebroDeAgenteDto>> _cerebrosPorAgente = new();
+    private readonly Dictionary<Guid, ChatAgente> _chats = new();
+    private static readonly HashSet<string> _sinClaves = new();
+
+    private sealed class ChatAgente
+    {
+        public List<AiChatTurn> Mensajes { get; } = new();
+        public string Texto { get; set; } = "";
+        public bool Ocupado { get; set; }
+        public string? Error { get; set; }
+        public void Limpiar() { Mensajes.Clear(); Error = null; }
+    }
+
+    private ChatAgente Chat(Guid agentId)
+    {
+        if (!_chats.TryGetValue(agentId, out var c)) { c = new ChatAgente(); _chats[agentId] = c; }
+        return c;
+    }
+
+    private async Task CargarCerebrosAgentes()
+    {
+        var mapa = new Dictionary<Guid, List<CerebroDeAgenteDto>>();
+        foreach (var a in _agentes)
+        {
+            mapa[a.Agent.Id] = (await AgenteCerebros.CerebrosAsync(a.Agent.Id)).ToList();
+        }
+        _cerebrosPorAgente = mapa;
+    }
+
+    private async Task AlternarCerebro(Guid agentId, CerebroDeAgenteDto c)
+    {
+        _ok = _error = null;
+        try
+        {
+            await AgenteCerebros.FijarAsync(agentId, c.Id, !c.Seleccionado);
+            _cerebrosPorAgente[agentId] = (await AgenteCerebros.CerebrosAsync(agentId)).ToList();
+        }
+        catch (InvalidOperationException ex) { _error = ex.Message; }
+    }
+
+    private async Task TeclaChat(KeyboardEventArgs e, Guid agentId)
+    {
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey)) { await EnviarChat(agentId); }
+    }
+
+    private async Task EnviarChat(Guid agentId)
+    {
+        var chat = Chat(agentId);
+        var texto = chat.Texto.Trim();
+        if (texto.Length == 0 || chat.Ocupado) { return; }
+        chat.Error = null;
+        chat.Mensajes.Add(new AiChatTurn("user", texto));
+        chat.Texto = "";
+        chat.Ocupado = true;
+        StateHasChanged();
+        await BajarChat(agentId);
+        try
+        {
+            // Se mandan los ultimos 20 turnos: suficiente contexto sin crecer sin limite.
+            var turnos = chat.Mensajes.TakeLast(20).ToList();
+            var res = await Inferencia.ConversarAsync(agentId, turnos);
+            if (res.Ok && !string.IsNullOrWhiteSpace(res.Text)) { chat.Mensajes.Add(new AiChatTurn("model", res.Text!)); }
+            else { chat.Error = res.Error ?? "El agente no respondio; intenta de nuevo."; }
+            await CargarConsumo();
+        }
+        catch (Exception ex) { chat.Error = "No se pudo hablar con el agente: " + ex.Message; }
+        finally { chat.Ocupado = false; }
+        StateHasChanged();
+        await BajarChat(agentId);
+    }
+
+    private async Task BajarChat(Guid agentId)
+    {
+        try { await JS.InvokeVoidAsync("cerebroGrafo.bajar", $"agc-msgs-{agentId:N}"); }
+        catch (JSException) { }
+    }
 }

@@ -6,6 +6,7 @@
 @inject ICerebroService Svc
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>@(_cerebro?.Nombre ?? "Cerebro") - Archimente</PageTitle>
 
@@ -19,12 +20,14 @@ else if (_cerebro is null)
 }
 else
 {
-    <div class="trx-breadcrumb"><a href="/cerebros">Cerebros</a> &middot; @_cerebro.Nombre</div>
-
-    <div class="cd-head">
-        <div style="min-width:0;">
+    @* Vista del cerebro como un gran modal sobre la aplicacion (cerrar = volver a la galeria). *@
+    <div class="cbv-scrim"></div>
+    <div class="cbv" role="dialog" aria-label="@_cerebro.Nombre">
+    <div class="cbv-h">
+        <div class="cbv-h-izq">
+            <a class="cbv-volver" href="/cerebros" title="Volver a Cerebros">&#8592; Cerebros</a>
             <div class="cd-titulo-row">
-                <h1 class="ase-title" style="margin:0;">@_cerebro.Nombre</h1>
+                <h1 class="cbv-titulo">@_cerebro.Nombre</h1>
                 @if (_cerebro.CategoriaNombre is not null)
                 {
                     <span class="cd-tag" style="--cb-acento:@(_cerebro.CategoriaColor ?? "var(--primary)")">@_cerebro.CategoriaNombre</span>
@@ -34,21 +37,26 @@ else
                     <span class="cd-plat">@(_cerebro.Bloqueado ? "Plataforma - solo lectura" : "De la plataforma")</span>
                 }
             </div>
-            @if (!string.IsNullOrWhiteSpace(_cerebro.Descripcion)) { <p class="page-sub" style="margin:4px 0 0;">@_cerebro.Descripcion</p> }
         </div>
-        @if (_esAdmin)
-        {
-            <div class="cd-head-acc">
-                <button class="trx-btn ghost" @onclick="Duplicar" title="Crea una copia editable de este cerebro en tu entidad">Duplicar como propio</button>
+        <div class="cbv-tabs">
+            <button class="cbv-tab @(_vista == Vista.Notas ? "on" : "")" @onclick="() => CambiarVista(Vista.Notas)">&#128196; Notas</button>
+            <button class="cbv-tab @(_vista == Vista.Grafo ? "on" : "")" @onclick="() => CambiarVista(Vista.Grafo)">&#128376; Grafo</button>
+        </div>
+        <div class="cd-head-acc">
+            @if (_esAdmin)
+            {
+                <button class="trx-btn ghost mini" @onclick="Duplicar" title="Crea una copia editable de este cerebro en tu entidad">Duplicar como propio</button>
                 @if (PuedeEditar)
                 {
-                    <button class="trx-btn ghost" @onclick="AbrirEditarCerebro">Editar cerebro</button>
-                    <button class="trx-btn danger" @onclick="ArchivarCerebro">Archivar</button>
+                    <button class="trx-btn ghost mini" @onclick="AbrirEditarCerebro">Editar cerebro</button>
+                    <button class="trx-btn danger mini" @onclick="ArchivarCerebro">Archivar</button>
                 }
-            </div>
-        }
+            }
+            <a class="cbv-x" href="/cerebros" title="Cerrar">&#10005;</a>
+        </div>
     </div>
 
+    <div class="cbv-avisos">
     @if (_cerebro.Bloqueado)
     {
         <div class="cd-bloqueado">
@@ -70,9 +78,22 @@ else
         <div class="cd-ia on">&#10024; <span><b>Referencia de la IA documental</b>: la generacion del Procedimiento de la TRD consulta este cerebro.</span></div>
     }
 
-    @if (_error is not null) { <div class="cb-error" style="margin:10px 0;">@_error</div> }
-    @if (_ok is not null) { <div class="ase-ok" style="margin:10px 0;">@_ok</div> }
+    @if (_error is not null) { <div class="cb-error" style="margin:0 0 8px;">@_error</div> }
+    @if (_ok is not null) { <div class="ase-ok" style="margin:0 0 8px;">@_ok</div> }
+    </div>
 
+    @if (_vista == Vista.Grafo)
+    {
+        <div class="cbv-grafo-wrap">
+            <div class="cbv-grafo-barra">
+                <span>@_grafoResumen</span>
+                <span class="cbv-grafo-ayuda">Rueda: zoom &middot; arrastra para mover &middot; pasa el cursor para ver conexiones &middot; clic abre la nota</span>
+            </div>
+            <div id="@GrafoId" class="cbv-grafo"></div>
+        </div>
+    }
+    else
+    {
     <div class="cd-split">
         @* ---------------- Indice de notas ---------------- *@
         <aside class="cd-lista">
@@ -176,6 +197,8 @@ else
             }
         </section>
     </div>
+    }
+    </div>
 }
 
 @* ===================== Editar cerebro ===================== *@
@@ -228,7 +251,7 @@ else
     .cd-lista-h { font-size:11px; font-weight:800; letter-spacing:.4px; text-transform:uppercase; color:var(--muted-foreground); margin-bottom:8px; }
     .cd-lista-acc { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
     .cd-lista-scroll { max-height:62vh; overflow:auto; display:flex; flex-direction:column; gap:1px; }
-    .cd-item { display:block; padding:6px 9px; border-radius:7px; font-size:12.5px; color:var(--foreground); text-decoration:none;
+    .cd-item { display:block; flex-shrink:0; padding:6px 9px; border-radius:7px; font-size:12.5px; color:var(--foreground); text-decoration:none;
                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .cd-item:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); }
     .cd-item.on { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); font-weight:700; }
@@ -273,6 +296,34 @@ else
     .cd-md a.wl-rota { color:#c0392b; border-bottom:1px dashed #c0392b; }
     .cd-md hr { border:none; border-top:1px solid var(--border); margin:1.2em 0; }
     .cd-md input[type=checkbox] { margin-right:6px; }
+    /* ---- Vista del cerebro como gran modal ---- */
+    .cbv-scrim { position:fixed; inset:0; z-index:1040; background:rgba(15,20,40,.45); backdrop-filter:blur(2px); }
+    .cbv { position:fixed; inset:2vh 2vw; z-index:1050; display:flex; flex-direction:column; background:#f6f7fb;
+           border-radius:18px; box-shadow:0 30px 90px rgba(0,0,0,.35); overflow:hidden; }
+    @@media (max-width: 700px) { .cbv { inset:0; border-radius:0; } }
+    .cbv-h { display:flex; align-items:center; gap:16px; padding:12px 18px; background:#fff; border-bottom:1px solid #e6e9f2; flex-shrink:0; flex-wrap:wrap; }
+    .cbv-h-izq { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+    .cbv-volver { font-size:11.5px; font-weight:700; color:var(--primary); text-decoration:none; }
+    .cbv-titulo { font-size:19px; font-weight:800; margin:0; color:#1f2433; letter-spacing:-.01em; }
+    .cbv-tabs { display:flex; gap:4px; background:#eef1f7; border-radius:10px; padding:3px; }
+    .cbv-tab { border:0; background:transparent; padding:6px 14px; border-radius:8px; font-size:12.5px; font-weight:700; color:#59617a; cursor:pointer; }
+    .cbv-tab.on { background:#fff; color:var(--primary); box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .cbv-x { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; margin-left:4px;
+             color:#59617a; text-decoration:none; font-size:15px; background:#f1f3f8; }
+    .cbv-x:hover { background:#e3e7f2; color:#1f2433; }
+    .cbv-avisos { padding:10px 18px 0; flex-shrink:0; }
+    .cbv-avisos:empty { display:none; }
+    .cbv .cd-ia, .cbv .cd-bloqueado { margin:0 0 8px; }
+    .cbv .cd-split { flex:1; min-height:0; padding:10px 18px 16px; align-items:stretch; }
+    .cbv .cd-lista { display:flex; flex-direction:column; min-height:0; }
+    .cbv .cd-lista-scroll { flex:1; max-height:none; min-height:0; }
+    .cbv .cd-nota { overflow:auto; min-height:0; }
+    .cbv-grafo-wrap { flex:1; min-height:0; display:flex; flex-direction:column; margin:10px 18px 16px; background:#fff;
+                      border:1px solid #e6e9f2; border-radius:12px; overflow:hidden; }
+    .cbv-grafo-barra { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:9px 14px; font-size:12px;
+                       font-weight:700; color:#37415c; border-bottom:1px solid #eef1f7; }
+    .cbv-grafo-ayuda { font-weight:500; color:#8a93ad; }
+    .cbv-grafo { flex:1; min-height:300px; }
 </style>
 
 @code {
@@ -417,6 +468,74 @@ else
         catch (InvalidOperationException ex) { _error = ex.Message; }
     }
 
+
+    // ------------------------------------------------ vista y grafo
+
+    private enum Vista { Notas, Grafo }
+    private Vista _vista = Vista.Notas;
+    private bool _grafoPendiente;
+    private string _grafoResumen = "";
+    private GrafoCerebroDto? _grafo;
+    private DotNetObjectReference<CerebroDetalle>? _self;
+    private string GrafoId => "cbv-grafo-" + (_cerebro?.Id.ToString("N") ?? "x");
+
+    private async Task CambiarVista(Vista v)
+    {
+        if (_vista == v) { return; }
+        if (_vista == Vista.Grafo) { await LiberarGrafo(); }
+        _vista = v;
+        if (v == Vista.Grafo && _cerebro is not null)
+        {
+            _grafo = await Svc.GrafoAsync(_cerebro.Id);
+            var notas = _grafo.Nodos.Count(n => !n.Fantasma);
+            var fantasmas = _grafo.Nodos.Count - notas;
+            _grafoResumen = $"{notas} nota(s) - {_grafo.Aristas.Count} enlace(s)" + (fantasmas > 0 ? $" - {fantasmas} sin crear" : "");
+            _grafoPendiente = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_grafoPendiente || _grafo is null) { return; }
+        _grafoPendiente = false;
+        _self ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeAsync<bool>("cerebroGrafo.render", GrafoId, _grafo, _self,
+                new { foco = _nota?.TituloClave, compacto = false });
+        }
+        catch (JSException ex) { _error = "No se pudo dibujar el grafo: " + ex.Message; StateHasChanged(); }
+    }
+
+    [JSInvokable]
+    public async Task AbrirNodoGrafo(string clave, bool fantasma)
+    {
+        if (_cerebro is null) { return; }
+        var titulo = _grafo?.Nodos.FirstOrDefault(n => n.Id == clave)?.Titulo ?? clave;
+        await LiberarGrafo();
+        _vista = Vista.Notas;
+        if (fantasma)
+        {
+            if (PuedeEditar) { NuevaNota(titulo); }
+            else { _error = $"La nota \"{titulo}\" aun no existe."; }
+            StateHasChanged();
+            return;
+        }
+        Nav.NavigateTo(MarkdownCerebro.UrlNota(_cerebro.Slug, titulo));
+    }
+
+    private async Task LiberarGrafo()
+    {
+        try { await JS.InvokeVoidAsync("cerebroGrafo.liberar", GrafoId); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_vista == Vista.Grafo) { await LiberarGrafo(); }
+        _self?.Dispose();
+    }
     private Task<ImportacionNotasDto> ImportarNotas(IReadOnlyList<ArchivoNotaDto> notas) => Svc.ImportarNotasAsync(_cerebro!.Id, notas);
 
     private async Task TrasImportar()

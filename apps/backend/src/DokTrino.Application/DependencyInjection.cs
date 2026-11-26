@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<Tenancy.IRelacionFormularioService, Tenancy.RelacionFormularioService>();
         services.AddScoped<Tenancy.ITrdAdminService, Tenancy.TrdAdminService>();
         services.AddScoped<Tenancy.ICerebroService, Tenancy.CerebroService>();
+        services.AddScoped<Tenancy.IAgenteCerebrosService, Tenancy.AgenteCerebrosService>();
         services.AddScoped<Admin.ICerebroPlantillaService, Admin.CerebroPlantillaService>();
         services.AddScoped<Admin.ICerebroPlantillaPublicador, Admin.CerebroPlantillaPublicador>();
         services.AddScoped<Tenancy.ITrdClienteService, Tenancy.TrdClienteService>();

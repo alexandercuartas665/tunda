@@ -131,6 +131,82 @@ public sealed class AiInferenceService : IAiInferenceService
         return result;
     }
 
+    public async Task<AiChatResult> ConversarAsync(Guid agentId, IReadOnlyList<AiChatTurn> turns, CancellationToken ct = default)
+    {
+        var agent = await _db.AiAgents.AsNoTracking().FirstOrDefaultAsync(a => a.Id == agentId, ct);
+        if (agent is null) { return new AiChatResult(false, null, "El agente no existe."); }
+        if (turns.Count == 0) { return new AiChatResult(false, null, "Escribe un mensaje para hablar con el agente."); }
+
+        // Proveedor del agente; si no esta habilitado, el primero habilitado (el de generacion se
+        // siembra con el proveedor que habia entonces).
+        var providerCfg = await _db.AiProviderConfigs.AsNoTracking()
+                              .FirstOrDefaultAsync(c => c.Provider == agent.Provider && c.IsEnabled && c.ApiKeyEncrypted != null, ct)
+                          ?? await _db.AiProviderConfigs.AsNoTracking()
+                              .FirstOrDefaultAsync(c => c.IsEnabled && c.ApiKeyEncrypted != null, ct);
+        if (providerCfg is null) { return new AiChatResult(false, null, "No hay un proveedor de IA habilitado. Configuralo en Servidores de IA."); }
+
+        string apiKey;
+        try { apiKey = _secretProtector.Unprotect(providerCfg.ApiKeyEncrypted!); }
+        catch { return new AiChatResult(false, null, "La API key del proveedor esta cifrada con una version anterior. Vuelve a guardarla en Servidores de IA."); }
+
+        var meta = AiProviderCatalog.For(providerCfg.Provider);
+        var model = providerCfg.Provider == agent.Provider && !string.IsNullOrWhiteSpace(agent.Model) ? agent.Model!
+            : !string.IsNullOrWhiteSpace(providerCfg.Model) ? providerCfg.Model!
+            : meta.DefaultModel;
+
+        var quota = await _usage.GetQuotaAsync(ct);
+        if (quota.Exceeded && quota.Hard)
+        {
+            return new AiChatResult(false, null, $"Alcanzaste el limite de tokens de IA de tu plan este mes ({quota.MonthlyLimitTokens:N0}).");
+        }
+
+        // Mision del agente + modo conversacion. Los pasos/prompts del agente (p. ej. las plantillas
+        // XML del procedimiento) NO se incluyen: son para su flujo, no para conversar.
+        var sb = new StringBuilder(agent.SystemPrompt ?? "");
+        sb.AppendLine().AppendLine()
+          .Append("MODO CONVERSACION: estas hablando con un usuario de la entidad. Responde en espanol, en texto claro ")
+          .Append("(puedes usar markdown simple), sin XML ni plantillas, y de forma concreta.");
+
+        // Cerebros que este agente puede consultar: herramientas acotadas a ellos.
+        var ids = await AgenteCerebrosService.SeleccionadosAsync(_db, agent, ct);
+        var herramientas = new List<IAgentToolset>();
+        if (ids.Count > 0)
+        {
+            var nombres = await _db.Cerebros.AsNoTracking().Where(c => ids.Contains(c.Id)).OrderBy(c => c.Nombre)
+                .Select(c => c.Nombre + " (slug: " + c.Slug + ")").ToListAsync(ct);
+            sb.AppendLine().AppendLine()
+              .Append("CEREBROS DISPONIBLES (bases de conocimiento de la entidad, solo lectura): ").Append(string.Join("; ", nombres))
+              .Append(". Para responder, busca primero en ellos con buscar_notas y abre con ver_nota las notas relevantes. ")
+              .Append("Fundamenta tu respuesta en lo que encuentres y menciona el titulo de las notas que usaste. ")
+              .Append("Si la respuesta no esta en los cerebros, dilo claramente en lugar de inventar.");
+            herramientas.Add(CerebroToolset.SoloCerebros(_db, ids));
+        }
+        else
+        {
+            sb.AppendLine().AppendLine().Append("Este agente no tiene cerebros asignados: responde solo con tu conocimiento general y aclaralo si te preguntan por documentos de la entidad.");
+        }
+
+        // Otras herramientas habilitadas al agente (ToolKeys), sin duplicar las de cerebros.
+        var habilitadas = ToolsHelper.Parse(agent.ToolKeys).ToHashSet(StringComparer.Ordinal);
+        if (habilitadas.Count > 0)
+        {
+            herramientas.AddRange(_toolsets
+                .Where(t => t is not CerebroToolset || ids.Count == 0)
+                .Select(t => (IAgentToolset)new ToolsetFiltrado(t, habilitadas))
+                .Where(t => t.GetSpecs().Count > 0));
+        }
+
+        if (herramientas.Count > 0)
+        {
+            return await LoopHerramientasAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(),
+                turns.Select(t => new AiToolMessage(t.Role, t.Text)).ToList(), herramientas, agent.Id, "chat", ct);
+        }
+
+        var res = await _client.CompleteAsync(providerCfg.Provider, apiKey, providerCfg.BaseUrl, model, sb.ToString(), turns, ct);
+        if (res.Ok) { await _usage.RecordAsync(agent.Id, providerCfg.Provider, model, res.InputTokens, res.OutputTokens, "chat", true, ct); }
+        return res;
+    }
+
     public async Task<ProcedimientoGeneradoDto> GenerarProcedimientoAsync(Guid respuestaId, CancellationToken ct = default)
     {
         var r = await _db.RespuestasTablaDocumental.FirstOrDefaultAsync(x => x.Id == respuestaId, ct);

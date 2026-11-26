@@ -21,6 +21,14 @@ public sealed record CerebroTarjetaDto(
 /// <summary>Nota en una lista (sin contenido).</summary>
 public sealed record NotaResumenDto(Guid Id, string Titulo, string TituloClave, DateTimeOffset Actualizado);
 
+/// <summary>Nodo del grafo: una nota (o un enlace a una nota que aun no existe: Fantasma).</summary>
+public sealed record NodoGrafoDto(string Id, string Titulo, int Grado, bool Fantasma);
+
+/// <summary>Arista del grafo: Origen enlaza a Destino (claves de titulo).</summary>
+public sealed record AristaGrafoDto(string Origen, string Destino);
+
+public sealed record GrafoCerebroDto(IReadOnlyList<NodoGrafoDto> Nodos, IReadOnlyList<AristaGrafoDto> Aristas);
+
 /// <summary>Cerebro con el indice de sus notas activas.</summary>
 public sealed record CerebroDetalleDto(
     Guid Id, string Slug, string Nombre, string? Descripcion,
@@ -71,6 +79,9 @@ public interface ICerebroService
 
     /// <summary>Busca la nota por titulo (o titulo normalizado) dentro del cerebro.</summary>
     Task<NotaCerebroDto?> NotaAsync(Guid cerebroId, string titulo, CancellationToken ct = default);
+
+    /// <summary>Grafo de notas del cerebro (vista tipo Obsidian): nodos = notas, aristas = [[enlaces]].</summary>
+    Task<GrafoCerebroDto> GrafoAsync(Guid cerebroId, CancellationToken ct = default);
     Task<NotaCerebroDto> GuardarNotaAsync(Guid cerebroId, Guid? notaId, string titulo, string contenido, CancellationToken ct = default);
     Task ArchivarNotaAsync(Guid notaId, CancellationToken ct = default);
 
@@ -488,6 +499,44 @@ public sealed partial class CerebroService : ICerebroService
         var n = await _db.NotasCerebro.AsNoTracking()
             .FirstOrDefaultAsync(x => x.CerebroId == cerebroId && x.TituloClave == clave && !x.Archivada, ct);
         return n is null ? null : await ANotaDtoAsync(n, ct);
+    }
+
+    public async Task<GrafoCerebroDto> GrafoAsync(Guid cerebroId, CancellationToken ct = default)
+    {
+        // Solo se lee el titulo y los enlaces de cada nota; el filtro global de tenant ya acota.
+        var notas = await _db.NotasCerebro.AsNoTracking()
+            .Where(x => x.CerebroId == cerebroId && !x.Archivada)
+            .Select(x => new { x.Titulo, x.TituloClave, x.Contenido })
+            .ToListAsync(ct);
+
+        var existentes = notas.ToDictionary(n => n.TituloClave, n => n.Titulo, StringComparer.Ordinal);
+        var aristas = new HashSet<(string, string)>();
+        var fantasmas = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var n in notas)
+        {
+            if (string.IsNullOrEmpty(n.Contenido) || !n.Contenido.Contains("[[")) { continue; }
+            foreach (Match m in EnlaceRegex().Matches(n.Contenido))
+            {
+                var destino = DestinoEnlace(m.Groups[1].Value);
+                var clave = ClaveTitulo(destino);
+                if (clave.Length == 0 || clave == n.TituloClave) { continue; }
+                if (!existentes.ContainsKey(clave)) { fantasmas.TryAdd(clave, destino); }
+                aristas.Add((n.TituloClave, clave));
+            }
+        }
+
+        var grado = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (o, d) in aristas)
+        {
+            grado[o] = grado.GetValueOrDefault(o) + 1;
+            grado[d] = grado.GetValueOrDefault(d) + 1;
+        }
+
+        var nodos = notas
+            .Select(n => new NodoGrafoDto(n.TituloClave, n.Titulo, grado.GetValueOrDefault(n.TituloClave), false))
+            .Concat(fantasmas.Select(f => new NodoGrafoDto(f.Key, f.Value, grado.GetValueOrDefault(f.Key), true)))
+            .ToList();
+        return new GrafoCerebroDto(nodos, aristas.Select(a => new AristaGrafoDto(a.Item1, a.Item2)).ToList());
     }
 
     private async Task<NotaCerebroDto> ANotaDtoAsync(NotaCerebro n, CancellationToken ct)

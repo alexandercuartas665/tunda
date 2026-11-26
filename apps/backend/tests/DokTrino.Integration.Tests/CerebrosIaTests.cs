@@ -179,6 +179,74 @@ public sealed class CerebrosIaTests : IAsyncLifetime
         Assert.Equal(1, cliente2.LlamadasSinHerramientas);
     }
 
+    [Fact]
+    public async Task Chat_del_agente_consulta_solo_los_cerebros_que_tiene_asignados()
+    {
+        Guid agente, generacion, manual, secreto;
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            manual = (await Cerebros(ctx).CrearAsync("Manual de plazos", null, null)).Id;
+            secreto = (await Cerebros(ctx).CrearAsync("Secreto", null, null)).Id;
+            await Cerebros(ctx).GuardarNotaAsync(manual, null, "Tabla de plazos", "Los contratos de plazos se conservan 20 anios.");
+            await Cerebros(ctx).GuardarNotaAsync(secreto, null, "Plazos ocultos", "plazos contratos radicacion confidencial");
+            var a = new AiAgent { TenantId = _tenant, Name = "Asesor", Provider = AiProvider.Claude, SystemPrompt = "Ayuda." };
+            var g = new AiAgent { TenantId = _tenant, Name = "Generacion", Role = ProcedimientoPrompts.AgenteRol, Provider = AiProvider.Claude, SystemPrompt = "Genera XML." };
+            ctx.AiAgents.AddRange(a, g);
+            await ctx.SaveChangesAsync();
+            (agente, generacion) = (a.Id, g.Id);
+        }
+
+        // Solo el admin cambia la seleccion.
+        await using (var ctx = Contexto(_tenant, _asesor))
+        {
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _asesor));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.FijarAsync(agente, manual, true));
+        }
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _admin));
+            await svc.FijarAsync(agente, manual, true);
+            // En el agente de generacion la seleccion ES la marca UsoIa del cerebro.
+            await svc.FijarAsync(generacion, secreto, true);
+        }
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _admin));
+            var vista = await svc.CerebrosAsync(agente);
+            Assert.True(vista.Single(c => c.Id == manual).Seleccionado);
+            Assert.False(vista.Single(c => c.Id == secreto).Seleccionado);
+            Assert.True(await ctx.Cerebros.Where(c => c.Id == secreto).Select(c => c.UsoIa).SingleAsync());
+            Assert.Equal([secreto], await svc.SeleccionadosAsync(generacion));
+        }
+
+        // El chat ofrece las herramientas de cerebros acotadas: encuentra Manual, nunca Secreto.
+        var cliente = new ClienteIaFalso();
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var r = await Inferencia(ctx, cliente).ConversarAsync(agente, [new AiChatTurn("user", "Cuanto se conservan los contratos?")]);
+            Assert.True(r.Ok, r.Error);
+        }
+        Assert.Contains(CerebroToolset.ToolBuscar, cliente.HerramientasOfrecidas);
+        Assert.Contains("Manual de plazos", cliente.PromptsConHerramientas.Single());
+        Assert.Contains("MODO CONVERSACION", cliente.PromptsConHerramientas.Single());
+        Assert.Contains(cliente.ResultadosHerramienta, x => x.Contains("Tabla de plazos"));
+        Assert.DoesNotContain(cliente.ResultadosHerramienta, x => x.Contains("Plazos ocultos"));
+
+        // Sin cerebros asignados: conversacion simple, sin herramientas.
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            var svc = new AgenteCerebrosService(ctx, new ContextoPrueba(_tenant, _admin));
+            await svc.FijarAsync(agente, manual, false);
+        }
+        var cliente2 = new ClienteIaFalso();
+        await using (var ctx = Contexto(_tenant, _admin))
+        {
+            await Inferencia(ctx, cliente2).ConversarAsync(agente, [new AiChatTurn("user", "Hola")]);
+        }
+        Assert.Empty(cliente2.PromptsConHerramientas);
+        Assert.Equal(1, cliente2.LlamadasSinHerramientas);
+    }
+
     // ---------------- helpers ----------------
 
     private async Task<Guid> CrearRespuestaAsync()

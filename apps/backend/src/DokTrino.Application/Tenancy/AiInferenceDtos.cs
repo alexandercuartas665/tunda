@@ -95,6 +95,12 @@ public interface IAiInferenceService
     Task<AiChatResult> TestChatAsync(Guid agentId, IReadOnlyList<AiChatTurn> turns, string? systemPromptOverride = null, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Conversacion con un agente (caja de chat de Agentes TRD): su mision en modo conversacion,
+    /// con acceso de solo lectura a los cerebros que tiene asignados (IAgenteCerebrosService).
+    /// </summary>
+    Task<AiChatResult> ConversarAsync(Guid agentId, IReadOnlyList<AiChatTurn> turns, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Consulta con tool-use: corre un loop dando al modelo las herramientas
     /// registradas (p.ej. lectura de la TRD) hasta que responde sin pedir mas.
     /// Usa el primer proveedor de IA habilitado. Registra el consumo.

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Renderers;
@@ -32,9 +33,77 @@ public static partial class MarkdownCerebro
     public static string UrlNota(string slug, string titulo) =>
         $"/cerebros/{Uri.EscapeDataString(slug)}?nota={Uri.EscapeDataString(titulo)}";
 
-    public static string Render(string? contenido, string slug, ISet<string> clavesExistentes)
+    /// <summary>
+    /// Encabezado YAML de Obsidian ("---" ... "---" al inicio). Se separa del cuerpo y se
+    /// muestra como un bloque de propiedades, no como texto (antes salia como un titulo).
+    /// </summary>
+    [GeneratedRegex(@"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(\r?\n|\z)", RegexOptions.Singleline)]
+    private static partial Regex FrontMatterRegex();
+
+    /// <summary>Separa el encabezado YAML (pares clave/valor) del cuerpo markdown.</summary>
+    public static (IReadOnlyList<(string Clave, IReadOnlyList<string> Valores)> Propiedades, string Cuerpo) SepararPropiedades(string? contenido)
     {
         var texto = contenido ?? "";
+        if (texto.Length > 0 && texto[0] == (char)0xFEFF) { texto = texto[1..]; }
+        var m = FrontMatterRegex().Match(texto);
+        if (!m.Success) { return (Array.Empty<(string, IReadOnlyList<string>)>(), texto); }
+
+        var props = new List<(string Clave, List<string> Valores)>();
+        foreach (var bruta in m.Groups[1].Value.Split('\n'))
+        {
+            var linea = bruta.TrimEnd('\r');
+            if (linea.Trim().Length == 0 || linea.TrimStart().StartsWith('#')) { continue; }
+            var t = linea.TrimStart();
+            if (t.StartsWith("- ") && props.Count > 0)
+            {
+                // Lista en bloque ("tags:" seguido de "- a" / "- b").
+                props[^1].Valores.Add(Limpio(t[2..]));
+                continue;
+            }
+            var dp = linea.IndexOf(':');
+            if (dp <= 0 || char.IsWhiteSpace(linea[0])) { continue; }
+            var clave = linea[..dp].Trim();
+            var valor = linea[(dp + 1)..].Trim();
+            var valores = new List<string>();
+            if (valor.StartsWith('[') && valor.EndsWith(']'))
+            {
+                valores.AddRange(valor[1..^1].Split(',').Select(Limpio).Where(v => v.Length > 0));
+            }
+            else if (valor.Length > 0)
+            {
+                valores.Add(Limpio(valor));
+            }
+            props.Add((clave, valores));
+        }
+        var lista = props.Select(p => (p.Clave, (IReadOnlyList<string>)p.Valores)).ToList();
+        return (lista, texto[m.Length..]);
+
+        static string Limpio(string v) => v.Trim().Trim('"', '\'').Trim();
+    }
+
+    /// <summary>Bloque HTML (texto codificado) con las propiedades del encabezado YAML.</summary>
+    private static string RenderPropiedades(IReadOnlyList<(string Clave, IReadOnlyList<string> Valores)> props)
+    {
+        if (props.Count == 0) { return ""; }
+        var sb = new System.Text.StringBuilder("<div class=\"cb-props\">");
+        foreach (var (clave, valores) in props)
+        {
+            sb.Append("<div class=\"cb-prop\"><span class=\"cb-prop-k\">").Append(WebUtility.HtmlEncode(clave)).Append("</span><span class=\"cb-prop-v\">");
+            if (valores.Count == 0) { sb.Append("<span class=\"cb-prop-vacio\">-</span>"); }
+            var chips = valores.Count > 1 || clave.Equals("tags", StringComparison.OrdinalIgnoreCase) || clave.Equals("aliases", StringComparison.OrdinalIgnoreCase);
+            foreach (var v in valores)
+            {
+                var txt = WebUtility.HtmlEncode(v);
+                sb.Append(chips ? $"<span class=\"cb-chip\">{txt}</span>" : txt);
+            }
+            sb.Append("</span></div>");
+        }
+        return sb.Append("</div>").ToString();
+    }
+
+    public static string Render(string? contenido, string slug, ISet<string> clavesExistentes)
+    {
+        var (propiedades, texto) = SepararPropiedades(contenido);
 
         // 1) Enlaces tipo Obsidian -> enlaces markdown normales a la nota.
         var prefijoNota = UrlNota(slug, "");
@@ -82,6 +151,7 @@ public static partial class MarkdownCerebro
         }
 
         using var sw = new StringWriter();
+        sw.Write(RenderPropiedades(propiedades));
         var renderer = new HtmlRenderer(sw);
         Pipeline.Setup(renderer);
         renderer.Render(doc);

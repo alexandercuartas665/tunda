@@ -33,4 +33,11 @@ public class AiAgent : TenantEntity
     /// Lo administra la Admin Agent API (Capa 6) via PUT .../tools.
     /// </summary>
     public string? ToolKeys { get; set; }
+
+    /// <summary>
+    /// Cerebros (bases de conocimiento) que el agente puede consultar en su chat, como arreglo
+    /// JSON de Guid. Nulo = ninguno. El agente de generacion de procedimientos NO usa este campo:
+    /// sus cerebros son los marcados con Cerebro.UsoIa (asi se ven igual desde ambos lados).
+    /// </summary>
+    public string? CerebroIds { get; set; }
 }
